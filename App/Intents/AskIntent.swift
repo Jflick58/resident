@@ -1,4 +1,5 @@
 import AppIntents
+import BackgroundTasks
 import HarnessKit
 import HarnessMLX
 
@@ -85,6 +86,8 @@ struct AgentQuery: EntityQuery {
 /// takes longer, so this is a long-running action: iOS lets it carry on while
 /// it reports progress, and shows that progress as a Live Activity with a stop
 /// button. That needs iOS 27, so the action exists from iOS 27 on.
+/// For a model this app runs it also asks to keep the GPU, without which iOS
+/// stops the model after about a minute off screen.
 @available(iOS 27.0, *)
 struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
     static let title: LocalizedStringResource = "Ask Resident"
@@ -133,13 +136,33 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
             }
         }
         defer { watcher.cancel() }
-        let reply = try await performBackgroundTask(
-            operation: { await chat.sendAndWait(text) },
-            onCancel: { _ in Task { @MainActor in chat.stop() } })
+        // A model this app runs needs the GPU, which iOS takes from an app off screen
+        // after about a minute unless the task asks to keep it. Asking needs the
+        // Background GPU Access entitlement and a device that allows it.
+        var isLocal = false
+        if case .local = chat.modelOverride ?? app.library.selected { isLocal = true }
+        let wantsGPU = isLocal && BGTaskScheduler.supportedResources.contains(.gpu)
+        let started = Started()
+        let run: (LongRunningTaskOptions) async throws -> String? = { options in
+            try await performBackgroundTask(
+                options: options,
+                operation: {
+                    started.mark()
+                    return await chat.sendAndWait(text)
+                },
+                onCancel: { _ in Task { @MainActor in chat.stop() } })
+        }
+        let reply: String?
+        do {
+            reply = try await run(wantsGPU ? [.requiresGPU] : [])
+        } catch where wantsGPU && !started.value {
+            // Refused before it began, as a build without the entitlement is: run with what every app gets.
+            reply = try await run([])
+        }
         progress.completedUnitCount = Int64(limit)
         if reply == nil, chat.pausedForBackground {
             throw AskError.failed(
-                "iOS stopped the model before it finished. It gives a model that Resident runs about a minute when Resident is not on screen. Open Resident to let it finish, or choose Apple Intelligence for longer tasks.")
+                "iOS stopped the model before it finished: it took the graphics processor back from Resident, which was not on screen. Open Resident to let it finish, or choose Apple Intelligence for longer tasks.")
         }
         if let error = chat.errorMessage, reply == nil { throw AskError.failed(error) }
         guard let reply else { throw AskError.failed("The agent gave no reply.") }
@@ -159,6 +182,14 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
             return line
         }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
+}
+
+/// Whether the action's work has begun, which decides if it is safe to start it a second time.
+private final class Started: @unchecked Sendable {
+    private let lock = NSLock()
+    private var began = false
+    var value: Bool { lock.withLock { began } }
+    func mark() { lock.withLock { began = true } }
 }
 
 enum AskError: Error, CustomLocalizedStringResourceConvertible {
