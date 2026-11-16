@@ -528,7 +528,11 @@ agent.groups = groups
 var plainPreset = preset
 plainPreset.tools = []
 agent.plainInstructions = PromptBuilder.systemPrompt(preset: plainPreset, memory: "", canRemember: false)
+// HARNESS_PREAMBLE: a sentence added to the prompt, to try wordings that ask the model to say what it is about to do.
+if let extra = ProcessInfo.processInfo.environment["HARNESS_PREAMBLE"] { systemText += "\n\n" + extra }
 let system = Message.system(systemText)
+var spokeBeforeCall = 0
+var callingSteps = 0
 print("System prompt: \(systemText.count) characters. Tools declared: \(declared?.count ?? agentTools.count) of \(agentTools.count).")
 
 // MARK: Run
@@ -570,6 +574,13 @@ for round in 0..<repeats {
                 case .toolFinished(let message):
                     print("  \(message.isError ? "error" : "result") \(message.text.replacingOccurrences(of: "\n", with: " ⏎ ").prefix(220))")
                 case .assistantMessage(let message):
+                    if !message.toolCalls.isEmpty {
+                        callingSteps += 1
+                        if !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            spokeBeforeCall += 1
+                            if spokeBeforeCall <= 6 { print("    said: \(message.text.prefix(110).replacingOccurrences(of: "\n", with: " "))") }
+                        }
+                    }
                     steps += 1
                     if !message.reasoning.isEmpty { print("  think (\(message.reasoning.count) chars)") }
                     if let speed = message.stats?.tokensPerSecond { speeds.append(speed) }
@@ -628,6 +639,7 @@ for round in 0..<repeats {
 
 func mean(_ values: [Double]) -> Double { values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count) }
 let meanPrompt = mean(promptSizes.map(Double.init))
+print("Spoke before a tool call in \(spokeBeforeCall) of \(callingSteps) calling steps.")
 print(String(format: "\n== %@ %@: %d/%d passed, first-step prompt %.0f tokens, %.1fs and %.1f steps per task, peak memory %@",
     repo, setup, passed, total, meanPrompt, mean(durations), mean(stepCounts.map(Double.init)), ModelFit.format(peak)))
 if let largest = loadedSizes.max() { print("   connector tools declared at once: up to about \(largest) tokens") }

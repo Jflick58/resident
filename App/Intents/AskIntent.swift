@@ -26,6 +26,11 @@ struct ModelEntity: AppEntity {
 
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
 
+    init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
     init(_ ref: ModelRef, name: String) {
         switch ref {
         case .apple: id = "apple"
@@ -79,21 +84,25 @@ struct AgentQuery: EntityQuery {
 /// hands back the reply, so it can be chained with other actions.
 ///
 /// It runs without bringing the app to the front, whichever model answers. A
-/// model this app runs itself works too: on an iPhone with iOS 27.2, LFM3
-/// answered from Shortcuts at its usual 76 to 95 tokens a second with the app
-/// not on screen.
+/// model this app runs itself works too, and asks to keep the GPU, without
+/// which iOS stops the model after about a minute off screen.
 ///
 /// An action normally has 30 seconds. An agent turn with a few tool calls
 /// takes longer, so this is a long-running action: iOS lets it carry on while
 /// it reports progress, and shows that progress as a Live Activity with a stop
 /// button. That needs iOS 27, so the action exists from iOS 27 on.
-/// For a model this app runs it also asks to keep the GPU, without which iOS
-/// stops the model after about a minute off screen.
+///
+/// Shortcuts itself stops waiting for any one action after about four minutes,
+/// and a model on the device, slowed to a fifth of its speed off screen, can
+/// need longer. So an action that is not done in three minutes holds the turn
+/// where it is and returns nothing; "Wait for Resident" picks it up from
+/// there. A shortcut that may run long follows Ask Resident with that action,
+/// repeated a few times.
 @available(iOS 27.0, *)
 struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
     static let title: LocalizedStringResource = "Ask Resident"
     static let description = IntentDescription(
-        "Sends a message to one of your agents and returns its reply. The chat is kept in Resident.")
+        "Sends a message to one of your agents and returns its reply. The chat is kept in Resident. If the agent needs more than three minutes, this returns empty text and the agent's work is held: add Wait for Resident after it to carry on and get the reply.")
     static let openAppWhenRun = false
 
     @Parameter(title: "Message")
@@ -114,8 +123,6 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let app = AppModel.shared
-        // An action runs with the app off screen: nothing may be left held from when the app was last left.
-        GenerationGate.open()
         let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw AskError.emptyMessage }
         let id = app.newConversation()
@@ -125,85 +132,9 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
             guard app.isAvailable(ref) else { throw AskError.failed("That model is no longer in Resident.") }
             chat.modelOverride = ref
         }
-        // Shortcuts stops waiting for an action after about four minutes, whatever iOS
-        // allows the app. So the agent is told to wrap up well before that: an answer
-        // from what it has found beats a better one nobody is waiting for.
-        chat.timeLimit = 150
-        // Progress is the agent's steps: each reply or tool call it makes is one.
-        // It also creeps forward inside a step. iOS lets a long action carry on for
-        // as long as it shows progress, and a model's first step from cold can take
-        // more than the 30 seconds an action is otherwise given.
-        let limit = 8
-        let scale = 1000.0
-        progress.totalUnitCount = Int64(Double(limit) * scale)
-        let before = chat.conversation.messages.count
-        let watcher = Task { @MainActor in
-            var lastSteps = 0
-            var stepBegan = Date()
-            while !Task.isCancelled {
-                let steps = min(limit - 1, chat.conversation.messages.dropFirst(before).filter { $0.role == .assistant }.count)
-                if steps != lastSteps {
-                    lastSteps = steps
-                    stepBegan = Date()
-                }
-                // Most of the way through a step's share after a minute, never all of it.
-                let within = 1 - exp(-Date().timeIntervalSince(stepBegan) / 30)
-                progress.completedUnitCount = max(progress.completedUnitCount, Int64((Double(steps) + 0.95 * within) * scale))
-                // The Live Activity shows these two lines: say what the agent is doing, not a count.
-                progress.localizedDescription = chat.activity ?? "Working"
-                progress.localizedAdditionalDescription = steps == 0 ? "Starting" : "Step \(steps + 1)"
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
-        defer { watcher.cancel() }
-        // A model this app runs needs the GPU, which iOS takes from an app off screen
-        // after about a minute unless the task asks to keep it. Asking needs the
-        // Background GPU Access entitlement and a device that allows it.
-        var isLocal = false
-        if case .local = chat.modelOverride ?? app.library.selected { isLocal = true }
-        let wantsGPU = isLocal && BGTaskScheduler.supportedResources.contains(.gpu)
-        let started = Started()
-        IntentLog.note("ask: model \(isLocal ? "local" : "other"), gpu wanted \(wantsGPU), app state \(UIApplication.shared.applicationState.rawValue)")
-        let run: (LongRunningTaskOptions) async throws -> String? = { options in
-            try await performBackgroundTask(
-                options: options,
-                operation: {
-                    started.mark()
-                    IntentLog.note("began, gpu asked \(options.contains(.requiresGPU))")
-                    return await chat.sendAndWait(text)
-                },
-                onCancel: { reason in
-                    started.cancelled(reason.debugDescription)
-                    IntentLog.note("cancelled by iOS: \(reason.debugDescription)")
-                    Task { @MainActor in chat.stop() }
-                })
-        }
-        let reply: String?
-        do {
-            reply = try await run(wantsGPU ? [.requiresGPU] : [])
-        } catch where wantsGPU && !started.value {
-            // Refused before it began, as a build without the entitlement is: run with what every app gets.
-            IntentLog.note("gpu task refused: \(error)")
-            reply = try await run([])
-        } catch {
-            IntentLog.note("failed: \(error)")
-            throw error
-        }
-        progress.completedUnitCount = progress.totalUnitCount
-        IntentLog.note("ended: reply \(reply == nil ? "none" : "\(reply!.count) characters"), paused \(chat.pausedForBackground), error \(chat.errorMessage ?? "none")")
-        if reply == nil, let reason = started.cancelReason {
-            throw AskError.failed(
-                reason.lowercased().contains("timeout")
-                    ? "iOS stopped the action for taking too long before the agent had replied. The chat is in Resident: open it to carry on."
-                    : "The action was stopped before the agent replied.")
-        }
-        if reply == nil, chat.pausedForBackground {
-            throw AskError.failed(
-                "iOS stopped the model before it finished: it took the graphics processor back from Resident, which was not on screen. Open Resident to let it finish, or choose Apple Intelligence for longer tasks.")
-        }
-        if let error = chat.errorMessage, reply == nil { throw AskError.failed(error) }
-        guard let reply else { throw AskError.failed("The agent gave no reply.") }
-        return .result(value: Self.plainText(reply))
+        ActionChat.remember(id, model: model?.id)
+        let reply = try await ActionRun.run(self, chat: chat) { chat.send(text) }
+        return .result(value: reply)
     }
 
     /// A reply as plain text: Shortcuts shows Markdown's marks as they are typed.
@@ -218,6 +149,149 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
             if trimmed.hasPrefix("#") { return trimmed.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces) }
             return line
         }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// "Wait for Resident" in Shortcuts: carries on with what the last Ask Resident
+/// started and hands back the reply once there is one. Empty text again means
+/// the agent is still not done; a reply already written comes back at once, so
+/// the action can be repeated without harm.
+@available(iOS 27.0, *)
+struct WaitIntent: AppIntent, LongRunningIntent, CancellableIntent {
+    static let title: LocalizedStringResource = "Wait for Resident"
+    static let description = IntentDescription(
+        "Carries on with the last Ask Resident and returns its reply. Returns empty text if the agent needs longer still. Put it after Ask Resident, inside Repeat, for work that takes more than three minutes.")
+    static let openAppWhenRun = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+        let app = AppModel.shared
+        guard let id = ActionChat.id, let chat = app.chatModel(for: id) else {
+            throw AskError.failed("There is nothing to wait for. Run Ask Resident first.")
+        }
+        if chat.modelOverride == nil, let ref = ActionChat.model, app.isAvailable(ref) { chat.modelOverride = ref }
+        let reply = try await ActionRun.run(self, chat: chat) {
+            // Held at the gate, the turn carries on by itself once the gate opens. One
+            // that was cut off, or lost with the app, starts again from its last finished step.
+            chat.resumeIfPaused()
+            if !chat.isRunning { chat.continueTurn() }
+        }
+        return .result(value: reply)
+    }
+}
+
+/// Which chat the last Ask Resident started, kept where it outlasts the app being closed.
+enum ActionChat {
+    static var id: UUID? { UserDefaults.standard.string(forKey: "actionChat").flatMap(UUID.init(uuidString:)) }
+
+    /// The model that action chose, if it chose one.
+    @available(iOS 27.0, *)
+    static var model: ModelRef? {
+        UserDefaults.standard.string(forKey: "actionChatModel").flatMap { ModelEntity(id: $0, name: "").ref }
+    }
+
+    static func remember(_ id: UUID, model: String?) {
+        UserDefaults.standard.set(id.uuidString, forKey: "actionChat")
+        UserDefaults.standard.set(model, forKey: "actionChatModel")
+    }
+}
+
+/// What both actions do: give the chat's turn time to run, show its progress, and
+/// hand over when Shortcuts is about to stop waiting.
+@available(iOS 27.0, *)
+enum ActionRun {
+    /// How long one action lets the agent work. Shortcuts stops waiting after about four minutes.
+    static let handOverSeconds: TimeInterval = 180
+
+    /// Starts or carries on the turn with `begin` and returns the reply as plain
+    /// text, or empty text when the turn was held for the next action.
+    @MainActor
+    static func run<Action: LongRunningIntent & CancellableIntent>(
+        _ action: Action, chat: ChatModel, begin: @escaping @MainActor () -> Void
+    ) async throws -> String {
+        let app = AppModel.shared
+        let progress = action.progress
+        // Progress is the agent's steps: each reply or tool call it makes is one.
+        // It also creeps forward inside a step. iOS lets a long action carry on for
+        // as long as it shows progress, and a model's first step from cold can take
+        // more than the 30 seconds an action is otherwise given.
+        let limit = 8
+        let scale = 1000.0
+        progress.totalUnitCount = Int64(Double(limit) * scale)
+        let turnStart = chat.conversation.messages.lastIndex { $0.role == .user } ?? chat.conversation.messages.count
+        let watcher = Task { @MainActor in
+            var lastSteps = -1
+            var stepBegan = Date()
+            while !Task.isCancelled {
+                let steps = min(limit - 1, chat.conversation.messages.dropFirst(turnStart).filter { $0.role == .assistant }.count)
+                if steps != lastSteps {
+                    lastSteps = steps
+                    stepBegan = Date()
+                }
+                // Most of the way through a step's share after a minute, never all of it.
+                let within = 1 - exp(-Date().timeIntervalSince(stepBegan) / 30)
+                progress.completedUnitCount = max(progress.completedUnitCount, Int64((Double(steps) + 0.95 * within) * scale))
+                // The Live Activity shows these two lines: say what the agent is doing, not a count.
+                progress.localizedDescription = chat.activity ?? "Working"
+                progress.localizedAdditionalDescription = steps == 0 ? "Starting" : "Step \(steps + 1)"
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+        defer { watcher.cancel() }
+
+        // A model this app runs needs the GPU, which iOS takes from an app off screen
+        // after about a minute unless the task asks to keep it. Asking needs the
+        // Background GPU Access entitlement and a device that allows it.
+        var isLocal = false
+        if case .local = chat.modelOverride ?? app.library.selected { isLocal = true }
+        let wantsGPU = isLocal && BGTaskScheduler.supportedResources.contains(.gpu)
+        let started = Started()
+        let name = String(describing: Action.self)
+        IntentLog.note("\(name): model \(isLocal ? "local" : "other"), gpu wanted \(wantsGPU), turn running \(chat.isRunning)")
+        let work: (LongRunningTaskOptions) async throws -> Bool = { options in
+            try await action.performBackgroundTask(
+                options: options,
+                operation: {
+                    started.mark()
+                    // An action runs with the app off screen: nothing may stay held from when the app was last left.
+                    GenerationGate.open()
+                    await begin()
+                    let done = await chat.waitForTurn(upTo: handOverSeconds)
+                    // Not done: hold the model between two tokens, so the next action carries on from this word.
+                    if !done, isLocal { GenerationGate.close() }
+                    return done
+                },
+                onCancel: { reason in
+                    started.cancelled(reason.debugDescription)
+                    IntentLog.note("cancelled by iOS: \(reason.debugDescription)")
+                    Task { @MainActor in chat.stop() }
+                })
+        }
+        let done: Bool
+        do {
+            done = try await work(wantsGPU ? [.requiresGPU] : [])
+        } catch where wantsGPU && !started.value {
+            // Refused before it began, as a build without the entitlement is: run with what every app gets.
+            IntentLog.note("gpu task refused: \(error)")
+            done = try await work([])
+        } catch {
+            IntentLog.note("failed: \(error)")
+            throw error
+        }
+        let reply = chat.lastReply
+        IntentLog.note("\(name) ended: done \(done), reply \(reply.map { "\($0.count) characters" } ?? "none"), paused \(chat.pausedForBackground), error \(chat.errorMessage ?? "none")")
+        // Held for the next action, or stopped by iOS taking the GPU: either way Wait for Resident carries on.
+        guard done, !chat.pausedForBackground else { return "" }
+        progress.completedUnitCount = progress.totalUnitCount
+        if reply == nil, let reason = started.cancelReason {
+            throw AskError.failed(
+                reason.lowercased().contains("timeout")
+                    ? "iOS stopped the action for taking too long before the agent had replied. The chat is in Resident: open it to carry on."
+                    : "The action was stopped before the agent replied.")
+        }
+        if let error = chat.errorMessage, reply == nil { throw AskError.failed(error) }
+        guard let reply else { throw AskError.failed("The agent gave no reply.") }
+        return AskIntent.plainText(reply)
     }
 }
 

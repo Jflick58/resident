@@ -31,8 +31,6 @@ final class ChatModel {
     /// A model to answer this chat with in place of the one selected in the app, while this chat is open.
     /// Set by a Shortcuts action that names a model.
     var modelOverride: ModelRef?
-    /// Seconds after which a turn should wrap up with what it has. Set for a chat something is waiting on.
-    var timeLimit: TimeInterval?
 
     init(conversation: Conversation, app: AppModel) {
         self.conversation = conversation
@@ -77,6 +75,21 @@ final class ChatModel {
     /// Waits for the turn in progress, if any, to end.
     func waitForTurn() async {
         await task?.value
+    }
+
+    /// Waits for the turn in progress to end, for at most this long. True when no turn is left running.
+    func waitForTurn(upTo seconds: TimeInterval) async -> Bool {
+        let giveUp = Date().addingTimeInterval(seconds)
+        while isRunning, Date() < giveUp {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return !isRunning
+    }
+
+    /// The reply to the latest message, once it has been written.
+    var lastReply: String? {
+        guard let asked = conversation.messages.lastIndex(where: { $0.role == .user }) else { return nil }
+        return conversation.messages.dropFirst(asked).last { $0.role == .assistant && $0.toolCalls.isEmpty && !$0.text.isEmpty }?.text
     }
 
     /// Sends a message and waits for the turn to end. Returns the reply's text, or nil if there was none.
@@ -206,7 +219,6 @@ final class ChatModel {
                     // Leave room in the context for the reply itself.
                     contextBudgetTokens: max(2048, model.contextTokens - preset.maxOutputTokens))
                 agent.groups = groups
-                if let timeLimit { agent.deadline = Date().addingTimeInterval(timeLimit) }
                 // For a model that answers some requests without tools: the same prompt with nothing about them.
                 var plain = preset
                 plain.tools = []
