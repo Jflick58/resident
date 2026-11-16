@@ -78,6 +78,9 @@ public struct OAuthError: LocalizedError, Sendable, Equatable {
 public struct OAuthFlow: Sendable {
     public var session: URLSession
     public var clientName: String
+    /// Where the app's page and icon are, shown on a service's sign-in page beside its own.
+    public var clientURI = "https://github.com/jflick58/resident"
+    public var logoURI = "https://raw.githubusercontent.com/jflick58/resident/main/site/assets/img/icon.png"
 
     public init(session: URLSession = .shared, clientName: String = "Resident") {
         self.session = session
@@ -192,6 +195,8 @@ public struct OAuthFlow: Sendable {
             "response_types": ["code"],
             "token_endpoint_auth_method": "none",
             "application_type": "native",
+            "client_uri": .string(clientURI),
+            "logo_uri": .string(logoURI),
         ]
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
