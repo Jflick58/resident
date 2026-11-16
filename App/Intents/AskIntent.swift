@@ -1,5 +1,6 @@
 import AppIntents
 import BackgroundTasks
+import UIKit
 import HarnessKit
 import HarnessMLX
 
@@ -125,14 +126,26 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
             chat.modelOverride = ref
         }
         // Progress is the agent's steps: each reply or tool call it makes is one.
+        // It also creeps forward inside a step. iOS lets a long action carry on for
+        // as long as it shows progress, and a model's first step from cold can take
+        // more than the 30 seconds an action is otherwise given.
         let limit = 8
-        progress.totalUnitCount = Int64(limit)
+        let scale = 1000.0
+        progress.totalUnitCount = Int64(Double(limit) * scale)
         let before = chat.conversation.messages.count
         let watcher = Task { @MainActor in
+            var lastSteps = 0
+            var stepBegan = Date()
             while !Task.isCancelled {
-                let steps = chat.conversation.messages.dropFirst(before).filter { $0.role == .assistant }.count
-                progress.completedUnitCount = Int64(min(limit - 1, steps))
-                try? await Task.sleep(for: .milliseconds(400))
+                let steps = min(limit - 1, chat.conversation.messages.dropFirst(before).filter { $0.role == .assistant }.count)
+                if steps != lastSteps {
+                    lastSteps = steps
+                    stepBegan = Date()
+                }
+                // Most of the way through a step's share after a minute, never all of it.
+                let within = 1 - exp(-Date().timeIntervalSince(stepBegan) / 30)
+                progress.completedUnitCount = max(progress.completedUnitCount, Int64((Double(steps) + 0.95 * within) * scale))
+                try? await Task.sleep(for: .seconds(1))
             }
         }
         defer { watcher.cancel() }
@@ -143,23 +156,40 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
         if case .local = chat.modelOverride ?? app.library.selected { isLocal = true }
         let wantsGPU = isLocal && BGTaskScheduler.supportedResources.contains(.gpu)
         let started = Started()
+        IntentLog.note("ask: model \(isLocal ? "local" : "other"), gpu wanted \(wantsGPU), app state \(UIApplication.shared.applicationState.rawValue)")
         let run: (LongRunningTaskOptions) async throws -> String? = { options in
             try await performBackgroundTask(
                 options: options,
                 operation: {
                     started.mark()
+                    IntentLog.note("began, gpu asked \(options.contains(.requiresGPU))")
                     return await chat.sendAndWait(text)
                 },
-                onCancel: { _ in Task { @MainActor in chat.stop() } })
+                onCancel: { reason in
+                    started.cancelled(reason.debugDescription)
+                    IntentLog.note("cancelled by iOS: \(reason.debugDescription)")
+                    Task { @MainActor in chat.stop() }
+                })
         }
         let reply: String?
         do {
             reply = try await run(wantsGPU ? [.requiresGPU] : [])
         } catch where wantsGPU && !started.value {
             // Refused before it began, as a build without the entitlement is: run with what every app gets.
+            IntentLog.note("gpu task refused: \(error)")
             reply = try await run([])
+        } catch {
+            IntentLog.note("failed: \(error)")
+            throw error
         }
-        progress.completedUnitCount = Int64(limit)
+        progress.completedUnitCount = progress.totalUnitCount
+        IntentLog.note("ended: reply \(reply == nil ? "none" : "\(reply!.count) characters"), paused \(chat.pausedForBackground), error \(chat.errorMessage ?? "none")")
+        if reply == nil, let reason = started.cancelReason {
+            throw AskError.failed(
+                reason.lowercased().contains("timeout")
+                    ? "iOS stopped the action for taking too long before the agent had replied. The chat is in Resident: open it to carry on."
+                    : "The action was stopped before the agent replied.")
+        }
         if reply == nil, chat.pausedForBackground {
             throw AskError.failed(
                 "iOS stopped the model before it finished: it took the graphics processor back from Resident, which was not on screen. Open Resident to let it finish, or choose Apple Intelligence for longer tasks.")
@@ -188,8 +218,31 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
 private final class Started: @unchecked Sendable {
     private let lock = NSLock()
     private var began = false
+    private var reason: String?
     var value: Bool { lock.withLock { began } }
+    /// Why iOS cancelled the action, if it did.
+    var cancelReason: String? { lock.withLock { reason } }
     func mark() { lock.withLock { began = true } }
+    func cancelled(_ why: String) { lock.withLock { reason = why } }
+}
+
+/// A short record of what the last few actions did, kept beside the app's data.
+/// An action runs where nothing can be seen, so this is how a failure is read afterwards.
+enum IntentLog {
+    private static let lock = NSLock()
+    private static var file: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Harness/intent-log.txt")
+    }
+
+    static func note(_ text: String) {
+        lock.withLock {
+            guard let file else { return }
+            var lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").components(separatedBy: "\n").filter { !$0.isEmpty }
+            lines.append("\(ISO8601DateFormatter().string(from: Date())) \(text)")
+            try? lines.suffix(200).joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        }
+    }
 }
 
 enum AskError: Error, CustomLocalizedStringResourceConvertible {
