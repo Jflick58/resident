@@ -82,6 +82,12 @@ public struct ToolGroup: Sendable {
         // An identifier in the text ("ENG-412") means one particular thing is wanted: fetch it.
         if (need + " " + request).range(of: #"\b[A-Z][A-Z0-9]{1,9}-\d+\b"#, options: .regularExpression) != nil {
             query["get"] = 1
+        } else if let weight = query["get"], !(need + " " + request).lowercased().contains("get_") {
+            // With nothing particular named, "get my open tickets" asks for a list. Left as
+            // "get", it brought Linear's six get_ tools and not list_issues, and LFM3
+            // spent ten steps trying to list issues with tools that fetch one thing.
+            query["get"] = nil
+            query["list"] = max(query["list"] ?? 0, weight)
         }
         // Its own name says nothing about which of its tools is wanted.
         for term in Self.terms(name) + Self.terms(title) { query[term] = nil }

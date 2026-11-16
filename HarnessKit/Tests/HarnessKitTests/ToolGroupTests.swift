@@ -272,6 +272,14 @@ private final class SeenMessages: @unchecked Sendable {
         #expect(names("", request: "Check my open linear tickets").contains("linear_list_issues"))
     }
 
+    @Test func getWithNothingNamedMeansList() {
+        #expect(names("Get my open linear tickets").first == "linear_list_issues")
+        var shelf = ToolShelf(groups: [bigGroup()])
+        let opened = shelf.preload(for: "Get my open linear tickets")
+        #expect(opened)
+        #expect(shelf.loaded.contains("linear_list_issues"))
+    }
+
     @Test func aStrayWordInTheRequestDoesNotOutweighTheNeed() {
         // "documentation" is in the request; the model asked for issues.
         let picked = names("list issues", request: "search the documentation skill")
