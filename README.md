@@ -23,6 +23,16 @@ Resident runs open models on your iPhone with [MLX](https://github.com/ml-explor
 
 Yes, it is another LLM chat app. The difference is under the hood.
 
+## 🤔 Why I built this
+
+I kept hearing how good small local models had become, and with a phone that finally had the memory for them, I wanted to see what they could do.
+
+So I tried the apps. Some ran models well and gave them no tools at all. Others had tools, but none of the context engineering a small model needs to cope with a real MCP server and its dozens of tool definitions. The model was rarely the weak part. The app around it was.
+
+I build AI assistants for a living, so I built the app I wanted, with everything I know about harness engineering in it: tools and skills disclosed only when a task needs them, memory, MCP connectors with proper sign-in, and a context budget tight enough for a 2B model.
+
+The goal is simple. Whatever the best model is that fits on an iPhone, the app and the harness should never be what holds it back. I think this is the best way to do useful work with a local model on an iPhone today, and I want to keep pushing how far these small models can go.
+
 ## ⚡️ Quick start
 
 You need a Mac with Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen), and an iPhone. On-device models need a real phone: MLX does not run in the iOS simulator.
@@ -43,16 +53,6 @@ Open `Config/Local.xcconfig` and fill in your Apple team ID, a bundle ID of your
 That builds the app, installs it on your phone and opens it. Pick a model in the app, wait for the download, and ask it something.
 
 > 👆 No phone to hand? `./run-sim.sh` runs the app in the simulator, where it can talk to a model server on your Mac, such as Ollama at `http://localhost:11434/v1`.
-
-## 🤔 Why I built this
-
-I kept hearing how good small local models had become, and with a phone that finally had the memory for them, I wanted to see what they could do.
-
-So I tried the apps. Some ran models well and gave them no tools at all. Others had tools, but none of the context engineering a small model needs to cope with a real MCP server and its dozens of tool definitions. The model was rarely the weak part. The app around it was.
-
-I build AI assistants for a living, so I built the app I wanted, with everything I know about harness engineering in it: tools and skills disclosed only when a task needs them, memory, MCP connectors with proper sign-in, and a context budget tight enough for a 2B model.
-
-The goal is simple. Whatever the best model is that fits on an iPhone, the app and the harness should never be what holds it back. I think this is the best way to do useful work with a local model on an iPhone today, and I want to keep pushing how far these small models can go.
 
 ## 🧠 The harness
 
