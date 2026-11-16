@@ -46,7 +46,7 @@ struct SuggestedConnector: Identifiable {
             symbol: "chevron.left.forwardslash.chevron.right",
             clientIDHint:
                 "GitHub needs a client ID. Create an OAuth app at github.com/settings/developers with the callback \(ConnectorsModel.redirectURI), tick Enable Device Flow, then enter its ID under Advanced and tap again.",
-            builtInKeys: ("GitHubClientID", nil), offersCode: true, scopes: ["repo", "read:org", "read:user"]),
+            builtInKeys: ("GitHubClientID", nil), offersCode: true),
         SuggestedConnector(name: "Linear", url: "https://mcp.linear.app/mcp", detail: "Issues and projects", symbol: "checklist"),
         SuggestedConnector(name: "Notion", url: "https://mcp.notion.com/mcp", detail: "Pages and databases", symbol: "doc.text"),
         SuggestedConnector(name: "Atlassian", url: "https://mcp.atlassian.com/v1/mcp", detail: "Jira and Confluence", symbol: "square.stack.3d.up"),
