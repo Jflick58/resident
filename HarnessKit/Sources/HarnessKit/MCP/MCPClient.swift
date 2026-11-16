@@ -192,7 +192,15 @@ public actor MCPClient {
         if http.statusCode == 404, sessionID != nil { throw SessionExpired.expired }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(decoding: try await Self.collect(bytes, limit: 2000), as: UTF8.self)
-            let detail = JSONValue(jsonString: body)?["error"]?["message"]?.stringValue ?? body.prefix(200).description
+            // Google refuses with a status and a header and still sends the answer as the
+            // body, so the body says why only when it is an error or not an answer at all.
+            let parsed = JSONValue(jsonString: body)
+            let detail =
+                parsed?["error"]?["message"]?.stringValue
+                ?? http.value(forHTTPHeaderField: "WWW-Authenticate")
+                ?? (parsed?["result"] != nil || body.contains("\"result\"")
+                    ? "It gave no reason. The account or the app may not be allowed to use this service."
+                    : body.prefix(200).description)
             throw MCPError.transport("The server answered \(http.statusCode). \(detail)".trimmingCharacters(in: .whitespaces))
         }
         if let newSession = http.value(forHTTPHeaderField: "Mcp-Session-Id") { sessionID = newSession }
