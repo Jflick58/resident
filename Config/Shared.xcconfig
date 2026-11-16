@@ -1,0 +1,9 @@
+// Settings every build shares. What is particular to one person (their Apple
+// team, a bundle ID of their own, their phone) goes in Local.xcconfig beside
+// this file, which is not checked in: copy Local.xcconfig.example to start.
+
+APP_BUNDLE_ID = com.jflick.resident
+PRODUCT_BUNDLE_IDENTIFIER = $(APP_BUNDLE_ID)
+CODE_SIGN_STYLE = Automatic
+
+#include? "Local.xcconfig"

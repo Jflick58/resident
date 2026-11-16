@@ -1,0 +1,12 @@
+title: Resident
+tagline: Fully Local AI Agent
+description: >-
+  Resident runs AI models on your iPhone and gives them the tools of a modern
+  agent: web search, code, memory, skills and your own apps. Private by design.
+url: ""
+baseurl: ""
+markdown: kramdown
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
