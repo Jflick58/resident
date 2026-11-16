@@ -274,24 +274,6 @@ struct ThinkingView: View {
         return "Thought for \(Int(seconds.rounded())) seconds"
     }
 
-    /// The sentence being written, from its first word, so the line grows in place
-    /// and is replaced whole when the next sentence starts. Showing the tail of the
-    /// text instead made both lines slide on every word, cut mid-word.
-    static func currentSentence(of text: String) -> String {
-        let sentences = String(text.suffix(1200))
-            .replacingOccurrences(of: "\n", with: " ")
-            .split(separator: " ", omittingEmptySubsequences: true)
-            .reduce(into: [[Substring]]()) { sentences, word in
-                if sentences.isEmpty || sentences[sentences.count - 1].last.map({ ".?!:".contains($0.last ?? " ") }) == true {
-                    sentences.append([])
-                }
-                sentences[sentences.count - 1].append(word)
-            }
-        // A sentence of a word or two says nothing yet: keep the one before it.
-        let shown = sentences.last { $0.count >= 3 } ?? sentences.last ?? []
-        return shown.joined(separator: " ")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
@@ -311,19 +293,6 @@ struct ThinkingView: View {
             }
             .buttonStyle(.plain)
 
-            if isLive, !isExpanded {
-                // The sentence it is thinking right now, so a wait before a tool call or an
-                // answer shows what the model is about to do. Asking the model to say so
-                // itself does not work: LFM3 went straight to the call, 54 times in 54.
-                Text(Self.currentSentence(of: text))
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 12)
-                    .transaction { $0.animation = nil }
-            }
             if isExpanded {
                 Text(text)
                     .font(.footnote)
