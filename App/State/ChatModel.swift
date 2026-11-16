@@ -17,6 +17,13 @@ final class ChatModel {
     var liveReasoning: String { OutputCleaner.clean(text: rawText, reasoning: rawReasoning).reasoning }
     /// IDs of tool calls that are running now.
     private(set) var runningCalls: Set<String> = []
+    private var lastToolSummary: String?
+    /// What the turn is doing right now, in a few words, or nil when none is running.
+    var activity: String? {
+        guard isRunning else { return nil }
+        if !liveText.isEmpty { return "Writing the reply" }
+        return lastToolSummary ?? "Thinking"
+    }
     var errorMessage: String?
 
     private unowned let app: AppModel
@@ -24,6 +31,8 @@ final class ChatModel {
     /// A model to answer this chat with in place of the one selected in the app, while this chat is open.
     /// Set by a Shortcuts action that names a model.
     var modelOverride: ModelRef?
+    /// Seconds after which a turn should wrap up with what it has. Set for a chat something is waiting on.
+    var timeLimit: TimeInterval?
 
     init(conversation: Conversation, app: AppModel) {
         self.conversation = conversation
@@ -167,6 +176,7 @@ final class ChatModel {
 
     private func run() {
         isRunning = true
+        lastToolSummary = nil
         userStopped = false
         conversation.turnInProgress = true
         app.update(conversation)
@@ -196,6 +206,7 @@ final class ChatModel {
                     // Leave room in the context for the reply itself.
                     contextBudgetTokens: max(2048, model.contextTokens - preset.maxOutputTokens))
                 agent.groups = groups
+                if let timeLimit { agent.deadline = Date().addingTimeInterval(timeLimit) }
                 // For a model that answers some requests without tools: the same prompt with nothing about them.
                 var plain = preset
                 plain.tools = []
@@ -239,7 +250,8 @@ final class ChatModel {
                 conversation.messages.append(message)
             }
             if message.toolCalls.isEmpty { turnCompleted = true }
-        case .toolStarted(let call, _):
+        case .toolStarted(let call, let summary):
+            lastToolSummary = summary
             runningCalls.insert(call.id)
         case .toolFinished(let message):
             if let id = message.toolCallID { runningCalls.remove(id) }

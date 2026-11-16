@@ -97,6 +97,23 @@ extension Array where Element == AgentEvent {
         #expect(events.assistantMessages.last?.text == "Final answer.")
     }
 
+    @Test func wrapsUpWhenOutOfTimeWithToolsStillDeclared() async throws {
+        // A model that keeps calling tools until told it has none left, and then answers.
+        let provider = ScriptedProvider { request in
+            let told = request.messages.last?.text.contains("no tool calls left") ?? false
+            // The tools are still declared on the last step, so the start of the prompt is unchanged.
+            return told
+                ? .init(text: request.tools.isEmpty ? "Answered without tools." : "Answered in time.")
+                : .init(toolCalls: [ToolCall(name: "echo", arguments: ["text": .string(UUID().uuidString)])])
+        }
+        var agent = Agent(provider: provider, tools: [EchoTool()], maxSteps: 8)
+        agent.deadline = Date().addingTimeInterval(-1)
+        let events = try await collect(agent.run(messages: [.user("go")]))
+        // The first step always runs; the next one is the last.
+        #expect(events.toolMessages.count == 1)
+        #expect(events.assistantMessages.last?.text == "Answered in time.")
+    }
+
     @Test func repeatedIdenticalCallIsRefused() async throws {
         let provider = ScriptedProvider { request in
             request.tools.isEmpty

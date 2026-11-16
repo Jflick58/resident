@@ -125,6 +125,10 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
             guard app.isAvailable(ref) else { throw AskError.failed("That model is no longer in Resident.") }
             chat.modelOverride = ref
         }
+        // Shortcuts stops waiting for an action after about four minutes, whatever iOS
+        // allows the app. So the agent is told to wrap up well before that: an answer
+        // from what it has found beats a better one nobody is waiting for.
+        chat.timeLimit = 150
         // Progress is the agent's steps: each reply or tool call it makes is one.
         // It also creeps forward inside a step. iOS lets a long action carry on for
         // as long as it shows progress, and a model's first step from cold can take
@@ -145,6 +149,9 @@ struct AskIntent: AppIntent, LongRunningIntent, CancellableIntent {
                 // Most of the way through a step's share after a minute, never all of it.
                 let within = 1 - exp(-Date().timeIntervalSince(stepBegan) / 30)
                 progress.completedUnitCount = max(progress.completedUnitCount, Int64((Double(steps) + 0.95 * within) * scale))
+                // The Live Activity shows these two lines: say what the agent is doing, not a count.
+                progress.localizedDescription = chat.activity ?? "Working"
+                progress.localizedAdditionalDescription = steps == 0 ? "Starting" : "Step \(steps + 1)"
                 try? await Task.sleep(for: .seconds(1))
             }
         }

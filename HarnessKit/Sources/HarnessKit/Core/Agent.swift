@@ -40,6 +40,10 @@ public struct Agent: Sendable {
     public var groups: [ToolGroup] = []
     /// Connector tools already declared earlier in the conversation.
     public var loadedToolNames: [String] = []
+    /// When the turn should be wrapping up. A step that starts after this is the
+    /// last: the model is told to answer with what it has, without thinking it
+    /// over. For work that something else is waiting on, such as a Shortcuts action.
+    public var deadline: Date?
 
     public init(
         provider: any ModelProvider, tools: [any Tool] = [], options: GenerationOptions = .init(),
@@ -104,21 +108,29 @@ public struct Agent: Sendable {
         var stepOptions = options
         var recoveredFromOverthinking = false
         var carriedReasoning = ""
+        // Set when the last step has to be asked again with no tools declared.
+        var answerWithoutTools = false
 
         var step = 0
-        while step < max(1, maxSteps) {
+        while step < max(1, maxSteps) || answerWithoutTools {
             step += 1
             try Task.checkCancellation()
-            let isLastStep = step == maxSteps
+            let outOfTime = step > 1 && deadline.map { Date() >= $0 } ?? false
+            let isLastStep = step >= maxSteps || outOfTime || answerWithoutTools
             var stepMessages = ContextBudget.fit(transcript, budgetTokens: contextBudgetTokens)
             if isLastStep, stepMessages.last?.role == .tool {
                 // Out of steps: say so, or a model that still wants a tool writes a call and no answer.
                 stepMessages.append(.user("You have no tool calls left. Answer now using what you already have."))
             }
+            if outOfTime { stepOptions.thinking = .off }
+            // The tools stay declared on the last step. Taking them away changes the
+            // start of the prompt, so a model on the device reads the whole chat again:
+            // nearly two minutes for 7,750 tokens with the app off screen. They go
+            // only if the model, told it has no calls left, makes one anyway.
             var generation = GenerationRequest(
                 messages: stepMessages,
-                tools: isLastStep ? [] : alwaysDeclared + shelf.loadedSpecs,
-                callableTools: isLastStep ? [] : ownSpecs + shelf.loadedSpecs,
+                tools: answerWithoutTools ? [] : alwaysDeclared + shelf.loadedSpecs,
+                callableTools: answerWithoutTools ? [] : ownSpecs + shelf.loadedSpecs,
                 options: stepOptions)
             generation.plainInstructions = plainInstructions
 
@@ -151,8 +163,12 @@ public struct Agent: Sendable {
 
             var cleaned = OutputCleaner.clean(text: text, reasoning: reasoning)
             if isLastStep, !calls.isEmpty {
-                // No tools were offered on this step; a call here cannot be run.
+                // A call here will not be run. If that is all the model wrote, ask once more with the tools gone.
                 calls = []
+                if cleaned.text.isEmpty, !answerWithoutTools {
+                    answerWithoutTools = true
+                    continue
+                }
                 if cleaned.text.isEmpty { cleaned.text = "I ran out of steps before I could finish this." }
             }
 
