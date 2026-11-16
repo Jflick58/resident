@@ -103,6 +103,8 @@ public struct Agent: Sendable {
         for message in messages where message.role == .assistant { for call in message.toolCalls { shelf.touch(call.name) } }
         let refreshed = shelf.refresh(for: request)
         if shelf.preload(for: request) || refreshed { emit(.toolsLoaded(shelf.loaded)) }
+        // Read once, so the start of the prompt stays the same for the whole turn.
+        let usageNotes = shelf.usageNotes
         var seenCalls: [String: Int] = [:]
         var seenResults: Set<String> = []
         var stepOptions = options
@@ -118,6 +120,7 @@ public struct Agent: Sendable {
             let outOfTime = step > 1 && deadline.map { Date() >= $0 } ?? false
             let isLastStep = step >= maxSteps || outOfTime || answerWithoutTools
             var stepMessages = ContextBudget.fit(transcript, budgetTokens: contextBudgetTokens)
+            if let usageNotes, stepMessages.first?.role == .system { stepMessages[0].text += "\n\n" + usageNotes }
             if isLastStep, stepMessages.last?.role == .tool {
                 // Out of steps: say so, or a model that still wants a tool writes a call and no answer.
                 stepMessages.append(.user("You have no tool calls left. Answer now using what you already have."))

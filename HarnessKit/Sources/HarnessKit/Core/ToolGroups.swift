@@ -204,6 +204,21 @@ struct ToolShelf {
 
     func holds(_ name: String) -> Bool { toolsByName[name] != nil }
 
+    /// Each service's own notes on using its tools, for the connectors with tools declared now.
+    ///
+    /// A model that opens a connector itself is given these in the answer. One whose
+    /// connector the app opened for it, because the user named it, was not: asked for
+    /// "my open linear tickets", LFM3 listed every ticket in the workspace page by page
+    /// for six minutes, never having read that `assignee: "me"` is how to ask for its own.
+    var usageNotes: String? {
+        let notes = groups.compactMap { group -> String? in
+            let text = group.guidance.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty, group.tools.contains(where: { loaded.contains($0.spec.name) }) else { return nil }
+            return "How \(group.title) says to use its tools: " + SchemaTrim.shorten(text, to: ToolGroup.guidanceLimit)
+        }
+        return notes.isEmpty ? nil : notes.joined(separator: "\n")
+    }
+
     var spec: ToolSpec {
         ToolSpec(
             name: ToolGroup.openerName,

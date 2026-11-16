@@ -272,6 +272,15 @@ private final class SeenMessages: @unchecked Sendable {
         #expect(names("", request: "Check my open linear tickets").contains("linear_list_issues"))
     }
 
+    @Test func aConnectorTheAppOpenedComesWithItsUsageNotes() {
+        var group = bigGroup()
+        group.guidance = "Use list_issues with assignee \"me\" for the user's own issues."
+        var shelf = ToolShelf(groups: [group])
+        #expect(shelf.usageNotes == nil)
+        _ = shelf.preload(for: "Get my open linear tickets")
+        #expect(shelf.usageNotes == "How Linear says to use its tools: Use list_issues with assignee \"me\" for the user's own issues.")
+    }
+
     @Test func getWithNothingNamedMeansList() {
         #expect(names("Get my open linear tickets").first == "linear_list_issues")
         var shelf = ToolShelf(groups: [bigGroup()])

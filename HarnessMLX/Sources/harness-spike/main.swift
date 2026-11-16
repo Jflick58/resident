@@ -2,6 +2,20 @@ import Foundation
 import HarnessKit
 import HarnessMLX
 
+/// The start of what Linear's server says about using its tools, as the app receives it.
+/// HARNESS_GUIDANCE=0 leaves it out, to measure what it is worth.
+let linearGuidance =
+    ProcessInfo.processInfo.environment["HARNESS_GUIDANCE"] == "0"
+    ? ""
+    : """
+        When passing string values to tools, send the content directly without escape sequences. For example, use real newlines in markdown content rather than literal backslash-n characters.
+
+        Tools accept human-readable references, so you rarely need to look up IDs first: issue identifiers such as LIN-123, project identifiers such as P-ENG-12, team names or keys, user names or emails, and "me" for the authenticated user. Only call list_teams, list_users, or similar tools when a reference is ambiguous or unknown.
+
+        Use list_issues for structured queries, such as the issues assigned to "me" in a team, status, label, project, or cycle, and its query parameter for keyword search. Results are paginated: when hasNextPage is true, pass the returned cursor to fetch the next page rather than assuming the first page is complete.
+        """
+
+
 // A command-line check of the whole harness against a real on-device model:
 // fit check, download, load, then a set of tasks through the agent loop with
 // the real tools. Prints what the model did and a score.
@@ -348,7 +362,7 @@ if let chatTurns {
     // With --setup linear the chat has Linear's connector, opened on demand as in the app.
     let chatGroups =
         setup == "linear"
-        ? [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder))] : []
+        ? [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance)] : []
     var messages: [Message] = [
         .system(
             PromptBuilder.systemPrompt(
@@ -465,7 +479,7 @@ case "linear", "linear-all":
         agentTools = recordedCore
         groups = connectorSummaries.map { group, summary in
             ToolGroup(name: group, title: group, summary: summary, tools: connectors.filter { $0.group == group })
-        } + [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: linear)]
+        } + [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: linear, guidance: linearGuidance)]
     } else {
         agentTools = recordedCore + connectors + linear
     }
