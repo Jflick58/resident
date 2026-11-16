@@ -9,10 +9,22 @@ struct SuggestedConnector: Identifiable {
     var symbol: String
     /// Set for services where the app cannot register itself: what to tell the user to bring.
     var clientIDHint: String?
+    /// The Info.plist keys of a client ID and secret built into this copy of the app, for such services.
+    var builtInKeys: (id: String, secret: String?)?
     var scopes: [String]?
     /// Tools left on when the service has more than a small model should be shown.
     var onlyTools: [String]?
     var id: String { url }
+
+    /// The client built into this copy of the app, if its maker set one.
+    var builtInClient: (id: String, secret: String)? {
+        func value(_ key: String?) -> String {
+            guard let key else { return "" }
+            return (Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "").trimmingCharacters(in: .whitespaces)
+        }
+        guard let keys = builtInKeys, !value(keys.id).isEmpty else { return nil }
+        return (value(keys.id), value(keys.secret))
+    }
 
     private static let googleHint =
         "needs a Google client ID. Create an iOS OAuth client for bundle ID \(AppIdentity.bundleID) in Google Cloud, then enter its ID under Advanced and tap again."
@@ -20,13 +32,19 @@ struct SuggestedConnector: Identifiable {
     static let all = [
         SuggestedConnector(
             name: "Gmail", url: "https://gmailmcp.googleapis.com/mcp/v1", detail: "Search and read mail, write drafts", symbol: "envelope",
-            clientIDHint: "Gmail " + googleHint,
+            clientIDHint: "Gmail " + googleHint, builtInKeys: ("GoogleClientID", nil),
             scopes: ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.compose"],
             onlyTools: ["search_threads", "get_thread", "create_draft"]),
         SuggestedConnector(
             name: "Google Calendar", url: "https://calendarmcp.googleapis.com/mcp/v1", detail: "Events across your Google calendars", symbol: "calendar",
-            clientIDHint: "Google Calendar " + googleHint,
+            clientIDHint: "Google Calendar " + googleHint, builtInKeys: ("GoogleClientID", nil),
             onlyTools: ["list_events", "create_event", "update_event", "delete_event", "suggest_time"]),
+        SuggestedConnector(
+            name: "GitHub", url: "https://api.githubcopilot.com/mcp/", detail: "Repositories, issues and pull requests",
+            symbol: "chevron.left.forwardslash.chevron.right",
+            clientIDHint:
+                "GitHub needs a client ID. Create an OAuth app at github.com/settings/developers with the callback \(ConnectorsModel.redirectURI), then enter its ID and secret under Advanced and tap again.",
+            builtInKeys: ("GitHubClientID", "GitHubClientSecret")),
         SuggestedConnector(name: "Linear", url: "https://mcp.linear.app/mcp", detail: "Issues and projects", symbol: "checklist"),
         SuggestedConnector(name: "Notion", url: "https://mcp.notion.com/mcp", detail: "Pages and databases", symbol: "doc.text"),
         SuggestedConnector(name: "Atlassian", url: "https://mcp.atlassian.com/v1/mcp", detail: "Jira and Confluence", symbol: "square.stack.3d.up"),
@@ -126,7 +144,9 @@ struct AddConnectorView: View {
             Section {
                 ForEach(suggestions) { suggestion in
                     Button {
-                        if let hint = suggestion.clientIDHint, clientID.trimmingCharacters(in: .whitespaces).isEmpty {
+                        if let hint = suggestion.clientIDHint, suggestion.builtInClient == nil,
+                            clientID.trimmingCharacters(in: .whitespaces).isEmpty
+                        {
                             error = hint
                         } else {
                             connect(suggestion.url, name: suggestion.name, suggestion: suggestion)
@@ -199,11 +219,15 @@ struct AddConnectorView: View {
         guard connecting == nil else { return }
         connecting = url
         error = nil
+        // What the user typed under Advanced wins over the client built into the app.
+        let typed = !clientID.trimmingCharacters(in: .whitespaces).isEmpty
+        let builtIn = typed ? nil : suggestion?.builtInClient
         Task {
             defer { connecting = nil }
             do {
                 try await app.addConnector(
-                    address: url, name: name, clientID: clientID, clientSecret: clientSecret, scopes: suggestion?.scopes,
+                    address: url, name: name, clientID: builtIn?.id ?? clientID, clientSecret: builtIn?.secret ?? clientSecret,
+                    scopes: suggestion?.scopes,
                     onlyTools: suggestion?.onlyTools, signInFirst: suggestion?.clientIDHint != nil, summary: suggestion?.detail)
                 dismiss()
             } catch {
