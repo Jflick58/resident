@@ -293,6 +293,18 @@ struct ThinkingView: View {
             }
             .buttonStyle(.plain)
 
+            if isLive, !isExpanded {
+                // The words it is thinking right now, so a wait before a tool call or an
+                // answer shows what the model is about to do. Asking the model to say so
+                // itself does not work: LFM3 went straight to the call, 54 times in 54.
+                Text(String(text.suffix(240)).replacingOccurrences(of: "\n", with: " "))
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                    .padding(.leading, 12)
+                    .transaction { $0.animation = nil }
+            }
             if isExpanded {
                 Text(text)
                     .font(.footnote)
