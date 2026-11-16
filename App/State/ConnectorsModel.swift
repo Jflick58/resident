@@ -12,7 +12,7 @@ import UIKit
 @Observable
 final class ConnectorsModel {
     /// Where the service sends the browser back to after the user approves.
-    static let redirectURI = AppIdentity.bundleID + ":/oauth"
+    static let redirectURI = AppIdentity.bundleID + "://oauth"
 
     private let store: Store
     private(set) var servers: [MCPServerConfig]

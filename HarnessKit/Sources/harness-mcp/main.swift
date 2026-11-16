@@ -38,9 +38,9 @@ do {
         print("  register:  \(info.registrationEndpoint?.absoluteString ?? "not offered")")
         print("  scopes:    \(info.scopes.joined(separator: " "))")
         if arguments.contains("--register") {
-            let client = try await flow.register(info, redirectURI: "com.jflick.resident:/oauth")
+            let client = try await flow.register(info, redirectURI: "com.jflick.resident://oauth")
             print("  registered, client id \(client.clientID.prefix(12))…")
-            print("  sign-in page: \(try flow.authorizationRequest(info, client: client, redirectURI: "com.jflick.resident:/oauth").url.absoluteString.prefix(160))…")
+            print("  sign-in page: \(try flow.authorizationRequest(info, client: client, redirectURI: "com.jflick.resident://oauth").url.absoluteString.prefix(160))…")
         }
     } catch {
         print("  \(error.localizedDescription)")
