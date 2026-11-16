@@ -18,6 +18,36 @@ final class ConnectorsModel {
     private(set) var servers: [MCPServerConfig]
     @ObservationIgnored private var connections: [UUID: MCPConnection] = [:]
     @ObservationIgnored private let browser = SignInBrowser()
+    static var redirectScheme: String { String(redirectURI.prefix { $0 != ":" }) }
+
+    /// A code the user must type at a service's site to finish signing in, while it is on offer.
+    struct SignInCode: Identifiable {
+        let id = UUID()
+        var code: String
+        var site: String
+    }
+    private(set) var signInCode: SignInCode?
+    @ObservationIgnored private var codeAnswer: CheckedContinuation<Bool, Never>?
+
+    /// Shows the code, already copied, and waits for the user to go on to the site or give up.
+    private func offer(_ code: String, at page: URL) async -> Bool {
+        UIPasteboard.general.string = code
+        answerSignInCode(false)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                codeAnswer = continuation
+                signInCode = SignInCode(code: code, site: page.host ?? "the service's site")
+            }
+        } onCancel: {
+            Task { @MainActor in self.answerSignInCode(false) }
+        }
+    }
+
+    func answerSignInCode(_ goOn: Bool) {
+        signInCode = nil
+        codeAnswer?.resume(returning: goOn)
+        codeAnswer = nil
+    }
 
     init(store: Store) {
         self.store = store
@@ -88,7 +118,8 @@ final class ConnectorsModel {
     @discardableResult
     func add(
         address: String, name: String = "", clientID: String = "", clientSecret: String = "",
-        scopes: [String]? = nil, onlyTools: [String]? = nil, signInFirst: Bool = false, summary: String? = nil
+        scopes: [String]? = nil, onlyTools: [String]? = nil, signInFirst: Bool = false, withCode: Bool = false,
+        summary: String? = nil
     ) async throws -> MCPServerConfig {
         guard let url = MCPServerConfig.normalizedURL(address) else {
             throw OAuthError("That does not look like a web address.")
@@ -100,6 +131,7 @@ final class ConnectorsModel {
             name: name.trimmingCharacters(in: .whitespaces), url: url.absoluteString, summary: summary,
             clientID: clientID.trimmingCharacters(in: .whitespaces).isEmpty ? nil : clientID.trimmingCharacters(in: .whitespaces),
             scopes: scopes)
+        if withCode, server.clientID != nil { server.signsInWithCode = true }
         Keychain.set(clientSecret.trimmingCharacters(in: .whitespaces), for: "mcp.secret.\(server.id.uuidString)")
         guard let connection = connection(for: server) else { throw OAuthError("That does not look like a web address.") }
         do {
@@ -145,13 +177,23 @@ final class ConnectorsModel {
     private func signIn(_ server: MCPServerConfig, connection: MCPConnection, challenge: String?) async throws {
         guard let url = URL(string: server.url) else { return }
         let browser = browser
-        let redirect = MCPServerConfig.redirectURI(clientID: server.clientID, default: Self.redirectURI)
-        let scheme = String(redirect.prefix { $0 != ":" })
-        let credentials = try await OAuthFlow().signIn(
-            serverURL: url, challenge: challenge, clientID: server.clientID,
-            clientSecret: Keychain.get("mcp.secret.\(server.id.uuidString)"), scopes: server.scopes, redirectURI: redirect
-        ) { page in
-            try await browser.open(page, callbackScheme: scheme)
+        let credentials: MCPCredentials
+        if server.signsInWithCode == true, let clientID = server.clientID {
+            credentials = try await OAuthFlow().signInWithCode(serverURL: url, challenge: challenge, clientID: clientID, scopes: server.scopes) {
+                [weak self] code, page in
+                guard await self?.offer(code, at: page) == true else { throw OAuthError("Sign-in was cancelled.") }
+                // Nothing comes back from this page: it ends when the user closes it, or when the approval arrives.
+                _ = try? await browser.open(page, callbackScheme: Self.redirectScheme)
+            }
+        } else {
+            let redirect = MCPServerConfig.redirectURI(clientID: server.clientID, default: Self.redirectURI)
+            let scheme = String(redirect.prefix { $0 != ":" })
+            credentials = try await OAuthFlow().signIn(
+                serverURL: url, challenge: challenge, clientID: server.clientID,
+                clientSecret: Keychain.get("mcp.secret.\(server.id.uuidString)"), scopes: server.scopes, redirectURI: redirect
+            ) { page in
+                try await browser.open(page, callbackScheme: scheme)
+            }
         }
         await connection.setCredentials(credentials)
     }
@@ -219,29 +261,52 @@ final class ConnectorsModel {
 @MainActor
 final class SignInBrowser: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var current: ASWebAuthenticationSession?
+    private var finishCurrent: (() -> Void)?
 
     func open(_ url: URL, callbackScheme: String) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callback: .customScheme(callbackScheme)) { callback, error in
-                if let callback {
-                    continuation.resume(returning: callback)
-                } else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
-                    continuation.resume(throwing: OAuthError("Sign-in was cancelled."))
-                } else {
-                    continuation.resume(throwing: OAuthError(error?.localizedDescription ?? "Sign-in failed."))
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                // Closing the page from here may or may not report back, so only the first outcome counts.
+                var isDone = false
+                @MainActor func finish(_ result: Result<URL, Error>) {
+                    guard !isDone else { return }
+                    isDone = true
+                    self.finishCurrent = nil
+                    continuation.resume(with: result)
+                }
+                let session = ASWebAuthenticationSession(url: url, callback: .customScheme(callbackScheme)) { callback, error in
+                    MainActor.assumeIsolated {
+                        if let callback {
+                            finish(.success(callback))
+                        } else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                            finish(.failure(OAuthError("Sign-in was cancelled.")))
+                        } else {
+                            finish(.failure(OAuthError(error?.localizedDescription ?? "Sign-in failed.")))
+                        }
+                    }
+                }
+                session.presentationContextProvider = self
+                #if DEBUG
+                    // `-ephemeralSignIn YES` skips the system's consent prompt, for driving sign-in from the command line.
+                    session.prefersEphemeralWebBrowserSession = UserDefaults.standard.bool(forKey: "ephemeralSignIn")
+                #endif
+                current = session
+                finishCurrent = { finish(.failure(OAuthError("Sign-in was cancelled."))) }
+                if Task.isCancelled || !session.start() {
+                    current = nil
+                    finish(.failure(OAuthError("The sign-in page could not be opened.")))
                 }
             }
-            session.presentationContextProvider = self
-            #if DEBUG
-                // `-ephemeralSignIn YES` skips the system's consent prompt, for driving sign-in from the command line.
-                session.prefersEphemeralWebBrowserSession = UserDefaults.standard.bool(forKey: "ephemeralSignIn")
-            #endif
-            current = session
-            if !session.start() {
-                current = nil
-                continuation.resume(throwing: OAuthError("The sign-in page could not be opened."))
-            }
+        } onCancel: {
+            Task { @MainActor in self.close() }
         }
+    }
+
+    /// Takes the page down, as when the approval arrived another way.
+    private func close() {
+        current?.cancel()
+        current = nil
+        finishCurrent?()
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {

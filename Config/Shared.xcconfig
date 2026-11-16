@@ -9,7 +9,6 @@ CODE_SIGN_STYLE = Automatic
 // OAuth clients for GitHub and Google, which do not let an app register
 // itself. Empty here: a build without them asks the user for a client ID.
 GITHUB_CLIENT_ID =
-GITHUB_CLIENT_SECRET =
 GOOGLE_CLIENT_ID =
 
 #include? "Local.xcconfig"

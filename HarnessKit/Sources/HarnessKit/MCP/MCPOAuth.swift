@@ -13,6 +13,8 @@ public struct OAuthServerInfo: Codable, Hashable, Sendable {
     public var authorizationEndpoint: URL
     public var tokenEndpoint: URL
     public var registrationEndpoint: URL?
+    /// Where to ask for a code the user types at the service's site, when it offers that.
+    public var deviceEndpoint: URL?
     public var scopes: [String]
 
     public init(
@@ -165,10 +167,12 @@ public struct OAuthFlow: Sendable {
             {
                 throw OAuthError("This server's sign-in does not support the PKCE protection this app requires.")
             }
-            return OAuthServerInfo(
+            var info = OAuthServerInfo(
                 resource: resource, authorizationEndpoint: authorize, tokenEndpoint: token,
                 registrationEndpoint: metadata["registration_endpoint"]?.stringValue.flatMap { URL(string: $0) },
                 scopes: scopes ?? [])
+            info.deviceEndpoint = metadata["device_authorization_endpoint"]?.stringValue.flatMap { URL(string: $0) }
+            return info
         }
 
         // No metadata anywhere: the paths older MCP servers are required to use.
@@ -372,5 +376,91 @@ public struct OAuthFlow: Sendable {
         let tokens = try await exchange(
             code: code, verifier: request.verifier, info: info, client: client, redirectURI: redirectURI)
         return MCPCredentials(server: info, client: client, tokens: tokens)
+    }
+
+    // MARK: Signing in with a code
+
+    /// Signs in by having the user type a short code at the service's own site (RFC 8628).
+    ///
+    /// For services where an app cannot register itself and would otherwise need a
+    /// client secret built in, which anyone could read out of the app: GitHub. This
+    /// way needs only the client ID. `show` is given the code and the page to enter
+    /// it on, and returns when the user has left that page; throwing from it gives up.
+    public func signInWithCode(
+        serverURL: URL, challenge: String?, clientID: String, scopes: [String]? = nil,
+        show: @escaping @Sendable (_ code: String, _ page: URL) async throws -> Void
+    ) async throws -> MCPCredentials {
+        var info = try await discover(serverURL: serverURL, challenge: challenge)
+        if let scopes, !scopes.isEmpty { info.scopes = scopes }
+        guard let endpoint = info.deviceEndpoint else { throw OAuthError("This service does not offer sign-in with a code.") }
+        let client = OAuthClientRegistration(clientID: clientID)
+
+        var request = Self.form(endpoint, ["client_id": clientID, "scope": info.scopes.joined(separator: " ")])
+        request.timeoutInterval = 30
+        let asked = try await Self.object(from: session, request, doing: "start signing in")
+        guard let deviceCode = asked["device_code"]?.stringValue, let userCode = asked["user_code"]?.stringValue,
+            let page = (asked["verification_uri"] ?? asked["verification_url"])?.stringValue.flatMap({ URL(string: $0) })
+        else {
+            throw OAuthError("Could not start signing in: \(asked["error_description"]?.stringValue ?? asked["error"]?.stringValue ?? "no code came back").")
+        }
+        let wait = max(1, asked["interval"]?.doubleValue ?? 5)
+        let lifetime = asked["expires_in"]?.doubleValue ?? 900
+        let info2 = info
+
+        let tokens: OAuthTokens = try await withThrowingTaskGroup(of: OAuthTokens?.self) { group in
+            group.addTask {
+                try await show(userCode, page)
+                // The approval may land a moment after the user leaves the page.
+                try await Task.sleep(for: .seconds(wait + 5))
+                return nil
+            }
+            group.addTask {
+                try await self.waitForApproval(info2, client: client, deviceCode: deviceCode, every: wait, for: lifetime)
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next(), let tokens = first else { throw OAuthError("Access was not approved.") }
+            return tokens
+        }
+        return MCPCredentials(server: info, client: client, tokens: tokens)
+    }
+
+    /// Asks the service, as often as it allows, whether the user has entered the code yet.
+    private func waitForApproval(
+        _ info: OAuthServerInfo, client: OAuthClientRegistration, deviceCode: String, every interval: Double, for lifetime: Double
+    ) async throws -> OAuthTokens {
+        var interval = interval
+        let end = Date().addingTimeInterval(lifetime)
+        while Date() < end {
+            try await Task.sleep(for: .seconds(interval))
+            let request = Self.form(
+                info.tokenEndpoint,
+                ["client_id": client.clientID, "device_code": deviceCode, "grant_type": "urn:ietf:params:oauth:grant-type:device_code"])
+            // GitHub answers "not yet" with status 200, others with 400: read the body either way.
+            guard let (data, _) = try? await session.data(for: request),
+                let value = JSONValue(jsonString: String(decoding: data, as: UTF8.self))
+            else { continue }
+            if let accessToken = value["access_token"]?.stringValue {
+                return OAuthTokens(
+                    accessToken: accessToken, refreshToken: value["refresh_token"]?.stringValue,
+                    expiresAt: value["expires_in"]?.doubleValue.map { Date().addingTimeInterval($0) })
+            }
+            switch value["error"]?.stringValue {
+            case "authorization_pending": continue
+            case "slow_down": interval = value["interval"]?.doubleValue ?? interval + 5
+            case "access_denied": throw OAuthError("Access was not approved.")
+            case "expired_token": throw OAuthError("The code ran out before it was entered. Try again.")
+            case let error: throw OAuthError("Sign-in failed: \(value["error_description"]?.stringValue ?? error ?? "no token came back")")
+            }
+        }
+        throw OAuthError("The code ran out before it was entered. Try again.")
+    }
+
+    private static func form(_ url: URL, _ fields: [String: String]) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = Data(formEncoded(fields).utf8)
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return request
     }
 }

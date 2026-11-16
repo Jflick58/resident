@@ -16,8 +16,7 @@ RUN_DEVICE = My iPhone
 
 // Optional. OAuth clients of your own, so GitHub and Google connect with one
 // tap. GitHub: an OAuth app at github.com/settings/developers with the callback
-// <your bundle ID>://oauth. Google: an iOS OAuth client for your bundle ID.
-// They are built into the app, so anyone with the app can read them out.
+// <your bundle ID>://oauth and Enable Device Flow ticked; no secret is needed.
+// Google: an iOS OAuth client for your bundle ID. Neither ID is a secret.
 // GITHUB_CLIENT_ID = Ov23abcdefghijklmnop
-// GITHUB_CLIENT_SECRET = 0123456789abcdef0123456789abcdef01234567
 // GOOGLE_CLIENT_ID = 1234567890-abcdefg.apps.googleusercontent.com

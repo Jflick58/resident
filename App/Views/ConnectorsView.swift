@@ -11,6 +11,8 @@ struct SuggestedConnector: Identifiable {
     var clientIDHint: String?
     /// The Info.plist keys of a client ID and secret built into this copy of the app, for such services.
     var builtInKeys: (id: String, secret: String?)?
+    /// True when the service lets the user sign in by typing a code at its site, so no client secret is needed.
+    var offersCode = false
     var scopes: [String]?
     /// Tools left on when the service has more than a small model should be shown.
     var onlyTools: [String]?
@@ -43,8 +45,8 @@ struct SuggestedConnector: Identifiable {
             name: "GitHub", url: "https://api.githubcopilot.com/mcp/", detail: "Repositories, issues and pull requests",
             symbol: "chevron.left.forwardslash.chevron.right",
             clientIDHint:
-                "GitHub needs a client ID. Create an OAuth app at github.com/settings/developers with the callback \(ConnectorsModel.redirectURI), then enter its ID and secret under Advanced and tap again.",
-            builtInKeys: ("GitHubClientID", "GitHubClientSecret")),
+                "GitHub needs a client ID. Create an OAuth app at github.com/settings/developers with the callback \(ConnectorsModel.redirectURI), tick Enable Device Flow, then enter its ID under Advanced and tap again.",
+            builtInKeys: ("GitHubClientID", nil), offersCode: true, scopes: ["repo", "read:org", "read:user"]),
         SuggestedConnector(name: "Linear", url: "https://mcp.linear.app/mcp", detail: "Issues and projects", symbol: "checklist"),
         SuggestedConnector(name: "Notion", url: "https://mcp.notion.com/mcp", detail: "Pages and databases", symbol: "doc.text"),
         SuggestedConnector(name: "Atlassian", url: "https://mcp.atlassian.com/v1/mcp", detail: "Jira and Confluence", symbol: "square.stack.3d.up"),
@@ -52,6 +54,24 @@ struct SuggestedConnector: Identifiable {
         SuggestedConnector(name: "Hugging Face", url: "https://huggingface.co/mcp", detail: "Models, datasets and Spaces", symbol: "cube"),
         SuggestedConnector(name: "DeepWiki", url: "https://mcp.deepwiki.com/mcp", detail: "Ask about any public GitHub repository", symbol: "book"),
     ]
+}
+
+/// Shows the code to type at a service's site, for sign-in that works that way.
+private struct SignInCodeAlert: ViewModifier {
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        let code = app.connectors.signInCode
+        content.alert(
+            "Your Code: \(code?.code ?? "")",
+            isPresented: Binding(get: { app.connectors.signInCode != nil }, set: { if !$0 { app.connectors.answerSignInCode(false) } })
+        ) {
+            Button("Continue") { app.connectors.answerSignInCode(true) }
+            Button("Cancel", role: .cancel) { app.connectors.answerSignInCode(false) }
+        } message: {
+            Text("Enter this code at \(code?.site ?? "the site") to sign in. It has been copied, so you can paste it.")
+        }
+    }
 }
 
 /// The connectors the user has added, and the way to add more.
@@ -207,6 +227,7 @@ struct AddConnectorView: View {
         }
         .disabled(connecting != nil)
         .navigationTitle("Add Connector")
+        .modifier(SignInCodeAlert())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -222,13 +243,16 @@ struct AddConnectorView: View {
         // What the user typed under Advanced wins over the client built into the app.
         let typed = !clientID.trimmingCharacters(in: .whitespaces).isEmpty
         let builtIn = typed ? nil : suggestion?.builtInClient
+        let secret = builtIn?.secret ?? clientSecret
+        // With no secret to hand, a service that offers it is signed in to with a code typed at its site.
+        let withCode = suggestion?.offersCode == true && secret.trimmingCharacters(in: .whitespaces).isEmpty
         Task {
             defer { connecting = nil }
             do {
                 try await app.addConnector(
-                    address: url, name: name, clientID: builtIn?.id ?? clientID, clientSecret: builtIn?.secret ?? clientSecret,
+                    address: url, name: name, clientID: builtIn?.id ?? clientID, clientSecret: secret,
                     scopes: suggestion?.scopes,
-                    onlyTools: suggestion?.onlyTools, signInFirst: suggestion?.clientIDHint != nil, summary: suggestion?.detail)
+                    onlyTools: suggestion?.onlyTools, signInFirst: suggestion?.clientIDHint != nil, withCode: withCode, summary: suggestion?.detail)
                 dismiss()
             } catch {
                 self.error = error.localizedDescription
@@ -305,6 +329,7 @@ struct ConnectorDetailView: View {
             .disabled(isWorking)
             .overlay { if isWorking { ProgressView() } }
             .navigationTitle(server.name)
+            .modifier(SignInCodeAlert())
             .navigationBarTitleDisplayMode(.inline)
         }
     }

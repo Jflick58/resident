@@ -464,11 +464,12 @@ final class AppModel {
     /// Adds a connector and switches it on in the preset new chats use, so it works straight away.
     func addConnector(
         address: String, name: String = "", clientID: String = "", clientSecret: String = "",
-        scopes: [String]? = nil, onlyTools: [String]? = nil, signInFirst: Bool = false, summary: String? = nil
+        scopes: [String]? = nil, onlyTools: [String]? = nil, signInFirst: Bool = false, withCode: Bool = false,
+        summary: String? = nil
     ) async throws {
         let server = try await connectors.add(
             address: address, name: name, clientID: clientID, clientSecret: clientSecret, scopes: scopes,
-            onlyTools: onlyTools, signInFirst: signInFirst, summary: summary)
+            onlyTools: onlyTools, signInFirst: signInFirst, withCode: withCode, summary: summary)
         var target = preset(library.defaultPresetID)
         if !target.servers.contains(server.id) {
             target.servers.append(server.id)

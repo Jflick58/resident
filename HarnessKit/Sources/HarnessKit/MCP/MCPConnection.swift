@@ -17,6 +17,8 @@ public struct MCPServerConfig: Codable, Hashable, Sendable, Identifiable {
     public var clientID: String?
     /// Permissions to ask for at sign-in, when not everything the server offers.
     public var scopes: [String]?
+    /// True when sign-in is by a code the user types at the service's site, which needs no client secret.
+    public var signsInWithCode: Bool?
     /// True when the server wants a sign-in that has not happened or has lapsed.
     public var needsSignIn: Bool
     /// True once the user has signed in, so the screen can offer signing out.

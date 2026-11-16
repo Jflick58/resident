@@ -2,7 +2,7 @@
 
 - [ ] **GitHub connector:** create an OAuth app at github.com/settings/developers
       with the callback `com.jflick.resident://oauth`, then give Claude its client
-      ID (and secret, if GitHub issues one). Until then GitHub can be added by
+      ID. Tick Enable Device Flow; no secret is needed. Until then GitHub can be added by
       hand in Settings > Connectors > Add Connector > Advanced.
 - [ ] **Gmail and Google Calendar connectors:** in Google Cloud Console create
       a project, enable the Gmail API and Google Calendar API (and their MCP

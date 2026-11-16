@@ -22,6 +22,8 @@ private final class StubServer: @unchecked Sendable {
     private var validTokens: Set<String> = []
     private var refreshTokens: Set<String> = []
     private var counter = 0
+    private var devicePolls = 0
+    var codeEntered = true
     private let lock = NSLock()
 
     func expireAccessTokens() {
@@ -68,8 +70,10 @@ private final class StubServer: @unchecked Sendable {
             return json([
                 "issuer": "https://auth.test/tenant", "authorization_endpoint": "https://auth.test/authorize",
                 "token_endpoint": "https://auth.test/token", "registration_endpoint": "https://auth.test/register",
-                "code_challenge_methods_supported": ["S256"],
+                "code_challenge_methods_supported": ["S256"], "device_authorization_endpoint": "https://auth.test/device",
             ])
+        case ("auth.test", "/device"):
+            return json(["device_code": "device-1", "user_code": "ABCD-1234", "verification_uri": "https://auth.test/enter", "interval": 1])
         case ("auth.test", "/register"):
             registrations += 1
             return json(["client_id": .string("client-\(registrations)")], status: 201)
@@ -84,6 +88,12 @@ private final class StubServer: @unchecked Sendable {
             return json(["location": .string("\(value("redirect_uri"))?code=\(code)&state=\(value("state"))")])
         case ("auth.test", "/token"):
             seenResources.append(form["resource"] ?? "")
+            if form["grant_type"] == "urn:ietf:params:oauth:grant-type:device_code" {
+                // "Not yet" the way GitHub says it, with status 200, until the code has been entered.
+                devicePolls += 1
+                guard form["device_code"] == "device-1", devicePolls > 1, codeEntered else { return json(["error": "authorization_pending"]) }
+                return json(issue())
+            }
             if form["grant_type"] == "authorization_code" {
                 guard let code = form["code"], let challenge = challenges.removeValue(forKey: code),
                     OAuthFlow.codeChallenge(for: form["code_verifier"] ?? "") == challenge
@@ -267,6 +277,29 @@ private func approve(_ session: URLSession) -> @Sendable (URL) async throws -> U
 }
 
 @Suite(.serialized) struct MCPServerTests {
+    @Test func signsInWithACodeAndNoSecret() async throws {
+        let server = StubServer()
+        let session = StubProtocol.session(server)
+        let credentials = try await OAuthFlow(session: session).signInWithCode(serverURL: serverURL, challenge: nil, clientID: "public-id") {
+            code, page in
+            #expect(code == "ABCD-1234" && page.absoluteString == "https://auth.test/enter")
+            // The page stays open until the approval arrives and closes it.
+            try await Task.sleep(for: .seconds(60))
+        }
+        #expect(credentials.client.clientSecret == nil)
+        let connection = MCPConnection(url: serverURL, credentials: credentials, session: session)
+        #expect(try await connection.listTools().count == 2)
+    }
+
+    @Test func givesUpWhenThePageIsClosedWithoutTheCode() async throws {
+        let server = StubServer()
+        server.codeEntered = false
+        let flow = OAuthFlow(session: StubProtocol.session(server))
+        await #expect(throws: OAuthError("Access was not approved.")) {
+            _ = try await flow.signInWithCode(serverURL: serverURL, challenge: nil, clientID: "public-id") { _, _ in }
+        }
+    }
+
     @Test func listsAndCallsToolsWithoutSignIn() async throws {
         let server = StubServer()
         server.requiresSignIn = false
