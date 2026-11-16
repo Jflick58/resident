@@ -31,7 +31,10 @@ struct SuggestedConnector: Identifiable {
     private static let googleHint =
         "needs a Google client ID. Create an iOS OAuth client for bundle ID \(AppIdentity.bundleID) in Google Cloud, then enter its ID under Advanced and tap again."
 
-    static let all = [
+    /// Google's servers for these answer only Workspace accounts enrolled in its developer
+    /// preview: a personal Gmail account signs in and is then refused with a 403. Kept
+    /// here, unlisted, until Google opens them.
+    static let waitingOnGoogle = [
         SuggestedConnector(
             name: "Gmail", url: "https://gmailmcp.googleapis.com/mcp/v1", detail: "Search and read mail, write drafts", symbol: "envelope",
             clientIDHint: "Gmail " + googleHint, builtInKeys: ("GoogleClientID", nil),
@@ -41,6 +44,9 @@ struct SuggestedConnector: Identifiable {
             name: "Google Calendar", url: "https://calendarmcp.googleapis.com/mcp/v1", detail: "Events across your Google calendars", symbol: "calendar",
             clientIDHint: "Google Calendar " + googleHint, builtInKeys: ("GoogleClientID", nil),
             onlyTools: ["list_events", "create_event", "update_event", "delete_event", "suggest_time"]),
+    ]
+
+    static let all = [
         SuggestedConnector(
             name: "GitHub", url: "https://api.githubcopilot.com/mcp/", detail: "Repositories, issues and pull requests",
             symbol: "chevron.left.forwardslash.chevron.right",
