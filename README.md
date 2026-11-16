@@ -14,7 +14,7 @@ Small models, run on the device, inside a harness built to get real work out of 
 ![License](https://img.shields.io/badge/license-Apache%202.0-red?style=for-the-badge)
 
 <img src="site/assets/img/shot-chat.png" width="230" alt="A chat that used tools" />&nbsp;&nbsp;
-<img src="site/assets/img/shot-agents.png" width="230" alt="Agents" />&nbsp;&nbsp;
+<img src="site/assets/img/shot-settings.png" width="230" alt="Settings: agents, connectors, skills and memory" />&nbsp;&nbsp;
 <img src="site/assets/img/shot-models.png" width="230" alt="The model library" />
 
 </div>
