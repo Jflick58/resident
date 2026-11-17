@@ -2,7 +2,7 @@
 
 <img src="site/assets/img/icon.png" width="120" alt="Resident icon" />
 
-# Resident: Fully local AI in the iPhone
+# Resident: Badass AI
 
 **A fully local AI agent for iPhone.**
 
