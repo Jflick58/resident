@@ -1500,6 +1500,12 @@ public final class ChatSession {
 
                             var decision = promptCachePolicy.decide(
                                 turn: turn, cache: cacheState)
+                            if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
+                                let common = zip(promptTokenIds, cachedTokenIds).prefix { $0 == $1 }.count
+                                FileHandle.standardError.write(
+                                    "REUSE \(decision) prompt=\(promptTokenIds.count) cached=\(cachedTokenIds.count) common=\(common) processed=\(kvCache.processedTokenCount) maxTrim=\(cacheState.maxTrimCount) mask=\(input.text.mask != nil) state=\(lmState != nil) media=\(containsNewMedia)/\(carriesPreparedMedia)\n"
+                                        .data(using: .utf8)!)
+                            }
 
                             if mtpSupportsResumption, !mtpSpeculativeStateIsReady,
                                 currentConversation.allowsMTPRecovery,
@@ -2176,6 +2182,118 @@ public final class ChatSession {
                 throw ChatSessionError.noCacheAvailable
             }
         }
+    }
+
+    // MARK: Resident: a cache saved with the tokens it holds
+
+    /// The metadata key for the tokens a saved cache holds, as numbers joined by commas.
+    static let savedTokensKey = "resident.tokens"
+
+    /// Saves the cache together with the exact tokens it holds, so a later process can start
+    /// a session from the file with ``init(_:savedCache:instructions:generateParameters:components:processing:additionalContext:tools:)``
+    /// and ``fork(history:)`` it. Unlike ``saveCache(to:)``, a session made that way keeps what
+    /// a new prompt starts with and reads only the rest, as a fork of a live session does.
+    ///
+    /// - Returns: the number of tokens saved, or nil when the session cannot say exactly which
+    ///   tokens its cache holds (nothing generated yet, a cancelled reply, images in the chat).
+    @discardableResult
+    public func saveCacheWithTokens(to url: URL, metadata: [String: String] = [:]) async throws -> Int? {
+        try await cache.read { cache in
+            guard case .kvcache(let stored) = cache, let conversation = stored.conversation,
+                !conversation.cachedTokens.isEmpty, conversation.uncommittedTokens.isEmpty,
+                conversation.cachedTokens.count == stored.main.processedTokenCount,
+                !conversation.messages.contains(where: { !$0.images.isEmpty || !$0.videos.isEmpty || !$0.audios.isEmpty })
+            else { return nil }
+            var metadata = metadata
+            metadata[Self.savedTokensKey] = conversation.cachedTokens.map(String.init).joined(separator: ",")
+            try savePromptCache(url: url, cache: stored.main.cache, metadata: metadata, state: stored.state)
+            return conversation.cachedTokens.count
+        }
+    }
+
+    /// Reads the opening that every conversation of this session shares (its instructions and
+    /// tools, up to where the first message begins) into an empty cache, and holds that as the
+    /// session's cache with no conversation. ``fork(history:)`` then gives sessions whose first
+    /// prompt continues from the opening without reading it again.
+    ///
+    /// A fork of a session that has answered something only helps models whose caches can be
+    /// rewound to where two prompts part ways. Models with recurrent layers cannot be rewound,
+    /// but any cache can be continued, and a cache that holds exactly the shared opening only
+    /// ever needs continuing.
+    ///
+    /// The opening is found by rendering two conversations that differ from their first
+    /// character and keeping the tokens they share, less `margin`: the last shared tokens sit
+    /// next to the message and can merge with its first characters.
+    ///
+    /// - Returns: the tokens now held, or nil when the two prompts share too little to be worth it.
+    public func readSharedOpening(margin: Int = 2) async throws -> [Int]? {
+        let processor = await model.processor
+        var leading: [Chat.Message] = []
+        if let instructions { leading.append(.system(instructions)) }
+        func prompt(_ text: String) async throws -> LMInput {
+            try await processor.prepare(
+                input: UserInput(chat: leading + [.user(text)], processing: processing, tools: tools, additionalContext: additionalContext))
+        }
+        let first = try await prompt("Alpha")
+        let second = try await prompt("zebra")
+        let firstTokens = first.text.tokens.asArray(Int.self)
+        let count = zip(firstTokens, second.text.tokens.asArray(Int.self)).prefix { $0 == $1 }.count - margin
+        guard count >= 64, first.text.mask == nil else { return nil }
+        let tokens = Array(firstTokens.prefix(count))
+        let opening = SendableBox(LMInput(text: .init(tokens: first.text.tokens[.ellipsis, 0 ..< count])))
+        let parameters = generateParameters
+        let container = model
+
+        return try await cache.update { cache in
+            let model = await container.perform { context in SendableBox(context.model) }.consume()
+            let storage = KVCacheStorage(try model.newCache(parameters: parameters), plan: try parameters.kvCachePlan())
+            let iterator = try TokenIterator(
+                input: opening.consume(), model: model, cacheStorage: storage, state: nil,
+                parameters: parameters, components: .init())
+            guard storage.processedTokenCount == count else { return nil }
+            eval(storage.cache)
+            var conversation = Conversation(messages: [], cachedTokens: tokens)
+            conversation.transcriptBuiltCache = false
+            cache = .kvcache(.init(main: storage, state: iterator.state, conversation: conversation))
+            return tokens
+        }
+    }
+
+    /// A session that starts from a cache saved by ``saveCacheWithTokens(to:metadata:)``. It holds
+    /// no conversation: call ``fork(history:)`` on it for each chat. Nil when the file does not
+    /// say which tokens it holds.
+    public init?(
+        _ model: ModelContainer,
+        savedCache snapshot: PromptCacheSnapshot,
+        instructions: String? = nil,
+        generateParameters: GenerateParameters = .init(),
+        components: GenerationComponents = .init(),
+        processing: UserInput.Processing = .init(resize: CGSize(width: 512, height: 512)),
+        additionalContext: [String: any Sendable]? = nil,
+        tools: [ToolSpec]? = nil
+    ) {
+        let tokens = (snapshot.metadata[Self.savedTokensKey] ?? "").split(separator: ",").compactMap { Int($0) }
+        guard !tokens.isEmpty, !snapshot.cache.isEmpty else { return nil }
+        let cache = snapshot.cache
+        // Each response uses the cache on another thread, and a fork shares its arrays.
+        eval(cache)
+        var conversation = Conversation(messages: [], cachedTokens: tokens)
+        conversation.transcriptBuiltCache = false
+        self.model = model
+        self.instructions = instructions
+        self.cache = .init(
+            .kvcache(
+                .init(
+                    cache: cache, state: snapshot.state, conversation: conversation,
+                    plan: (try? generateParameters.kvCachePlan()) ?? .disabled)))
+        self.loadedDraftModel = .init(nil)
+        self.processing = processing
+        self.generateParameters = generateParameters
+        self.components = components
+        self.tools = tools
+        self.toolDispatch = nil
+        self.additionalContext = additionalContext
+        self.speculativeDecoding = nil
     }
 }
 
