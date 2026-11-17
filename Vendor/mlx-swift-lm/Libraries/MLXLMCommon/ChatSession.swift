@@ -215,6 +215,10 @@ public final class ChatSession {
         /// only an exact token match can reuse it.
         var transcriptBuiltCache = true
 
+        /// The parts of `cachedTokens` the model generated, one range for each of its turns
+        /// since the cache was last built from a prompt. See ``KeepGeneratedTurnsRule``.
+        var generatedSpans: [Range<Int>] = []
+
         @discardableResult
         mutating func record(
             _ assistant: AssistantGeneration,
@@ -228,6 +232,7 @@ public final class ChatSession {
                 // the ledger and rebuild from the retained messages.
                 cachedTokens.removeAll()
                 uncommittedTokens.removeAll()
+                generatedSpans.removeAll()
                 return false
             }
 
@@ -240,12 +245,16 @@ public final class ChatSession {
                     contentsOf: generatedTokens.prefix(committedGeneratedTokenCount))
                 uncommittedTokens = Array(
                     generatedTokens.dropFirst(committedGeneratedTokenCount))
+                if committedGeneratedTokenCount > 0 {
+                    generatedSpans.append(cachedTokenCount ..< cachedTokens.count)
+                }
             } else {
                 // The iterator/cache relationship could not be proven
                 // (for example, a speculative iterator retained
                 // un-emitted lookahead).
                 cachedTokens.removeAll()
                 uncommittedTokens.removeAll()
+                generatedSpans.removeAll()
             }
 
             // A turn that produced only reasoning appends an empty assistant message.
@@ -416,6 +425,8 @@ public final class ChatSession {
             }
             conversation.messages = history
             conversation.transcriptBuiltCache = false
+            // The cache was not built from this transcript: only an exact match may reuse it.
+            conversation.generatedSpans.removeAll()
             var copied = stored.copy()
             copied.conversation = conversation
             return .kvcache(copied)
@@ -438,6 +449,12 @@ public final class ChatSession {
 
     public var additionalContext: [String: any Sendable]?
     public var tools: [ToolSpec]?
+
+    /// Tools the model was told of in the conversation, not by the template. The template
+    /// declares ``tools`` at the start of the prompt, so adding one there changes the prompt
+    /// from its first tokens and nothing cached can be kept. A caller that declares a tool in a
+    /// message instead lists it here, and a call to it is accepted like a call to any of ``tools``.
+    public var laterTools: [ToolSpec]?
 
     /// Optional automatic dispatcher for accepted tool calls.
     ///
@@ -841,6 +858,7 @@ public final class ChatSession {
         self.generateParameters = source.generateParameters
         self.components = source.components
         self.tools = source.tools
+        self.laterTools = source.laterTools
         self.toolDispatch = source.toolDispatch
         self.additionalContext = source.additionalContext
         self.speculativeDecoding = source.speculativeDecoding
@@ -1149,7 +1167,7 @@ public final class ChatSession {
         let task = Task {
             [
                 model,
-                instructions, processing, tools, toolDispatch,
+                instructions, processing, tools, laterTools, toolDispatch,
                 additionalContext, cache, loadedDraftModel, generateParameters = parameters,
                 components, speculativeDecoding, steeringRequests
             ] in
@@ -1161,8 +1179,11 @@ public final class ChatSession {
                 // Automatic dispatch must always be schema-authorized. Treat a missing
                 // declaration list as an empty allowlist when a dispatcher is installed,
                 // rather than allowing the processor's schema-less parsing mode.
-                let toolValidationSchemas: [ToolSpec]? =
+                let declaredSchemas: [ToolSpec]? =
                     toolDispatch == nil ? tools : (tools ?? [])
+                let toolValidationSchemas: [ToolSpec]? =
+                    (laterTools ?? []).isEmpty
+                    ? declaredSchemas : (declaredSchemas ?? []) + (laterTools ?? [])
 
                 try await cache.update { cache in
                     steeringRequests.start(steering)
@@ -1232,6 +1253,7 @@ public final class ChatSession {
                             // structured transcript is retained, rebuild the cache from it
                             // rather than silently continuing with the old cache policy.
                             restored.cachedTokens.removeAll()
+                            restored.generatedSpans.removeAll()
                             restored.uncommittedTokens.removeAll()
                             kvCache = KVCacheStorage(
                                 try model.newCache(parameters: generateParameters),
@@ -1312,6 +1334,7 @@ public final class ChatSession {
                                 conversation?.messages.append(contentsOf: committedToolResults)
                                 mtpDrafterContinuation = nil
                                 conversation?.cachedTokens.removeAll()
+                                conversation?.generatedSpans.removeAll()
                                 conversation?.uncommittedTokens.removeAll()
                             }
                             if recordedStep && !finishedStep {
@@ -1489,14 +1512,17 @@ public final class ChatSession {
                                     currentConversation.uncommittedTokens,
                                 structuredToolCallCount: structuredToolCallCount,
                                 usesSpeculativeDecoding: speculationIsEligibleForParameters,
-                                canSplitPreparedMedia: model is PreparedInputSplitting)
+                                canSplitPreparedMedia: model is PreparedInputSplitting,
+                                turnEndTokens: buildStopTokenIds(
+                                    modelConfiguration: modelConfiguration, tokenizer: tokenizer))
                             let cacheState = PromptCacheState(
                                 cachedTokens: cachedTokenIds,
                                 processedTokenCount: kvCache.processedTokenCount,
                                 mainCacheIsAligned: mainCacheIsAligned,
                                 speculativeReuseCapability: speculativeReuseCapability,
                                 maxTrimCount: (kvCache.cache + (draftKVCache?.cache ?? []))
-                                    .map(\.maxTrimCount).min() ?? 0)
+                                    .map(\.maxTrimCount).min() ?? 0,
+                                generatedSpans: currentConversation.generatedSpans)
 
                             var decision = promptCachePolicy.decide(
                                 turn: turn, cache: cacheState)
@@ -1644,6 +1670,7 @@ public final class ChatSession {
                             case .prefillAll, .trimToCommonPrefix,
                                 .trimToCommonPrefixMainOnly, .rebuild:
                                 currentConversation.cachedTokens = promptTokenIds
+                                currentConversation.generatedSpans.removeAll()
                             }
                             currentConversation.uncommittedTokens.removeAll()
                             currentConversation.transcriptBuiltCache = true

@@ -1,6 +1,7 @@
 import CoreImage
 import Foundation
 import HarnessKit
+import os
 import HuggingFace
 import MLX
 import MLXHuggingFace
@@ -51,7 +52,22 @@ public actor MLXEngine {
         var topP: Double
         var repetitionPenalty: Double?
         var contextTokens: Int
+        /// How the cache is stored and the prompt read: a session made under one setting is not used under another.
+        var tuning: String
+
+        /// True when only the tools differ.
+        func matchesButForTools(_ other: SessionKey) -> Bool {
+            var copy = other
+            copy.tools = tools
+            copy.callable = callable
+            return copy == self
+        }
     }
+
+    /// Names of the tools the session's prompt declared at its start.
+    private var sessionTemplateTools: Set<String> = []
+    /// Tools the session's model was told of later, in the conversation. See `declaresToolsLate`.
+    private var sessionLaterTools: [String: HarnessKit.ToolSpec] = [:]
 
     public init() {}
 
@@ -123,20 +139,43 @@ public actor MLXEngine {
             callable: JSONValue.array((request.callableTools ?? []).map(\.functionDeclaration)).jsonString,
             thinking: request.options.thinking, maxOutputTokens: request.options.maxOutputTokens,
             temperature: request.options.temperature, topP: request.options.topP,
-            repetitionPenalty: request.options.repetitionPenalty, contextTokens: contextTokens)
+            repetitionPenalty: request.options.repetitionPenalty, contextTokens: contextTokens, tuning: Self.tuningName)
 
         // Messages the model has not answered yet: everything after the last assistant message.
         let pendingStart = (transcript.lastIndex { $0.role == .assistant }).map { $0 + 1 } ?? 0
         let ids = transcript.map(Mark.init)
 
         let activeSession: ChatSession
-        let newMessages: [HarnessKit.Message]
-        if let session, sessionKey == key, !sessionMessageIDs.isEmpty,
-            ids.count > sessionMessageIDs.count, Array(ids.prefix(sessionMessageIDs.count)) == sessionMessageIDs
-        {
+        var newMessages: [HarnessKit.Message]
+        let extends = !sessionMessageIDs.isEmpty && ids.count > sessionMessageIDs.count
+            && Array(ids.prefix(sessionMessageIDs.count)) == sessionMessageIDs
+        if let session, sessionKey == key, extends {
             // The request extends what the session already holds: reuse its cache.
             activeSession = session
             newMessages = Array(transcript[sessionMessageIDs.count...])
+        } else if let session, let old = sessionKey, extends, Self.declaresToolsLate, old.matchesButForTools(key) {
+            // Only the tools changed: a connector was opened part-way through the chat. The
+            // template declares tools at the very start of the prompt, so declaring the new ones
+            // there would change the prompt from its first tokens, and a model whose cache cannot
+            // be rewound would read all of it again: 5,400 tokens when the code tools open, two
+            // minutes for a 27B on a phone, and again at each tool added after. So the session
+            // keeps the prompt it has, and the new tools are declared where the conversation
+            // stands, after the message that brought them.
+            let added = request.tools.filter { !sessionTemplateTools.contains($0.name) && sessionLaterTools[$0.name] == nil }
+            for tool in added { sessionLaterTools[tool.name] = tool }
+            // A tool dropped from the list stays known to the session: the model still sees it
+            // declared, and a call to it should reach the agent, which knows what to do with it.
+            session.laterTools = sessionLaterTools.keys.sorted().compactMap { sessionLaterTools[$0] }.map(Self.toolSpec)
+            session.components = await components(container: container, request: request)
+            activeSession = session
+            sessionKey = key
+            newMessages = Array(transcript[sessionMessageIDs.count...])
+            if !added.isEmpty, let last = newMessages.indices.last, newMessages[last].role == .tool || newMessages[last].role == .user {
+                newMessages[last].text += Self.declarations(added)
+            }
+            if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
+                FileHandle.standardError.write("LATE TOOLS added=\(added.map(\.name))\n".data(using: .utf8)!)
+            }
         } else {
             if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
                 // Development aid: why the cache could not be carried on.
@@ -191,6 +230,8 @@ public actor MLXEngine {
             }
             session = activeSession
             sessionKey = key
+            sessionTemplateTools = Set(request.tools.map(\.name))
+            sessionLaterTools = [:]
             newMessages = Array(transcript[pendingStart...])
         }
         guard !newMessages.isEmpty else {
@@ -242,11 +283,20 @@ public actor MLXEngine {
                         promptTokens: info.promptTokenCount, outputTokens: info.generationTokenCount,
                         tokensPerSecond: info.tokensPerSecond,
                         timeToFirstToken: firstToken.map { $0.timeIntervalSince(started) })
-                    MLXEngine.noteMemory(tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount)
+                    let wait = firstToken.map { $0.timeIntervalSince(started) } ?? -1
+                    let cache = try? await activeSession.cacheStatus()
+                    MLXEngine.noteMemory(
+                        tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount, promptTime: info.promptTime,
+                        outputTokens: info.generationTokenCount, firstToken: wait, cacheBytes: cache?.memoryBytes ?? 0)
                     if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
+                        let held = MLXEngine.memoryInUse
                         FileHandle.standardError.write(
-                            String(format: "STEP read %d tokens, first token after %.2fs, prompt time %.2fs\n", info.promptTokenCount,
-                                firstToken.map { $0.timeIntervalSince(started) } ?? -1, info.promptTime).data(using: .utf8)!)
+                            String(
+                                format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most\n",
+                                info.promptTokenCount, info.promptTime, wait, info.generationTokenCount, info.tokensPerSecond,
+                                (cache?.memoryBytes ?? 0) >> 20, cache?.compressedLayerCount ?? 0, cache?.pendingLayerCount ?? 0,
+                                cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20
+                            ).data(using: .utf8)!)
                     }
                     switch info.stopReason {
                     case .length: stop = .length
@@ -292,7 +342,7 @@ public actor MLXEngine {
     /// A mark of everything the opening's tokens depend on, to tell whether a saved one still fits.
     private static func fingerprint(_ key: SessionKey) -> String {
         var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in "\(key.instructions)|\(key.tools)|\(key.thinking)|\(key.contextTokens)".utf8 {
+        for byte in "\(key.instructions)|\(key.tools)|\(key.thinking)|\(key.contextTokens)|\(key.tuning)".utf8 {
             hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211
         }
         return String(hash, radix: 16)
@@ -375,10 +425,21 @@ public actor MLXEngine {
     private func makeSession(
         container: ModelContainer, key: SessionKey, request: GenerationRequest, history: [Chat.Message]
     ) async throws -> ChatSession {
-        var parameters = GenerateParameters(
-            maxTokens: request.options.maxOutputTokens, maxKVSize: key.contextTokens,
-            temperature: Float(request.options.temperature), topP: Float(request.options.topP))
+        var parameters: GenerateParameters
+        if let strategy = Self.cacheCompression {
+            // A compressed cache cannot also be a bounded one. The agent keeps the transcript
+            // within the context it was given, so the bound is only a second guard.
+            parameters = GenerateParameters(
+                maxTokens: request.options.maxOutputTokens,
+                kvCache: KVCacheConfiguration(strategy: strategy, compatibility: .allowPartial),
+                temperature: Float(request.options.temperature), topP: Float(request.options.topP))
+        } else {
+            parameters = GenerateParameters(
+                maxTokens: request.options.maxOutputTokens, maxKVSize: key.contextTokens,
+                temperature: Float(request.options.temperature), topP: Float(request.options.topP))
+        }
         parameters.repetitionPenalty = request.options.repetitionPenalty.map(Float.init)
+        if let step = Self.prefillStep { parameters.prefill.stepSize = step }
 
         // Thinking on or off, expressed the way this model's chat template expects.
         let reasoning = await container.configuration.reasoningConfig
@@ -388,6 +449,20 @@ public actor MLXEngine {
                 forThinkingEnabled: request.options.thinking != .off)
         }
 
+        let components = await components(container: container, request: request)
+
+        let tools: [MLXLMCommon.ToolSpec]? = request.tools.isEmpty ? nil : request.tools.map(Self.toolSpec)
+        return ChatSession(
+            container, instructions: key.instructions.isEmpty ? nil : key.instructions, history: history,
+            generateParameters: parameters, components: components,
+            processing: .init(resize: CGSize(width: 768, height: 768)), additionalContext: context,
+            tools: tools)
+    }
+
+    /// What shapes each reply as it is written: the grammar that holds tool calls to valid syntax,
+    /// the cap on thinking, and the gate that holds generation while the app is off screen.
+    private func components(container: ModelContainer, request: GenerationRequest) async -> GenerationComponents {
+        let reasoning = await container.configuration.reasoningConfig
         var components = GenerationComponents()
 
         // Hold tool calls to valid syntax, for models that write them as tagged JSON.
@@ -416,13 +491,7 @@ public actor MLXEngine {
         // Last, around whatever is already there: the gate that holds generation while the app is off screen.
         let existing = components.logitProcessorFactory
         components.logitProcessorFactory = { GatedProcessor(inner: existing?()) }
-
-        let tools: [MLXLMCommon.ToolSpec]? = request.tools.isEmpty ? nil : request.tools.map(Self.toolSpec)
-        return ChatSession(
-            container, instructions: key.instructions.isEmpty ? nil : key.instructions, history: history,
-            generateParameters: parameters, components: components,
-            processing: .init(resize: CGSize(width: 768, height: 768)), additionalContext: context,
-            tools: tools)
+        return components
     }
 
     // MARK: Conversions
@@ -544,10 +613,13 @@ extension MLXEngine {
     /// like any it wrote to, and by default MLX keeps as much as it likes.
     public nonisolated static func setCacheLimit(megabytes: Int) { MLX.Memory.cacheLimit = megabytes << 20 }
 
-    /// EXPERIMENT. Adds a line to `memory-log.txt` after each reply while weights are mapped: how fast it
-    /// went, what the app is charged, what the system will still give it, what MLX holds, and how much
-    /// of the mapped model is in memory. Numbers only, nothing of the chat.
-    nonisolated static func noteMemory(tokensPerSecond: Double, promptTokens: Int) {
+    /// Adds a line to `memory-log.txt` after each reply while weights are mapped: how fast it went,
+    /// what the app is charged, what the system will still give it, what MLX holds, how much of the
+    /// mapped model is in memory, and what the whole phone's memory is doing. Numbers only, nothing
+    /// of the chat.
+    nonisolated static func noteMemory(
+        tokensPerSecond: Double, promptTokens: Int, promptTime: Double, outputTokens: Int, firstToken: Double, cacheBytes: Int
+    ) {
         guard WeightMapping.isOn else { return }
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
@@ -562,10 +634,19 @@ extension MLXEngine {
         #else
             let available = "n/a"
         #endif
-        let line = String(format: "%@  %.1f tok/s  prompt %d  ", ISO8601DateFormatter().string(from: Date()), tokensPerSecond, promptTokens)
-            + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  "
-            + "MLX in use \(megabytes(held.active)) cache \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
-            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))\n"
+        let system = SystemMemory.now()
+        let readIn = system.pageIns - lastPageIns.withLock { last in
+            defer { last = system.pageIns }
+            return last ?? system.pageIns
+        }
+        let line = String(
+            format: "%@  %.1f tok/s  wrote %d  prompt %d in %.1fs  first token %.1fs  ", ISO8601DateFormatter().string(from: Date()),
+            tokensPerSecond, outputTokens, promptTokens, promptTime, firstToken)
+            + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  cache \(megabytes(cacheBytes))  "
+            + "MLX in use \(megabytes(held.active)) kept \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
+            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))  "
+            + "phone: free \(megabytes(system.free)) apps \(megabytes(system.written)) files \(megabytes(system.files)) "
+            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readIn)) since last\n"
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: url) {
@@ -577,9 +658,90 @@ extension MLXEngine {
         }
     }
 
+    /// The count of bytes read back from storage at the last line of the log, to show what each reply added.
+    private static let lastPageIns = OSAllocatedUnfairLock<Int?>(initialState: nil)
+
     /// What MLX holds: in use, kept for reuse, and the most it has held, in bytes.
     public nonisolated static var memoryInUse: (active: Int, cache: Int, peak: Int) {
         let now = MLX.Memory.snapshot()
         return (now.activeMemory, now.cacheMemory, now.peakMemory)
+    }
+}
+
+// MARK: Settings for a model that fills the phone's memory
+
+extension MLXEngine {
+    private struct Tuning {
+        var compression: String?
+        var prefillStep: Int?
+        var lateTools: Bool
+    }
+
+    private static let tuning = OSAllocatedUnfairLock<Tuning>(
+        initialState: Tuning(
+            compression: ProcessInfo.processInfo.environment["HARNESS_KV"],
+            prefillStep: ProcessInfo.processInfo.environment["HARNESS_PREFILL_STEP"].flatMap(Int.init),
+            lateTools: ProcessInfo.processInfo.environment["HARNESS_LATE_TOOLS"] != "0"))
+
+    /// How the chat's cache is stored. Nil keeps it as the model wrote it, at 16 bits a number.
+    static var cacheCompression: KVCacheConfiguration.Strategy? { compression(named: tuning.withLock { $0.compression }) }
+    /// Most tokens of a prompt read in one pass. Nil leaves it to the model (512).
+    static var prefillStep: Int? { tuning.withLock { $0.prefillStep } }
+    /// Whether tools added part-way through a chat are declared where the conversation stands
+    /// and not at the start of the prompt, so that nothing already read is read again.
+    static var declaresToolsLate: Bool { tuning.withLock { $0.lateTools } }
+    /// The settings as one word, for telling sessions and saved openings made under them apart.
+    static var tuningName: String { tuning.withLock { "\($0.compression ?? "plain")/\($0.prefillStep ?? 0)" } }
+
+    /// Sets how the next session stores its cache: "affine8", "turbo0v4", "turbo8v3", "turbo8v2", or nil for as written.
+    public nonisolated static func setCacheCompression(_ name: String?) {
+        tuning.withLock { $0.compression = compression(named: name) == nil ? nil : name }
+    }
+
+    public nonisolated static func setPrefillStep(_ tokens: Int?) { tuning.withLock { $0.prefillStep = tokens } }
+
+    public nonisolated static func setDeclaresToolsLate(_ on: Bool) { tuning.withLock { $0.lateTools = on } }
+
+    /// The words that declare tools in a message, in the form a template declares them at the start.
+    static func declarations(_ tools: [HarnessKit.ToolSpec]) -> String {
+        "\n\nYou can now also call these functions, in the same way as the others:\n<tools>\n"
+            + tools.map { $0.functionDeclaration.jsonString }.joined(separator: "\n") + "\n</tools>"
+    }
+
+    private static func compression(named name: String?) -> KVCacheConfiguration.Strategy? {
+        switch name {
+        case "affine8": return .affine(.eightBit)
+        case "turbo0v4": return .turboQuant(.qualityFirst)
+        case "turbo8v3": return .turboQuant(.balanced)
+        case "turbo8v2": return .turboQuant(.memoryFirst)
+        default: return nil
+        }
+    }
+}
+
+/// What the whole device's memory holds, in bytes.
+struct SystemMemory {
+    var free = 0
+    /// Memory apps and the system wrote to: it can be squeezed but not dropped.
+    var written = 0
+    /// Memory holding files, a mapped model among them: dropped first when memory runs short.
+    var files = 0
+    var wired = 0
+    var compressed = 0
+    /// Bytes read back from storage since the device started.
+    var pageIns = 0
+
+    static func now() -> SystemMemory {
+        var stats = vm_statistics64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &stats) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count) }
+        }
+        guard result == KERN_SUCCESS else { return SystemMemory() }
+        let page = Int(vm_kernel_page_size)
+        return SystemMemory(
+            free: Int(stats.free_count) * page, written: Int(stats.internal_page_count) * page,
+            files: Int(stats.external_page_count) * page, wired: Int(stats.wire_count) * page,
+            compressed: Int(stats.compressor_page_count) * page, pageIns: Int(stats.pageins) * page)
     }
 }

@@ -113,6 +113,10 @@ struct PromptCacheTurn: Sendable {
     /// Capability is not a guarantee: the split may still be declined for a
     /// specific input, which the caller handles when applying the decision.
     var canSplitPreparedMedia: Bool = false
+
+    /// The tokens that end a turn for this model (its stop tokens). Used to find where a
+    /// generated turn ends in the rendered prompt. Empty when not known.
+    var turnEndTokens: Set<Int> = []
 }
 
 /// What speculative-cache reuse can safely accompany the authoritative main cache.
@@ -162,6 +166,11 @@ struct PromptCacheState: Sendable {
 
     /// Exact rewind limit across all participating layers.
     var maxTrimCount: Int = 0
+
+    /// The parts of `cachedTokens` the model generated, in order: one range for each of its
+    /// turns since the cache was last built from a prompt. The cache holds those turns as the
+    /// model wrote them, which a render of the same conversation need not reproduce.
+    var generatedSpans: [Range<Int>] = []
 }
 
 /// One reusability rule.
@@ -184,6 +193,7 @@ struct PromptCacheReusePolicy: Sendable {
     static let standardRules: [any PromptCacheReuseRule] = [
         ExtendCachedPrefixRule(),
         AppendOnlyMediaRule(),
+        KeepGeneratedTurnsRule(),
         RewindToCommonPrefixRule(),
     ]
 
@@ -273,6 +283,106 @@ struct AppendOnlyMediaRule: PromptCacheReuseRule {
 
         return .appendMediaSuffix(
             suffixStart: cache.cachedTokens.count, representedTokens: turn.promptTokens)
+    }
+}
+
+/// Carries on from a cache whose generated turns a render does not reproduce exactly.
+///
+/// A cache holds each of the model's own turns as the model wrote it. The template's
+/// render of the same turn can differ: a tool call's arguments in another order, the
+/// reasoning left out or spaced differently. A cache that can rewind goes back to where
+/// the two part and reads the render's version (``RewindToCommonPrefixRule``). One that
+/// cannot (a recurrent or hybrid model) would read the whole prompt again, at every such
+/// turn: on a prompt of 6,000 tokens that is most of a minute for each step of a tool loop.
+///
+/// This rule keeps the model's own version instead. Everything outside the generated turns
+/// must be in the prompt token for token; each generated turn is matched to the turn that
+/// opens the same way in the prompt and runs to its end; and what the prompt adds after the
+/// last of them is fed as a suffix. It applies only when rewinding is not possible, so a
+/// model that can rewind behaves as before.
+struct KeepGeneratedTurnsRule: PromptCacheReuseRule {
+    /// Fewest tokens of a turn's opening (its role header) that must match for the turn in
+    /// the prompt to count as the one the cache holds.
+    static let openingTokens = 2
+
+    /// Development aid: `HARNESS_KEEP_TURNS=0` switches the rule off, to measure what it saves.
+    private static let isOn = ProcessInfo.processInfo.environment["HARNESS_KEEP_TURNS"] != "0"
+
+    func reuse(turn: PromptCacheTurn, cache: PromptCacheState) -> PromptCacheReuseDecision? {
+        guard Self.isOn else { return nil }
+        let cached = cache.cachedTokens
+        let prompt = turn.promptTokens
+        let ends = turn.turnEndTokens
+        guard !cached.isEmpty, cache.mainCacheIsAligned,
+            !turn.carriesNewMedia, !turn.carriesAttentionMask, !turn.usesSpeculativeDecoding,
+            turn.previousGenerationUncommittedTokens.isEmpty,
+            !ends.isEmpty, !cache.generatedSpans.isEmpty
+        else {
+            return nil
+        }
+
+        // A cache that can go back to where the two part reads the render's version.
+        let common = zip(prompt, cached).prefix { $0 == $1 }.count
+        guard common < cached.count, cached.count - common > cache.maxTrimCount else {
+            return nil
+        }
+
+        var i = 0  // in `cached`
+        var j = 0  // in `prompt`
+        for span in cache.generatedSpans {
+            guard !span.isEmpty, span.lowerBound >= i, span.upperBound <= cached.count else {
+                return nil
+            }
+            // The turn the span belongs to starts after the last end of turn before it.
+            let turnStart =
+                cached[i ..< span.lowerBound].lastIndex { ends.contains($0) }.map { $0 + 1 } ?? i
+            // Everything before that turn is in both, token for token.
+            let before = turnStart - i
+            guard j + before <= prompt.count,
+                cached[i ..< turnStart].elementsEqual(prompt[j ..< (j + before)])
+            else {
+                return nil
+            }
+            j += before
+            // The turn opens the same way in both: a turn the template left out, or another
+            // turn in its place, is not one to skip over.
+            let opening = min(4, span.lowerBound - turnStart)
+            guard opening >= Self.openingTokens, j + opening <= prompt.count,
+                cached[turnStart ..< (turnStart + opening)].elementsEqual(
+                    prompt[j ..< (j + opening)])
+            else {
+                return nil
+            }
+            // What the model wrote has an end of turn only as its last token, when it
+            // stopped of its own accord.
+            let endsItself = ends.contains(cached[span.upperBound - 1])
+            guard !cached[span.lowerBound ..< (span.upperBound - 1)].contains(where: ends.contains)
+            else {
+                return nil
+            }
+            // In the prompt the turn runs to the first end of turn.
+            guard let end = prompt[j...].firstIndex(where: ends.contains) else { return nil }
+            i = span.upperBound
+            j = endsItself ? end + 1 : end
+        }
+
+        // What was fed after the last generated turn must be in the prompt too, and the
+        // prompt must add something.
+        let after = cached.count - i
+        guard j + after < prompt.count, cached[i...].elementsEqual(prompt[j ..< (j + after)])
+        else {
+            return nil
+        }
+        let suffixStart = j + after
+
+        // The cache now holds more than a render would (reasoning the template drops from
+        // earlier turns, say). A little is the price of not reading everything again; a lot
+        // is context better spent, so the prompt is read afresh.
+        let kept = cached.count - suffixStart
+        guard kept <= max(1024, prompt.count / 4) else { return nil }
+
+        return .appendSuffix(
+            suffixStart: suffixStart, representedTokens: cached + prompt[suffixStart...])
     }
 }
 
