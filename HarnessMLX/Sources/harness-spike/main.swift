@@ -2,6 +2,16 @@ import Foundation
 import HarnessKit
 import HarnessMLX
 
+/// The skills the eval suite's assistant has: the app's own, and one a model wrote on a phone.
+let suiteSkills =
+    Skill.builtIns + [
+        Skill(
+            name: "get-open-tickets", summary: "When the user asks for their open Linear tickets",
+            instructions:
+                "1. Use the `linear_list_issues` tool with assignee \"me\" to retrieve the issues. 2. Leave out any whose status is Done or Canceled. 3. Return the list with id, title, status and priority."
+        )
+    ]
+
 /// The start of what Linear's server says about using its tools, as the app receives it.
 /// HARNESS_GUIDANCE=0 leaves it out, to measure what it is worth.
 let linearGuidance =
@@ -96,6 +106,19 @@ if let value = option("--setup") { setup = value }
 if let value = option("--repeat") { repeats = Int(value) ?? 1 }
 if let value = option("--out") { outPath = value }
 if let value = option("--temperature") { temperature = Double(value) }
+// --suite <folder|file|all>: run the eval cases kept as data (evals/cases) in place of the tasks above.
+// --sample N [--seed S] runs about N of them, the same ones each time; --category a,b keeps those
+// categories; --label names the run in the results; --resume skips cases the --out file already has.
+let suitePath = option("--suite")
+let sampleSize = option("--sample").flatMap { Int($0) }
+let sampleSeed = option("--seed").flatMap { Int($0) } ?? 1
+let onlyCategories = option("--category").map { Set($0.split(separator: ",").map(String.init)) }
+let runLabel = option("--label") ?? ""
+// --ids a,b: only the cases whose id starts with one of these.
+let onlyIDs = option("--ids")?.split(separator: ",").map(String.init)
+let resumes = arguments.contains("--resume")
+arguments.removeAll { $0 == "--resume" }
+if suitePath != nil { setup = "suite" }
 if let index = arguments.firstIndex(of: "--retrieval-only") {
     arguments.remove(at: index)
     retrievalOnly = true
@@ -484,6 +507,16 @@ case "linear", "linear-all":
         agentTools = recordedCore + connectors + linear
     }
     systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", connectors: groups)
+case "suite":
+    // The world the eval cases run in: the app's built-in tools with the web faked,
+    // skills, the 13 stand-in connectors and Linear, all opened on demand.
+    let web = WebFixtures.load()
+    let suiteCore: [any Tool] = [web.searchTool(), web.fetchTool(), JavaScriptTool(), SaveMemoryTool(store: memory), UseSkillTool(skills: suiteSkills)]
+    agentTools = suiteCore.map { RecordedTool(base: $0, recorder: recorder) }
+    groups = connectorSummaries.map { group, summary in
+        ToolGroup(name: group, title: group, summary: summary, tools: connectors.filter { $0.group == group })
+    } + [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance)]
+    systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", skills: suiteSkills, connectors: groups)
 case "disclose":
     let finder = FindToolsTool(index: toolIndex, count: disclosedPerRequest)
     agentTools = recordedCore + [finder] + connectors
@@ -549,11 +582,97 @@ var spokeBeforeCall = 0
 var callingSteps = 0
 print("System prompt: \(systemText.count) characters. Tools declared: \(declared?.count ?? agentTools.count) of \(agentTools.count).")
 
+// MARK: The eval suite
+
+var peak: Int64 = 0
+
+if let suitePath {
+    setvbuf(stdout, nil, _IOLBF, 0)
+    var cases = try EvalSuite.load(suitePath)
+    if let onlyCategories { cases = cases.filter { onlyCategories.contains($0.category) } }
+    if let onlyIDs { cases = cases.filter { item in onlyIDs.contains { item.id.hasPrefix($0) } } }
+    if let sampleSize { cases = EvalSuite.sample(cases, count: sampleSize, seed: sampleSeed) }
+    let modelName = useApple ? "apple" : repo
+    let done = resumes ? EvalSuite.finished(in: outPath ?? "", model: modelName, label: runLabel) : []
+    print("Suite: \(cases.count) cases\(done.isEmpty ? "" : ", \(done.count) already done")")
+    var tally: [String: (passed: Int, total: Int)] = [:]
+    var failed: [String] = []
+    var seconds: [Double] = []
+    let suiteStart = Date()
+    for (position, item) in cases.enumerated() where !done.contains(item.id) {
+        print("\n--- [\(position + 1)/\(cases.count)] \(item.id)  \(item.turns.joined(separator: " | "))")
+        _ = recorder.take()
+        memory.setFacts([])
+        var messages: [Message] = [
+            .system(PromptBuilder.systemPrompt(preset: preset, memory: item.memory ?? "", skills: suiteSkills, connectors: groups))
+        ]
+        var loaded: [String] = []
+        var calls: [[(name: String, arguments: String)]] = []
+        var answer = ""
+        var steps = 0
+        var problem: String?
+        let start = Date()
+        for turn in item.turns {
+            messages.append(.user(turn))
+            agent.loadedToolNames = loaded
+            answer = ""
+            do {
+                for try await event in agent.run(messages: messages) {
+                    switch event {
+                    case .toolStarted(let call, _): print("  call  \(call.name) \(call.arguments.jsonString.prefix(200))")
+                    case .toolFinished(let message):
+                        messages.append(message)
+                        print("  \(message.isError ? "error" : "result") \(message.text.replacingOccurrences(of: "\n", with: " ⏎ ").prefix(200))")
+                    case .assistantMessage(let message):
+                        messages.append(message)
+                        steps += 1
+                        if message.toolCalls.isEmpty { answer = message.text }
+                    case .toolsLoaded(let names): loaded = names
+                    default: break
+                    }
+                    peak = max(peak, residentMemory())
+                }
+            } catch {
+                problem = error.localizedDescription
+            }
+            calls.append(recorder.take())
+            if problem != nil { break }
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        let failure = problem ?? item.failure(calls: calls, answer: answer)
+        print("  answer: \(answer.replacingOccurrences(of: "\n", with: " ⏎ ").prefix(300))")
+        print(String(format: "  %@  %.1fs  %d steps%@", failure == nil ? "PASS" : "FAIL", elapsed, steps, failure.map { "  (\($0))" } ?? ""))
+        tally[item.category, default: (0, 0)].total += 1
+        if failure == nil { tally[item.category]!.passed += 1 } else { failed.append("\(item.id): \(failure!)") }
+        seconds.append(elapsed)
+        if let outPath {
+            EvalSuite.append(
+                [
+                    "id": .string(item.id), "category": .string(item.category), "pass": .bool(failure == nil),
+                    "failure": .string(failure ?? ""), "seconds": .double((elapsed * 10).rounded() / 10), "steps": .int(steps),
+                    "calls": .array(calls.flatMap { $0 }.map { .string($0.name) }), "answer": .string(String(answer.prefix(300))),
+                    "model": .string(modelName), "thinking": .string(thinking.rawValue), "label": .string(runLabel),
+                ], to: outPath)
+        }
+    }
+    let ran = tally.values.reduce(0) { $0 + $1.total }
+    let right = tally.values.reduce(0) { $0 + $1.passed }
+    print("\n== \(modelName)\(runLabel.isEmpty ? "" : " [\(runLabel)]"), thinking \(thinking.rawValue)")
+    for (category, score) in tally.sorted(by: { $0.key < $1.key }) {
+        print("   \(category.padding(toLength: 12, withPad: " ", startingAt: 0)) \(score.passed)/\(score.total)")
+    }
+    let range = EvalSuite.interval(passed: right, of: ran)
+    print(String(format: "   total        %d/%d  (%d%%, likely between %d%% and %d%%)  %.1fs a case, %.0f minutes in all",
+        right, ran, ran == 0 ? 0 : right * 100 / ran, range.low, range.high, seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count),
+        Date().timeIntervalSince(suiteStart) / 60))
+    failed.forEach { print("   fail \($0)") }
+    exit(0)
+}
+
 // MARK: Run
 
 var passed = 0
 var total = 0
-var peak: Int64 = 0
 var promptSizes: [Int] = []
 var durations: [Double] = []
 var stepCounts: [Int] = []

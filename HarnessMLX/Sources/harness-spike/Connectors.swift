@@ -108,6 +108,20 @@ private func tool(
     ConnectorTool(group: group, action: action, brief: brief, more: more, params: params, handler: handler)
 }
 
+/// "today", "tomorrow" or "yesterday" for a date written out that is one of them, so a
+/// model that works the date out itself gets the same answer as one that says the word.
+private func dayWord(_ value: String) -> String {
+    let lowered = value.lowercased().trimmingCharacters(in: .whitespaces)
+    let format = DateFormatter()
+    format.dateFormat = "yyyy-MM-dd"
+    for (offset, word) in [(0, "today"), (1, "tomorrow"), (-1, "yesterday")] {
+        if let date = Calendar.current.date(byAdding: .day, value: offset, to: Date()), lowered.hasPrefix(format.string(from: date)) {
+            return word
+        }
+    }
+    return lowered
+}
+
 private let dayParam = Param("day", "today, tomorrow, yesterday, or a date as YYYY-MM-DD")
 
 let connectorTools: [ConnectorTool] = [
@@ -117,7 +131,7 @@ let connectorTools: [ConnectorTool] = [
         "Use this for any question about the user's schedule, meetings or appointments. Returns one line per event with its id, start and end time, title and location, in time order. Call it before creating or deleting events so you know what is already there.",
         [dayParam]
     ) { values in
-        switch text(values, "day").lowercased() {
+        switch dayWord(text(values, "day")) {
         case "tomorrow":
             return ToolResult(
                 """
@@ -199,7 +213,11 @@ let connectorTools: [ConnectorTool] = [
         "contacts", "get", "Get every detail stored for one contact.",
         "Needs the contact id from contacts_search. Returns address, birthday and notes as well as phone and email.",
         [Param("contact_id", "Contact id such as con_7")]
-    ) { _ in ToolResult("Maria Lopez, 555-0142, maria.lopez@example.com, 4 Harbour Road, birthday 3 March") },
+    ) { values in
+        text(values, "contact_id").contains("9")
+            ? ToolResult("Priya Raman, 555-0177, priya@example.com, 18 Orchard Way, birthday 22 July")
+            : ToolResult("Maria Lopez, 555-0142, maria.lopez@example.com, 4 Harbour Road, birthday 3 March")
+    },
     tool(
         "contacts", "add", "Add a new person to the user's contacts.",
         "Use only when the user asks to save a contact. Returns the new contact's id.",
@@ -261,7 +279,13 @@ let connectorTools: [ConnectorTool] = [
         "github", "issue", "Read one GitHub issue with its comments.",
         "Needs the repository and the issue number from github_issues.",
         [Param("repo", "Repository as owner/name"), Param("number", "Issue number", type: "integer")]
-    ) { _ in ToolResult("#12 Fuel gauge reads negative after refuelling. 2 comments. Latest: \"Reproduced on v2.3.\"") },
+    ) { values in
+        switch text(values, "number") {
+        case "31": return ToolResult("#31 Telemetry export drops the last row. 1 comment. Latest: \"Off-by-one in the writer loop.\"")
+        case "40": return ToolResult("#40 Docs: launch checklist is out of date. No comments.")
+        default: return ToolResult("#12 Fuel gauge reads negative after refuelling. 2 comments. Latest: \"Reproduced on v2.3.\"")
+        }
+    },
     tool(
         "github", "comment", "Post a comment on a GitHub issue or pull request.",
         "This is visible to everyone with access to the repository, so only call it when the user asked for a comment to be posted.",
@@ -334,7 +358,7 @@ let connectorTools: [ConnectorTool] = [
         "health", "steps", "Get the user's step count for a day.",
         "Returns the number of steps and the distance walked.", [dayParam]
     ) { values in
-        text(values, "day").lowercased() == "yesterday" ? ToolResult("8412 steps, 6.1 km") : ToolResult("2310 steps so far, 1.7 km")
+        dayWord(text(values, "day")) == "yesterday" ? ToolResult("8412 steps, 6.1 km") : ToolResult("2310 steps so far, 1.7 km")
     },
     tool(
         "health", "sleep", "Get how long the user slept on a night.",

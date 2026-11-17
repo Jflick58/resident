@@ -1,0 +1,26 @@
+{"id": "followup-close-1", "category": "followup", "turns": ["What are my open Linear tickets?", "Close the CSV one."], "tools": ["linear_save_issue"], "args": ["431"], "argsAny": ["done", "complete", "cancel", "closed"]}
+{"id": "followup-close-2", "category": "followup", "turns": ["Show me my Linear issues.", "Mark ENG-431 as done."], "tools": ["linear_save_issue"], "args": ["431"], "argsAny": ["done", "complete", "cancel", "closed"]}
+{"id": "followup-cancel-lunch-1", "category": "followup", "turns": ["What's on my calendar tomorrow?", "Cancel the lunch."], "tools": ["calendar_list", "calendar_delete"], "argsAny": ["evt_202", "evt_203"]}
+{"id": "followup-cancel-lunch-2", "category": "followup", "turns": ["What do I have tomorrow?", "Take the choir rehearsal off."], "tools": ["calendar_list", "calendar_delete"], "argsAny": ["evt_202", "evt_203"]}
+{"id": "followup-passport-1", "category": "followup", "turns": ["What reminders do I have?", "Mark the passport one as done."], "tools": ["reminders_complete"], "args": ["rem_11"]}
+{"id": "followup-passport-2", "category": "followup", "turns": ["Show my reminders.", "I've renewed my passport, tick that off."], "tools": ["reminders_complete"], "args": ["rem_11"]}
+{"id": "followup-her-email-1", "category": "followup", "turns": ["What's Maria Lopez's phone number?", "And her email?"], "tools": ["contacts_search"], "answer": ["maria.lopez@example.com"]}
+{"id": "followup-her-email-2", "category": "followup", "turns": ["Look up Maria Lopez.", "What's her email address?"], "tools": ["contacts_search"], "answer": ["maria.lopez@example.com"]}
+{"id": "followup-tokyo-1", "category": "followup", "turns": ["What's the weather in Lisbon?", "And in Tokyo?"], "tools": ["weather_current"], "args": ["tokyo"]}
+{"id": "followup-tokyo-2", "category": "followup", "turns": ["How warm is it in Lisbon right now?", "What about Tokyo?"], "tools": ["weather_current"], "args": ["tokyo"]}
+{"id": "followup-tom-1", "category": "followup", "turns": ["Do I have any unread email?", "What does the one from Tom say?"], "tools": ["mail_unread", "mail_read"], "answerAny": ["boiler", "tuesday"]}
+{"id": "followup-tom-2", "category": "followup", "turns": ["Anything new in my inbox?", "Open the landlord's email."], "tools": ["mail_unread", "mail_read"], "answerAny": ["boiler", "tuesday"]}
+{"id": "followup-gh-comment-1", "category": "followup", "turns": ["Which issues are open on acme/rocket?", "Comment on the fuel gauge one that we're looking into it."], "tools": ["github_issues", "github_comment"], "args": ["looking"]}
+{"id": "followup-csv-comments-1", "category": "followup", "turns": ["What Linear issues are assigned to me?", "What are the comments on the CSV one?"], "tools": ["linear_list_issues", "linear_list_comments"], "answer": ["semicolon"]}
+{"id": "followup-csv-comments-2", "category": "followup", "turns": ["Show my Linear tickets.", "What have people said on ENG-431?"], "tools": ["linear_list_issues", "linear_list_comments"], "answer": ["semicolon"]}
+{"id": "followup-thanks-1", "category": "followup", "turns": ["What Linear issues are assigned to me?", "Thanks!"], "lastTurnNoTools": true}
+{"id": "followup-thanks-2", "category": "followup", "turns": ["What's on my calendar tomorrow?", "Great, thank you."], "lastTurnNoTools": true}
+{"id": "followup-thanks-3", "category": "followup", "turns": ["How many steps did I walk yesterday?", "OK."], "lastTurnNoTools": true}
+{"id": "followup-sleep-1", "category": "followup", "turns": ["How many steps did I walk yesterday?", "And how did I sleep?"], "tools": ["health_steps", "health_sleep"]}
+{"id": "followup-alarm-instead-1", "category": "followup", "turns": ["Set a timer for 10 minutes.", "Actually, set an alarm for 7am as well."], "tools": ["timer_start", "timer_alarm"], "args": ["07:00"]}
+{"id": "followup-switch-1", "category": "followup", "turns": ["Remember that my broadband provider is Zest.", "What's on my calendar today?"], "tools": ["calendar_list"], "answer": ["accountant"]}
+{"id": "followup-switch-2", "category": "followup", "turns": ["What is the capital of Australia?", "What's on my calendar today?"], "tools": ["calendar_list"], "answer": ["accountant"]}
+{"id": "followup-book-free-1", "category": "followup", "turns": ["When am I free tomorrow afternoon?", "Book a dentist follow-up call at 15:00 tomorrow."], "tools": ["calendar_create"], "args": ["15:00"]}
+{"id": "followup-linear-comment-1", "category": "followup", "turns": ["What is ENG-412 about in Linear?", "Add a comment that I've reproduced it."], "tools": ["linear_save_comment"], "args": ["reproduced"]}
+{"id": "followup-wifi-then-add-1", "category": "followup", "turns": ["What's my wifi password? It's in my notes.", "Add a line to that note: 'Changed 16 November'."], "tools": ["notes_read", "notes_append"], "args": ["note_4"]}
+{"id": "followup-draft-after-1", "category": "followup", "turns": ["What did my landlord email me about?", "Draft a reply to tom@beckerlets.example saying Tuesday works."], "tools": ["mail_read", "mail_draft"], "args": ["tom@beckerlets.example", "tuesday"]}

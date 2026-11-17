@@ -1,0 +1,17 @@
+{"id": "memory-peanut-1", "category": "memory", "turns": ["Please remember that I'm allergic to peanuts."], "tools": ["save_memory"], "args": ["peanut"]}
+{"id": "memory-peanut-2", "category": "memory", "turns": ["FYI I have a peanut allergy, keep that in mind from now on."], "tools": ["save_memory"], "args": ["peanut"]}
+{"id": "memory-peanut-3", "category": "memory", "turns": ["Note for the future: I can't eat peanuts."], "tools": ["save_memory"], "args": ["peanut"]}
+{"id": "memory-veg-1", "category": "memory", "turns": ["Please remember that I'm vegetarian."], "tools": ["save_memory"], "argsAny": ["vegetarian", "meat"]}
+{"id": "memory-veg-2", "category": "memory", "turns": ["Remember I don't eat meat."], "tools": ["save_memory"], "argsAny": ["vegetarian", "meat"]}
+{"id": "memory-city-1", "category": "memory", "turns": ["Remember that I live in Sacramento."], "tools": ["save_memory"], "args": ["sacramento"]}
+{"id": "memory-city-2", "category": "memory", "turns": ["I just moved to Sacramento, remember that."], "tools": ["save_memory"], "args": ["sacramento"]}
+{"id": "memory-dog-1", "category": "memory", "turns": ["My dog's name is Biscuit. Please remember it."], "tools": ["save_memory"], "args": ["biscuit"]}
+{"id": "memory-units-1", "category": "memory", "turns": ["From now on, always give me temperatures in Celsius."], "tools": ["save_memory"], "args": ["celsius"]}
+{"id": "memory-recall-sister-1", "category": "memory", "turns": ["What's my sister's name?"], "memory": "The user's sister is called Hannah.", "noTools": true, "answer": ["hannah"]}
+{"id": "memory-recall-sister-2", "category": "memory", "turns": ["Remind me, what is my sister called?"], "memory": "The user's sister is called Hannah.", "noTools": true, "answer": ["hannah"]}
+{"id": "memory-recall-city-1", "category": "memory", "turns": ["Which city do I live in?"], "memory": "The user lives in Sacramento.", "noTools": true, "answer": ["sacramento"]}
+{"id": "memory-recall-city-2", "category": "memory", "turns": ["Where do I live?"], "memory": "The user lives in Sacramento.", "noTools": true, "answer": ["sacramento"]}
+{"id": "memory-recall-diet-1", "category": "memory", "turns": ["Suggest one dinner I could cook tonight. Keep it to one line."], "memory": "The user is vegetarian.", "answerNot": ["chicken", "beef", "pork", "salmon", "steak", "bacon"]}
+{"id": "memory-recall-dog-1", "category": "memory", "turns": ["What's my dog called?"], "memory": "The user's dog is named Biscuit.", "noTools": true, "answer": ["biscuit"]}
+{"id": "memory-passing-1", "category": "memory", "turns": ["I'm a bit tired today. What's the capital of Japan?"], "forbid": ["save_memory"]}
+{"id": "memory-passing-2", "category": "memory", "turns": ["Ugh, long day. How many minutes are in an hour?"], "forbid": ["save_memory"]}

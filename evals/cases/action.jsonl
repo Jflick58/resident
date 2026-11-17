@@ -1,0 +1,54 @@
+{"id": "action-rem-plumber-1", "category": "action", "turns": ["Remind me to call the plumber tomorrow at 5pm."], "tools": ["reminders_add"], "args": ["plumber", "17:00"]}
+{"id": "action-rem-plumber-2", "category": "action", "turns": ["Set a reminder for tomorrow 5pm: call the plumber."], "tools": ["reminders_add"], "args": ["plumber", "17:00"]}
+{"id": "action-rem-plumber-3", "category": "action", "turns": ["Tomorrow at five in the afternoon I need to call the plumber. Add a reminder."], "tools": ["reminders_add"], "args": ["plumber", "17:00"]}
+{"id": "action-rem-stamps-1", "category": "action", "turns": ["Remind me to buy stamps."], "tools": ["reminders_add"], "args": ["stamps"]}
+{"id": "action-rem-stamps-2", "category": "action", "turns": ["Add 'buy stamps' to my reminders."], "tools": ["reminders_add"], "args": ["stamps"]}
+{"id": "action-rem-stamps-3", "category": "action", "turns": ["Put buying stamps on my to-do list."], "tools": ["reminders_add"], "args": ["stamps"]}
+{"id": "action-rem-rent-1", "category": "action", "turns": ["Remind me on 2026-12-01 at 9am to pay the rent."], "tools": ["reminders_add"], "args": ["rent", "2026-12-01", "09:00"]}
+{"id": "action-rem-rent-2", "category": "action", "turns": ["Add a reminder to pay rent on 1 December 2026 at 9 in the morning."], "tools": ["reminders_add"], "args": ["rent", "2026-12-01", "09:00"]}
+{"id": "action-rem-done-1", "category": "action", "turns": ["Mark my oat milk reminder as done."], "tools": ["reminders_complete"], "args": ["rem_12"]}
+{"id": "action-rem-done-2", "category": "action", "turns": ["I bought the oat milk. Tick that reminder off."], "tools": ["reminders_complete"], "args": ["rem_12"]}
+{"id": "action-rem-delete-1", "category": "action", "turns": ["Delete my passport reminder."], "tools": ["reminders_delete"], "args": ["rem_11"]}
+{"id": "action-rem-delete-2", "category": "action", "turns": ["Remove the reminder about renewing my passport."], "tools": ["reminders_delete"], "args": ["rem_11"]}
+{"id": "action-cal-haircut-1", "category": "action", "turns": ["Schedule a haircut on 2026-11-20 at 3pm."], "tools": ["calendar_create"], "args": ["haircut", "2026-11-20", "15:00"]}
+{"id": "action-cal-haircut-2", "category": "action", "turns": ["Add a haircut to my calendar for 20 November 2026 at 15:00."], "tools": ["calendar_create"], "args": ["haircut", "2026-11-20", "15:00"]}
+{"id": "action-cal-haircut-3", "category": "action", "turns": ["Book me in for a haircut on November 20th 2026, 3 in the afternoon."], "tools": ["calendar_create"], "args": ["haircut", "2026-11-20", "15:00"]}
+{"id": "action-cal-call-1", "category": "action", "turns": ["Book a 30-minute call with Sam on 2026-11-18 at 10:00."], "tools": ["calendar_create"], "args": ["sam", "2026-11-18", "10:00", "30"]}
+{"id": "action-cal-call-2", "category": "action", "turns": ["Put a half-hour call with Sam in my calendar on 18 November 2026 at 10am."], "tools": ["calendar_create"], "args": ["sam", "2026-11-18", "10:00", "30"]}
+{"id": "action-cal-cancel-choir-1", "category": "action", "turns": ["Cancel my choir rehearsal tomorrow."], "tools": ["calendar_delete"], "args": ["evt_203"]}
+{"id": "action-cal-cancel-choir-2", "category": "action", "turns": ["I can't make choir tomorrow. Take it off my calendar."], "tools": ["calendar_delete"], "args": ["evt_203"]}
+{"id": "action-cal-cancel-lunch-1", "category": "action", "turns": ["Cancel tomorrow's lunch with Priya."], "tools": ["calendar_delete"], "args": ["evt_202"]}
+{"id": "action-cal-cancel-lunch-2", "category": "action", "turns": ["Delete the lunch with Priya from my calendar tomorrow."], "tools": ["calendar_delete"], "args": ["evt_202"]}
+{"id": "action-con-add-1", "category": "action", "turns": ["Add Omar Haddad to my contacts, phone 555-0199."], "tools": ["contacts_add"], "args": ["omar", "555-0199"]}
+{"id": "action-con-add-2", "category": "action", "turns": ["Save a new contact: Omar Haddad, 555-0199."], "tools": ["contacts_add"], "args": ["omar", "555-0199"]}
+{"id": "action-note-create-1", "category": "action", "turns": ["Make a note titled Gift ideas with: scarf, book, candle."], "tools": ["notes_create"], "args": ["gift", "scarf"]}
+{"id": "action-note-create-2", "category": "action", "turns": ["Create a new note called 'Gift ideas' that says scarf, book, candle."], "tools": ["notes_create"], "args": ["gift", "scarf"]}
+{"id": "action-note-append-1", "category": "action", "turns": ["Add 'Guest password: plum-7' to my wifi note."], "tools": ["notes_append"], "args": ["note_4", "plum-7"]}
+{"id": "action-note-append-2", "category": "action", "turns": ["Append the line 'Guest password: plum-7' to the note about my home wifi."], "tools": ["notes_append"], "args": ["note_4", "plum-7"]}
+{"id": "action-gh-open-1", "category": "action", "turns": ["Open an issue on acme/rocket titled 'Crash on startup'."], "tools": ["github_create_issue"], "args": ["rocket", "crash on startup"]}
+{"id": "action-gh-open-2", "category": "action", "turns": ["File a GitHub issue in acme/rocket called 'Crash on startup'."], "tools": ["github_create_issue"], "args": ["rocket", "crash on startup"]}
+{"id": "action-gh-comment-1", "category": "action", "turns": ["Comment on issue 12 in acme/rocket: 'Fixed in v2.4'."], "tools": ["github_comment"], "args": ["rocket", "v2.4"]}
+{"id": "action-gh-comment-2", "category": "action", "turns": ["Post 'Fixed in v2.4' as a comment on acme/rocket issue #12."], "tools": ["github_comment"], "args": ["rocket", "v2.4"]}
+{"id": "action-mail-draft-1", "category": "action", "turns": ["Draft an email to maria.lopez@example.com saying I'll be ten minutes late."], "tools": ["mail_draft"], "args": ["maria.lopez@example.com", "late"]}
+{"id": "action-mail-draft-2", "category": "action", "turns": ["Write an email to maria.lopez@example.com to tell her I'm running ten minutes late."], "tools": ["mail_draft"], "args": ["maria.lopez@example.com", "late"]}
+{"id": "action-music-1", "category": "action", "turns": ["Play some Miles Davis."], "tools": ["music_play"], "args": ["miles davis"]}
+{"id": "action-music-2", "category": "action", "turns": ["Put on Miles Davis."], "tools": ["music_play"], "args": ["miles davis"]}
+{"id": "action-music-3", "category": "action", "turns": ["I'd like to hear Miles Davis."], "tools": ["music_play"], "args": ["miles davis"]}
+{"id": "action-music-pause-1", "category": "action", "turns": ["Pause the music."], "tools": ["music_pause"]}
+{"id": "action-music-pause-2", "category": "action", "turns": ["Stop the music for a moment."], "tools": ["music_pause"]}
+{"id": "action-timer-1", "category": "action", "turns": ["Set a timer for 12 minutes."], "tools": ["timer_start"], "args": ["12"]}
+{"id": "action-timer-2", "category": "action", "turns": ["Start a 12 minute timer."], "tools": ["timer_start"], "args": ["12"]}
+{"id": "action-timer-3", "category": "action", "turns": ["Timer, twelve minutes, please."], "tools": ["timer_start"], "args": ["12"]}
+{"id": "action-timer-pasta-1", "category": "action", "turns": ["Set a 9 minute timer for the pasta."], "tools": ["timer_start"], "args": ["9", "pasta"]}
+{"id": "action-alarm-1", "category": "action", "turns": ["Wake me up at 6:30 tomorrow morning."], "tools": ["timer_alarm"], "args": ["06:30"]}
+{"id": "action-alarm-2", "category": "action", "turns": ["Set an alarm for 6:30am."], "tools": ["timer_alarm"], "args": ["06:30"]}
+{"id": "action-alarm-pm-1", "category": "action", "turns": ["Set an alarm for 7pm."], "tools": ["timer_alarm"], "args": ["19:00"]}
+{"id": "action-alarm-pm-2", "category": "action", "turns": ["Alarm at seven this evening, please."], "tools": ["timer_alarm"], "args": ["19:00"]}
+{"id": "action-lights-off-1", "category": "action", "turns": ["Turn off the kitchen lights."], "tools": ["home_lights"], "args": ["kitchen", "false"]}
+{"id": "action-lights-off-2", "category": "action", "turns": ["Kitchen lights off, please."], "tools": ["home_lights"], "args": ["kitchen", "false"]}
+{"id": "action-lights-off-3", "category": "action", "turns": ["Switch the lights off in the kitchen."], "tools": ["home_lights"], "args": ["kitchen", "false"]}
+{"id": "action-lights-on-1", "category": "action", "turns": ["Turn on the lights in the bedroom."], "tools": ["home_lights"], "args": ["bedroom", "true"]}
+{"id": "action-lights-on-2", "category": "action", "turns": ["Bedroom lights on."], "tools": ["home_lights"], "args": ["bedroom", "true"]}
+{"id": "action-heat-1", "category": "action", "turns": ["Set the thermostat to 21 degrees."], "tools": ["home_thermostat"], "args": ["21"]}
+{"id": "action-heat-2", "category": "action", "turns": ["Make it 21 in here."], "tools": ["home_thermostat"], "args": ["21"]}
+{"id": "action-heat-3", "category": "action", "turns": ["Heating to 21, please."], "tools": ["home_thermostat"], "args": ["21"]}

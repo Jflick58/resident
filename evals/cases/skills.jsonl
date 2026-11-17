@@ -1,0 +1,10 @@
+{"id": "skills-plan-1", "category": "skills", "turns": ["Plan my day for tomorrow."], "tools": ["use_skill", "calendar_list"], "args": ["plan-day"], "forbid": ["calendar_create", "calendar_delete", "reminders_add"]}
+{"id": "skills-plan-2", "category": "skills", "turns": ["Help me plan tomorrow around my calendar and reminders."], "tools": ["use_skill", "calendar_list"], "args": ["plan-day"], "forbid": ["calendar_create", "calendar_delete", "reminders_add"]}
+{"id": "skills-plan-3", "category": "skills", "turns": ["Can you put together a plan for my day tomorrow?"], "tools": ["use_skill", "calendar_list"], "args": ["plan-day"], "forbid": ["calendar_create", "calendar_delete", "reminders_add"]}
+{"id": "skills-email-1", "category": "skills", "turns": ["Write an email to my landlord Tom asking to move the boiler visit to Wednesday."], "tools": ["use_skill"], "args": ["write-email"], "answer": ["wednesday"]}
+{"id": "skills-email-2", "category": "skills", "turns": ["Help me draft a reply to my landlord: Tuesday doesn't work for the boiler, can we do Wednesday?"], "tools": ["use_skill"], "args": ["write-email"], "answer": ["wednesday"]}
+{"id": "skills-tickets-1", "category": "skills", "turns": ["Run my open tickets skill."], "tools": ["use_skill", "linear_list_issues"], "args": ["get-open-tickets"], "answer": ["ENG-412"]}
+{"id": "skills-tickets-2", "category": "skills", "turns": ["Use the get-open-tickets skill."], "tools": ["use_skill", "linear_list_issues"], "args": ["get-open-tickets"], "answer": ["ENG-412"]}
+{"id": "skills-summarise-1", "category": "skills", "turns": ["Summarize the page at https://kestrel-bridge.example/about for me."], "tools": ["fetch_page"], "answerAny": ["1987", "1240"]}
+{"id": "skills-no-skill-1", "category": "skills", "turns": ["What is the capital of Australia?"], "forbid": ["use_skill"]}
+{"id": "skills-no-skill-2", "category": "skills", "turns": ["Set a timer for 12 minutes."], "forbid": ["use_skill"]}

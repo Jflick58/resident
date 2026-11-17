@@ -36,12 +36,18 @@ struct LinearTool: Tool {
         func text(_ key: String) -> String { values[key]?.stringValue ?? "" }
         switch info.name {
         case "list_issues":
-            return ToolResult(
-                """
-                ENG-412  Fix login crash on iOS 27  status: In Progress  priority: Urgent  assignee: me  team: Engineering
-                ENG-431  Add export to CSV  status: Todo  priority: Medium  assignee: me  team: Engineering
-                hasNextPage: false
-                """)
+            // Filters that match nothing return nothing, as the real server does, so a
+            // search for an issue that does not exist is not answered with the two that do.
+            let issues = [
+                "ENG-412  Fix login crash on iOS 27  status: In Progress  priority: Urgent  assignee: me  team: Engineering",
+                "ENG-431  Add export to CSV  status: Todo  priority: Medium  assignee: me  team: Engineering",
+            ]
+            let team = text("team").lowercased()
+            let words = text("query").lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).filter { $0.count > 2 && $0 != "eng" }
+            let found = issues.filter { issue in
+                (team.isEmpty || team.hasPrefix("eng")) && (words.isEmpty || words.contains { issue.lowercased().contains($0) })
+            }
+            return ToolResult((found.isEmpty ? ["No issues found."] : found).joined(separator: "\n") + "\nhasNextPage: false")
         case "get_issue":
             guard text("id").uppercased().contains("412") || text("id").uppercased().contains("431") else {
                 return .error("Issue not found: \(text("id")).")
@@ -64,6 +70,12 @@ struct LinearTool: Tool {
         case "list_projects":
             return ToolResult("Onboarding Revamp  status: In Progress  health: atRisk  target: 2026-12-01\nBilling v2  status: In Progress  health: onTrack  target: 2027-01-15")
         case "get_project":
+            if values.values.contains(where: { $0.stringValue?.lowercased().contains("onboard") == true }) {
+                return ToolResult("Onboarding Revamp  status: In Progress  health: atRisk  lead: Aiko Tanaka  target: 2026-12-01")
+            }
+            if let query = values["query"]?.stringValue?.lowercased(), !query.contains("billing") {
+                return .error("Project not found: \(query).")
+            }
             return ToolResult("Billing v2  status: In Progress  health: onTrack  lead: Dana Whit  milestones: Private beta (2026-12-10), General release (2027-01-15)")
         case "list_milestones":
             return ToolResult("Private beta  target: 2026-12-10\nGeneral release  target: 2027-01-15")

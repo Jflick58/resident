@@ -1,0 +1,43 @@
+{"id": "direct-hello-1", "category": "direct", "turns": ["Hi! In one sentence, what can you help me with?"], "noTools": true}
+{"id": "direct-hello-2", "category": "direct", "turns": ["Hey there"], "noTools": true}
+{"id": "direct-hello-3", "category": "direct", "turns": ["Good morning!"], "noTools": true}
+{"id": "direct-hello-4", "category": "direct", "turns": ["Thanks, that's all for now."], "noTools": true}
+{"id": "direct-australia-1", "category": "direct", "turns": ["What is the capital of Australia?"], "noTools": true, "answer": ["canberra"]}
+{"id": "direct-australia-2", "category": "direct", "turns": ["Which city is Australia's capital?"], "noTools": true, "answer": ["canberra"]}
+{"id": "direct-japan-1", "category": "direct", "turns": ["What's the capital of Japan?"], "noTools": true, "answer": ["tokyo"]}
+{"id": "direct-canada-1", "category": "direct", "turns": ["What is the capital city of Canada?"], "noTools": true, "answer": ["ottawa"]}
+{"id": "direct-planet-1", "category": "direct", "turns": ["Which planet in our solar system is the largest?"], "noTools": true, "answer": ["jupiter"]}
+{"id": "direct-planet-2", "category": "direct", "turns": ["What's the biggest planet?"], "noTools": true, "answer": ["jupiter"]}
+{"id": "direct-boil-1", "category": "direct", "turns": ["At what temperature does water boil at sea level, in Celsius?"], "noTools": true, "answer": ["100"]}
+{"id": "direct-monalisa-1", "category": "direct", "turns": ["Who painted the Mona Lisa?"], "noTools": true, "answer": ["vinci"]}
+{"id": "direct-austen-1", "category": "direct", "turns": ["Who wrote Pride and Prejudice?"], "noTools": true, "answer": ["austen"]}
+{"id": "direct-brazil-1", "category": "direct", "turns": ["What language do people speak in Brazil?"], "noTools": true, "answer": ["portuguese"]}
+{"id": "direct-tomato-1", "category": "direct", "turns": ["Is a tomato a fruit or a vegetable, botanically?"], "noTools": true, "answer": ["fruit"]}
+{"id": "direct-http-1", "category": "direct", "turns": ["What does HTTP stand for?"], "noTools": true, "answer": ["hypertext"]}
+{"id": "direct-mice-1", "category": "direct", "turns": ["What's the plural of mouse?"], "noTools": true, "answer": ["mice"]}
+{"id": "direct-green-1", "category": "direct", "turns": ["What colour do you get when you mix blue and yellow?"], "noTools": true, "answer": ["green"]}
+{"id": "direct-hexagon-1", "category": "direct", "turns": ["How many sides does a hexagon have?"], "noTools": true, "answerAny": ["6", "six"]}
+{"id": "direct-leap-1", "category": "direct", "turns": ["How many days are there in a leap year?"], "noTools": true, "answer": ["366"]}
+{"id": "direct-minutes-1", "category": "direct", "turns": ["How many minutes are in an hour?"], "noTools": true, "answerAny": ["60", "sixty"]}
+{"id": "direct-spanish-1", "category": "direct", "turns": ["How do you say 'good morning' in Spanish?"], "noTools": true, "answer": ["buenos"]}
+{"id": "direct-spanish-2", "category": "direct", "turns": ["Translate 'good morning' into Spanish."], "noTools": true, "answer": ["buenos"]}
+{"id": "direct-french-1", "category": "direct", "turns": ["How do you say 'thank you' in French?"], "noTools": true, "answer": ["merci"]}
+{"id": "direct-write-1", "category": "direct", "turns": ["Write a two-line poem about autumn."], "noTools": true}
+{"id": "direct-write-2", "category": "direct", "turns": ["Give me three name ideas for a black cat."], "noTools": true}
+{"id": "direct-write-3", "category": "direct", "turns": ["Rewrite this to sound polite: 'Send me the file now.'"], "noTools": true}
+{"id": "direct-write-4", "category": "direct", "turns": ["Write a one-sentence birthday message for my colleague Sam."], "noTools": true}
+{"id": "direct-write-5", "category": "direct", "turns": ["Give me a short packing tip for a weekend trip."], "noTools": true}
+{"id": "direct-write-6", "category": "direct", "turns": ["Suggest a title for a blog post about learning to cook."], "noTools": true}
+{"id": "direct-explain-1", "category": "direct", "turns": ["Explain what an API is in one sentence."], "noTools": true}
+{"id": "direct-explain-2", "category": "direct", "turns": ["In two sentences, why is the sky blue?"], "noTools": true}
+{"id": "direct-explain-3", "category": "direct", "turns": ["What's the difference between weather and climate?"], "noTools": true}
+{"id": "direct-explain-4", "category": "direct", "turns": ["Briefly, what is a pull request on GitHub?"], "noTools": true}
+{"id": "direct-explain-5", "category": "direct", "turns": ["What does it mean to archive an email?"], "noTools": true}
+{"id": "direct-explain-6", "category": "direct", "turns": ["What is a calendar invite?"], "noTools": true}
+{"id": "direct-explain-7", "category": "direct", "turns": ["Explain what a smart thermostat does."], "noTools": true}
+{"id": "direct-explain-8", "category": "direct", "turns": ["What's a good way to remember people's names?"], "noTools": true}
+{"id": "direct-summarise-1", "category": "direct", "turns": ["Summarise this in one sentence: The meeting ran long because the projector failed, so the budget review moved to Thursday and the team agreed to send questions by email first."], "noTools": true, "answerAny": ["thursday", "budget"]}
+{"id": "direct-fix-1", "category": "direct", "turns": ["Fix the spelling: 'I recieved the pakage yesterday.'"], "noTools": true, "answer": ["received", "package"]}
+{"id": "direct-opposite-1", "category": "direct", "turns": ["What's the opposite of 'generous'?"], "noTools": true, "answerAny": ["stingy", "selfish", "mean", "greedy", "miserly", "tight"]}
+{"id": "direct-list-1", "category": "direct", "turns": ["Name three primary colours."], "noTools": true}
+{"id": "direct-list-2", "category": "direct", "turns": ["List the days of the weekend."], "noTools": true}
