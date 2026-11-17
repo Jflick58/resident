@@ -40,8 +40,9 @@ questions:
   <img class="hero-mark" src="{{ '/assets/img/mark.png' | relative_url }}" alt="" width="120" height="130">
   <h1>Small model. Serious agent.</h1>
   <p class="lede">
-    Resident runs open models on your iPhone and builds around them everything an agent needs.
-    The parts small models are bad at, the app does for them. Your chats stay with you.
+    Plenty of apps can run an AI model on your phone. Resident is built to get work out of one.
+    It connects to the services you use, takes a task through as many steps as it needs,
+    and keeps every chat on your iPhone.
   </p>
   <p class="actions">
     <span class="button soon" aria-disabled="true">Coming soon to the App Store</span>
@@ -57,57 +58,95 @@ questions:
 
 <section class="band facts" aria-label="At a glance">
   <div><strong>1 GB</strong><span>is enough to start: the model we recommend first</span></div>
-  <div><strong>70 tools</strong><span>in one connector, and a small model still copes</span></div>
+  <div><strong>388</strong><span>scored test requests behind the way it works, all in the open</span></div>
   <div><strong>0</strong><span>accounts, analytics or servers of ours</span></div>
 </section>
 
 <section id="how" class="band">
-  <p class="eyebrow">Why it works</p>
-  <h2>Built for how small models actually behave.</h2>
+  <p class="eyebrow">What is different</p>
+  <h2>Running the model is the easy part.</h2>
   <p class="sub">
-    A model that fits on a phone is capable and easily overwhelmed. Give it a long prompt, fifty tools
-    and a page of raw data and it falls over. Most of Resident is the work of not doing that.
+    A model small enough for a phone can reason well and still fail at real work. It picks the wrong
+    tool, drowns in what a service sends back, or stops halfway. Most apps leave that to the model.
+    Resident treats it as the app's job.
   </p>
 
-  <div class="flow" role="img" aria-label="A connector with seventy tools is shown to the model as one line, and four tools are opened when a request needs them.">
-    <div><span class="num">70</span><span class="what">tools in Linear's connector</span></div>
-    <div class="arrow" aria-hidden="true">→</div>
-    <div><span class="num">1</span><span class="what">line in the model's prompt</span></div>
-    <div class="arrow" aria-hidden="true">→</div>
-    <div><span class="num">4</span><span class="what">opened for “my open issues”</span></div>
+  <div class="versus" role="table" aria-label="A typical local chat app compared with Resident">
+    <div class="head" role="row">
+      <span role="columnheader"></span>
+      <span role="columnheader">A typical local chat app</span>
+      <span role="columnheader">Resident</span>
+    </div>
+    <div role="row">
+      <span role="rowheader">Tools</span>
+      <span role="cell">None, or a handful built in</span>
+      <span role="cell">Web search, page reading, code, memory, skills, your calendar and reminders</span>
+    </div>
+    <div role="row">
+      <span role="rowheader">Your services</span>
+      <span role="cell">Not connected</span>
+      <span role="cell">GitHub, Linear, Notion and anything else that speaks MCP, with a proper sign-in</span>
+    </div>
+    <div role="row">
+      <span role="rowheader">A job with several steps</span>
+      <span role="cell">One reply, then it is over to you</span>
+      <span role="cell">Works through the steps itself, and picks up where it stopped if you leave</span>
+    </div>
+    <div role="row">
+      <span role="rowheader">A tool used wrongly</span>
+      <span role="cell">The reply fails or makes something up</span>
+      <span role="cell">A broken call cannot be written, and a wrong one comes back with how to put it right</span>
+    </div>
+    <div role="row">
+      <span role="rowheader">With the app closed</span>
+      <span role="cell">Nothing happens</span>
+      <span role="cell">Runs from Shortcuts, on a schedule if you like</span>
+    </div>
+    <div role="row">
+      <span role="rowheader">How you know it works</span>
+      <span role="cell">You try it and see</span>
+      <span role="cell">388 scored test requests, and the code, are public</span>
+    </div>
   </div>
 
   <div class="pairs">
     <article>
-      <h3>Tools appear when they are needed</h3>
+      <h3>It finishes what it starts</h3>
       <p>
-        Describing every tool of a real service takes more text than a phone-sized model can hold.
-        Resident tells the model each connector exists in one line, then opens only the few tools a
-        request calls for. Connect several services and the model still sees a short, clear list.
+        Resident runs a tool, reads what came back and decides what to do next, for as many steps as
+        the job takes. The chat is saved after every step, so a job cut off by a phone call carries
+        on from where it was, without doing anything twice.
       </p>
     </article>
     <article>
-      <h3>Answers from tools are made to fit</h3>
+      <h3>It signs in to your real accounts</h3>
       <p>
-        Ask for your issues and a service sends twenty, each with pages of description. Cut that off and
-        the model sees five and goes round in circles. Resident shortens the long parts first, keeps
-        every item, and says plainly when something was left out.
+        Add a service and you sign in on that service's own page, the way you would for any app.
+        Resident never sees a password, keeps the access it is given in the iPhone's Keychain, and
+        renews it without asking you again.
+      </p>
+    </article>
+    <article>
+      <h3>Tool calls come out right</h3>
+      <p>
+        Once a model starts to call a tool, Resident lets it write only a tool that exists with
+        arguments that fit. If a call still fails, the model is told why and what the tool expects,
+        so it can correct itself instead of giving up.
+      </p>
+    </article>
+    <article>
+      <h3>Everything is cut to fit</h3>
+      <p>
+        A small model has little room to think in. Resident shows it a service's tools only when a
+        request needs them, shortens long answers while keeping every item, and summarises old parts
+        of a chat, so the tenth question is as quick as the first.
       </p>
     </article>
     <article>
       <h3>The chores are done for it</h3>
       <p>
-        A small model busy answering will not stop to remember a fact about you, name the chat or tidy
-        a long conversation. Resident does each as a short request of its own after the reply, so they
-        happen every time.
-      </p>
-    </article>
-    <article>
-      <h3>It keeps its place</h3>
-      <p>
-        Leave the app mid-answer and the reply holds where it is, then carries on from the same word
-        when you come back. Long chats are summarised behind the scenes, so the tenth question is as
-        quick as the first.
+        A small model busy answering will not stop to remember a fact about you or name the chat.
+        Resident does each as a short request of its own after the reply, so they happen every time.
       </p>
     </article>
     <article>
@@ -115,13 +154,6 @@ questions:
       <p>
         Each search, page and tool call is shown as it happens, with what was sent and what came back.
         When an answer is wrong you can see where it went wrong.
-      </p>
-    </article>
-    <article>
-      <h3>Nothing downloads that will not run</h3>
-      <p>
-        Before a model downloads, Resident works out the memory it needs at full context and checks it
-        against your device. Paste any MLX model from Hugging Face and get a straight answer first.
       </p>
     </article>
   </div>
@@ -203,7 +235,10 @@ questions:
 <section id="models" class="band">
   <p class="eyebrow">Models</p>
   <h2>The newest small models, and any you bring.</h2>
-  <p class="sub">Tested models are a tap away, and any MLX model on Hugging Face can be added by its link.</p>
+  <p class="sub">
+    Tested models are a tap away, and any MLX model on Hugging Face can be added by its link.
+    Before anything downloads, Resident checks that it will run on your device.
+  </p>
   <div class="grid six models">
     {% for model in page.models %}
     <article>
@@ -248,6 +283,6 @@ questions:
 <section class="band closing">
   <img src="{{ '/assets/img/icon.png' | relative_url }}" alt="" width="96" height="96">
   <h2>Resident</h2>
-  <p>Fully local AI agent.</p>
+  <p>Fully local AI agent. Open source.</p>
   <p class="actions"><span class="button soon" aria-disabled="true">Coming soon to the App Store</span></p>
 </section>
