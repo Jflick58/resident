@@ -62,20 +62,35 @@ questions:
   <div><strong>0</strong><span>accounts, analytics or servers of ours</span></div>
 </section>
 
-<section id="connectors" class="band">
-  <p class="eyebrow">Connectors</p>
-  <h2>Real tools, not just web search.</h2>
+<section id="tools" class="band">
+  <p class="eyebrow">Tools</p>
+  <h2>Real tools, not just toy examples.</h2>
   <p class="sub">
-    Most local AI apps stop at searching the web. Resident speaks the Model Context Protocol (MCP), so
-    a model on your phone can work inside the services you already use: find your open issues, close
-    one, comment on a pull request, check tomorrow's calendar.
+    Most local AI apps stop at a web search demo. Resident gives a model on your phone tools that do
+    work: a code sandbox, the web, your calendar, and through the Model Context Protocol (MCP) the
+    services you already use. Find your open issues, close one, comment on a pull request.
   </p>
-  <div class="grid three">
+  <div class="grid six">
+    <article>
+      <h3>A code sandbox on the device</h3>
+      <p>
+        A JavaScript interpreter runs on the phone, with no network and no access to your files. The
+        model writes code for arithmetic, dates and data, so the answer is computed, not guessed.
+      </p>
+    </article>
     <article>
       <h3>Any MCP server</h3>
       <p>
         GitHub, Linear, Notion, Atlassian, Sentry and Hugging Face are a tap away. Anything else that
         speaks MCP is added by pasting its address.
+      </p>
+    </article>
+    <article>
+      <h3>Big services are no problem</h3>
+      <p>
+        Linear's server offers about 70 tools. Described all at once, they would fill a small model's
+        context before it read your question. Resident opens only the few a request needs, so a 1.7B
+        model uses a server that size correctly.
       </p>
     </article>
     <article>
@@ -86,11 +101,17 @@ questions:
       </p>
     </article>
     <article>
-      <h3>Big services are no problem</h3>
+      <h3>The web, read properly</h3>
       <p>
-        Linear's server offers about 70 tools. Described all at once, they would leave a small model
-        no room to think. Resident handles servers that size on a 1.7B model, and the next section
-        says how.
+        Search and page reading run on the phone, with no account or key. Long pages are ranked
+        against the question, so the model reads the passages that matter.
+      </p>
+    </article>
+    <article>
+      <h3>Your calendar and reminders</h3>
+      <p>
+        Read and written on the device, with dates understood the way people say them: "tomorrow at
+        five", "next Friday".
       </p>
     </article>
   </div>
@@ -103,34 +124,6 @@ questions:
     A model small enough for a phone reasons well and is easily overwhelmed. What decides whether it
     gets real work done is what it is shown and what it is allowed to write. Resident controls both,
     hard, and that is where the reliability comes from.
-  </p>
-
-  <div class="versus" role="table" aria-label="The same model and tasks, with every tool declared and with Resident's harness">
-    <div class="head" role="row">
-      <span role="columnheader">Same model, same 12 tasks</span>
-      <span role="columnheader">Every tool declared up front</span>
-      <span role="columnheader">Resident's harness</span>
-    </div>
-    <div role="row">
-      <span role="rowheader">Tasks done right</span>
-      <span role="cell">10 of 12</span>
-      <span role="cell">12 of 12</span>
-    </div>
-    <div role="row">
-      <span role="rowheader">What the model has to read</span>
-      <span role="cell">18,600 tokens</span>
-      <span role="cell">Under 3,000 tokens</span>
-    </div>
-    <div role="row">
-      <span role="rowheader">Time for each task</span>
-      <span role="cell">97 seconds</span>
-      <span role="cell">21 seconds</span>
-    </div>
-  </div>
-  <p class="fine">
-    LFM3 1.7B on a Mac, working with Linear's real tool definitions beside 13 other connectors. One run
-    of each, so read it as a direction, not a decimal place. The
-    <a href="https://github.com/jflick58/resident/tree/main/evals">388-case suite</a> that measures every model is public.
   </p>
 
   <h3 class="group">Context management: what the model is shown</h3>
@@ -197,24 +190,16 @@ questions:
       </p>
     </article>
   </div>
+  <p class="fine">
+    How we check all this: a public suite of
+    <a href="https://github.com/jflick58/resident/tree/main/evals">388 scored test requests</a> that any model can be run through.
+  </p>
 </section>
 
 <section id="agent" class="band">
   <p class="eyebrow">What it does</p>
   <h2>An agent, not a chat box.</h2>
-  <div class="grid six">
-    <article>
-      <h3>Looks things up</h3>
-      <p>Searches the web and reads pages when a question needs something recent.</p>
-    </article>
-    <article>
-      <h3>Works it out</h3>
-      <p>Runs code in a sandbox for arithmetic, dates and data, so answers are computed, not guessed.</p>
-    </article>
-    <article>
-      <h3>Uses your apps</h3>
-      <p>Calendar and Reminders on the device. Linear, Notion and anything else that speaks MCP, by pasting an address.</p>
-    </article>
+  <div class="grid three">
     <article>
       <h3>Remembers you</h3>
       <p>Keeps a short list of lasting facts you mention. Read it, edit it or switch it off.</p>
