@@ -161,7 +161,52 @@ extension Array where Element == AgentEvent {
                 .run(messages: [.user("go")]))
         let text = try #require(events.toolMessages.first?.text)
         #expect(text.count < 1100)
-        #expect(text.contains("cut off"))
+        #expect(text.contains("Part 1 of"))
+    }
+
+    @Test func longTextIsReadAPartAtATime() async throws {
+        struct FileTool: Tool {
+            var spec: ToolSpec { ToolSpec(name: "file", description: "File", parameters: ["type": "object"]) }
+            func call(_ arguments: JSONValue) async -> ToolResult {
+                ToolResult((1...60).map { "line \($0) of the file" }.joined(separator: "\n"))
+            }
+        }
+        // The model asks for the same file four times, once with another argument.
+        let provider = ScriptedProvider { request in
+            let asked = request.messages.filter { $0.role == .tool }.count
+            return asked < 4
+                ? .init(toolCalls: [ToolCall(name: "file", arguments: asked == 1 ? ["ref": "main"] : [:])])
+                : .init(text: "ok")
+        }
+        let events = try await collect(
+            Agent(provider: provider, tools: [FileTool()], maxToolResultCharacters: 700).run(messages: [.user("go")]))
+        let results = events.toolMessages.map(\.text)
+        #expect(results.count == 4)
+        #expect(results[0].hasPrefix("line 1 of the file"))
+        #expect(results[0].contains("Part 1 of 3"))
+        #expect(results[0].contains("make this same call again"))
+        // Each part starts where the last one ended, on a whole line.
+        #expect(results[1].contains("Part 2 of 3"))
+        #expect(results[2].contains("Part 3 of 3"))
+        #expect(results[2].contains("line 60 of the file"))
+        let body = results.prefix(3).map { $0.components(separatedBy: "\n[Part")[0] }.joined()
+        #expect(body == (1...60).map { "line \($0) of the file" }.joined(separator: "\n"))
+        #expect(results[3].contains("read all 3 parts"))
+        #expect(!events.toolMessages.contains { $0.isError })
+    }
+
+    @Test func emptyAnswerAfterSecondTryIsExplained() async throws {
+        struct OnlyThinks: ModelProvider {
+            func generate(_ request: GenerationRequest) -> AsyncThrowingStream<ProviderEvent, Error> {
+                AsyncThrowingStream { continuation in
+                    continuation.yield(.reasoning("Still thinking"))
+                    continuation.yield(.finished(.length, nil))
+                    continuation.finish()
+                }
+            }
+        }
+        let events = try await collect(Agent(provider: OnlyThinks()).run(messages: [.user("go")]))
+        #expect(events.assistantMessages.last?.text.contains("could not finish") == true)
     }
 }
 

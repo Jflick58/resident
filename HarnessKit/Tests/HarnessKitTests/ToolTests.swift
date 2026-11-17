@@ -477,3 +477,72 @@ struct StubFetcher: HTTPFetching {
         #expect(Greeting.name(in: ["The user is vegetarian."]) == nil)
     }
 }
+
+@Suite struct FileEditToolTests {
+    /// A repository of one file, behind tools shaped like GitHub's.
+    final class Repo: @unchecked Sendable {
+        var text = "# Rokcet\n\nFuel tools.\nFuel tools.\n\n    python -m rocket\n"
+        var saved: JSONValue?
+    }
+    struct Read: Tool {
+        var repo: Repo
+        var spec: ToolSpec { ToolSpec(name: "github_get_file_contents", description: "Read", parameters: ["type": "object"]) }
+        func call(_ arguments: JSONValue) async -> ToolResult {
+            arguments["path"]?.stringValue == "README.md"
+                ? ToolResult("successfully downloaded text file (SHA: a41c0de)\n" + repo.text) : .error("path was not found.")
+        }
+    }
+    struct Write: Tool {
+        var repo: Repo
+        var spec: ToolSpec { ToolSpec(name: "github_create_or_update_file", description: "Write", parameters: ["type": "object"]) }
+        func call(_ arguments: JSONValue) async -> ToolResult {
+            repo.saved = arguments
+            return ToolResult("ok")
+        }
+    }
+
+    func tool(_ repo: Repo) throws -> any Tool {
+        let tools = FileEditTool.adding(to: [Read(repo: repo), Write(repo: repo)], title: "GitHub")
+        return try #require(tools.first { $0.spec.name == "github_edit_file" })
+    }
+
+    func arguments(find: String, replace: String, path: String = "README.md") -> JSONValue {
+        ["owner": "acme", "repo": "rocket", "path": .string(path), "branch": "fix", "find": .string(find), "replace": .string(replace), "message": "Fix"]
+    }
+
+    @Test func isAddedOnlyWhereItCanWork() {
+        let repo = Repo()
+        #expect(FileEditTool.adding(to: [Read(repo: repo)], title: "GitHub").count == 1)
+        #expect(FileEditTool.adding(to: [EchoTool()], title: "Other").count == 1)
+        #expect(FileEditTool.adding(to: [Read(repo: repo), Write(repo: repo)], title: "GitHub").count == 3)
+    }
+
+    @Test func changesOnlyTheTextItWasGiven() async throws {
+        let repo = Repo()
+        let result = try await tool(repo).call(arguments(find: "# Rokcet", replace: "# Rocket"))
+        #expect(!result.isError)
+        #expect(repo.saved?["content"]?.stringValue == "# Rocket\n\nFuel tools.\nFuel tools.\n\n    python -m rocket\n")
+        #expect(repo.saved?["sha"]?.stringValue == "a41c0de")
+        #expect(repo.saved?["branch"]?.stringValue == "fix")
+    }
+
+    @Test func forgivesSpaceAroundTheText() async throws {
+        let repo = Repo()
+        let result = try await tool(repo).call(arguments(find: "\n# Rokcet \n", replace: "# Rocket"))
+        #expect(!result.isError)
+        #expect(repo.saved?["content"]?.stringValue?.hasPrefix("# Rocket\n\nFuel") == true)
+    }
+
+    @Test func refusesTextThatIsMissingOrRepeated() async throws {
+        let repo = Repo()
+        let missing = try await tool(repo).call(arguments(find: "python -m rocket --fast", replace: "x"))
+        #expect(missing.isError)
+        #expect(missing.text.contains("python -m rocket"))
+        let repeated = try await tool(repo).call(arguments(find: "Fuel tools.", replace: "x"))
+        #expect(repeated.isError)
+        #expect(repeated.text.contains("2 times"))
+        let absent = try await tool(repo).call(arguments(find: "a", replace: "b", path: "nope.md"))
+        #expect(absent.isError)
+        #expect(repo.saved == nil)
+    }
+}

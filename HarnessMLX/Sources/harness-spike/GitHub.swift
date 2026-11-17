@@ -35,8 +35,22 @@ struct GitHubTool: Tool {
             "web/styles.css", "9b1d77e",
             "body {\n  margin: 0;\n  background: #ffffff;\n  color: #222222;\n  font-family: Helvetica, Arial, sans-serif;\n}\n\nh1 {\n  font-size: 2rem;\n}\n"
         ),
+        ("docs/GUIDE.md", "d0c5a11", guide),
         ("web/index.html", "c0ffee1", "<!doctype html>\n<title>Rocket</title>\n<link rel=\"stylesheet\" href=\"styles.css\">\n<h1>Rocket</h1>\n"),
     ]
+
+    /// A file too long to show a model in one result (about 9,000 characters), with one misspelling near its end.
+    static let guide: String = {
+        var text = "# Operator guide\n\nHow to run a launch day with the Rocket tools.\n"
+        for (number, topic) in ["Fuelling", "Telemetry", "Weather holds", "Range safety", "Countdown", "Recovery"].enumerated() {
+            text += "\n## \(number + 1). \(topic)\n\n"
+            for step in 1...12 {
+                text += "\(step). Check item \(step) of the \(topic.lowercased()) list and log the reading before going on to the next one.\n"
+            }
+            if topic == "Countdown" { text += "\nThe ground station must recieve a heartbeat every two seconds, or the count stops.\n" }
+        }
+        return text + "\n## Contacts\n\nRange control: ext. 4410.\n"
+    }()
 
     /// Named and described the way the app presents an MCP tool.
     var spec: ToolSpec {

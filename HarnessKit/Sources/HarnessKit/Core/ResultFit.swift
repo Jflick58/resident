@@ -13,6 +13,31 @@ public enum ResultFit {
     /// Lengths that long strings are shortened to, tried in turn until the result fits.
     static let stringCaps = [400, 160, 80]
 
+    /// Whether a result is a JSON list or object, which is made smaller item by item, not read in parts.
+    public static func isStructured(_ text: String) -> Bool {
+        guard let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(JSONValue.self, from: data) else { return false }
+        return value.arrayValue != nil || value.objectValue != nil
+    }
+
+    /// Plain text split into parts of at most `limit` characters, each ending at the end of a line where one is near.
+    ///
+    /// A file or a page cannot be made smaller the way a list can: every line of it may be the one that matters.
+    /// So the model reads it a part at a time.
+    public static func parts(_ text: String, limit: Int) -> [String] {
+        var parts: [String] = []
+        var rest = Substring(text)
+        while rest.count > limit {
+            let window = rest.prefix(limit)
+            // A line break in the last quarter of the window, so a part is never much shorter than it could be.
+            let cut = window.lastIndex(of: "\n").flatMap { window.distance(from: window.startIndex, to: $0) > limit * 3 / 4 ? window.index(after: $0) : nil }
+                ?? window.endIndex
+            parts.append(String(rest[..<cut]))
+            rest = rest[cut...]
+        }
+        if !rest.isEmpty { parts.append(String(rest)) }
+        return parts
+    }
+
     public static func fit(_ text: String, limit: Int) -> String {
         guard text.count > limit else { return text }
         guard let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(JSONValue.self, from: data),

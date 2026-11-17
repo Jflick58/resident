@@ -83,7 +83,7 @@ final class ConnectorsModel {
     func tools(for ids: [UUID]) -> [any Tool] {
         ids.compactMap { server($0) }.flatMap { server -> [any Tool] in
             guard let connection = connection(for: server) else { return [] }
-            return server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) }
+            return FileEditTool.adding(to: server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) }, title: server.name)
         }
     }
 
@@ -93,7 +93,8 @@ final class ConnectorsModel {
             guard let connection = connection(for: server), !server.needsSignIn else { return nil }
             return ToolGroup(
                 name: server.toolPrefix, title: server.name, summary: server.summary ?? "",
-                tools: server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) },
+                tools: FileEditTool.adding(
+                    to: server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) }, title: server.name),
                 guidance: server.instructions ?? "")
         }
     }

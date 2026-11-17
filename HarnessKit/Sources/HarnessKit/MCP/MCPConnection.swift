@@ -147,6 +147,8 @@ public actor MCPConnection {
 public struct MCPTool: Tool {
     /// Results longer than this are cut, so one large answer cannot fill a small model's context.
     public static let resultLimit = 6000
+    /// Plain text, such as a file, is passed on whole up to this length. The agent shows it to the model a part at a time.
+    public static let textLimit = 60000
 
     public var connection: MCPConnection
     public var serverName: String
@@ -183,7 +185,8 @@ public struct MCPTool: Tool {
     public func call(_ arguments: JSONValue) async -> ToolResult {
         do {
             var result = try await connection.callTool(info.name, arguments: arguments.objectValue == nil ? [:] : arguments)
-            result.text = ResultFit.fit(result.text, limit: Self.resultLimit)
+            result.text = ResultFit.isStructured(result.text)
+                ? ResultFit.fit(result.text, limit: Self.resultLimit) : ResultFit.fit(result.text, limit: Self.textLimit)
             return result
         } catch MCPError.needsSignIn {
             return .error(

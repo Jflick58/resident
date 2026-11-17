@@ -109,6 +109,10 @@ public struct Agent: Sendable {
         let usageNotes = shelf.usageNotes
         var seenCalls: [String: Int] = [:]
         var seenResults: Set<String> = []
+        // Long plain text is read a part at a time: how many parts of each result the model has had,
+        // and the calls that show the next part when made again, which are not refused as repeats.
+        var partsRead: [String: Int] = [:]
+        var callsWithMore: Set<String> = []
         var stepOptions = options
         var recoveredFromOverthinking = false
         var carriedReasoning = ""
@@ -192,6 +196,10 @@ public struct Agent: Sendable {
                 step -= 1
                 continue
             }
+            if calls.isEmpty, cleaned.text.isEmpty, stop == .length {
+                // Still nothing after the second try. An empty turn tells the user nothing.
+                cleaned.text = "I could not finish this: I used up my reply working it out. Ask for one part of it at a time, or say exactly what to change."
+            }
             if !carriedReasoning.isEmpty {
                 cleaned.reasoning = cleaned.reasoning.isEmpty ? carriedReasoning : carriedReasoning + "\n\n" + cleaned.reasoning
                 carriedReasoning = ""
@@ -228,7 +236,7 @@ public struct Agent: Sendable {
                     result = shelf.open(call.arguments, request: request)
                     if shelf.loaded != before { emit(.toolsLoaded(shelf.loaded)) }
                 } else if let tool {
-                    if seenCalls[key, default: 0] > 2 {
+                    if seenCalls[key, default: 0] > 2, !callsWithMore.contains(key) {
                         result = .error(
                             "You already made this exact call twice. Use the earlier result or answer now.")
                     } else {
@@ -259,7 +267,23 @@ public struct Agent: Sendable {
                 // difference. Saying so takes a line; repeating it takes the whole
                 // result again and invites another try.
                 let fingerprint = call.name + "\u{0}" + text
-                if !result.isError, text.count > 400, seenResults.contains(fingerprint) {
+                if !result.isError, result.text.count > maxToolResultCharacters, !ResultFit.isStructured(result.text) {
+                    // A long file or page. Cutting it off leaves the model unable to see the rest, and asking
+                    // again got it the same first part. So the same call, made again, shows the next part.
+                    let parts = ResultFit.parts(result.text, limit: maxToolResultCharacters - 200)
+                    let whole = call.name + "\u{0}" + result.text
+                    let index = partsRead[whole, default: 0]
+                    if index < parts.count {
+                        partsRead[whole] = index + 1
+                        let last = index + 1 == parts.count
+                        text = parts[index] + (last
+                            ? "\n[Part \(index + 1) of \(parts.count). That is the end of this result.]"
+                            : "\n[Part \(index + 1) of \(parts.count) of a long result. To read part \(index + 2), make this same call again.]")
+                        callsWithMore.insert(key)
+                    } else {
+                        text = "You have read all \(parts.count) parts of this result. Calling again shows nothing new. Use what you read."
+                    }
+                } else if !result.isError, text.count > 400, seenResults.contains(fingerprint) {
                     text = "This is the same result as an earlier \(call.name) call in this turn, so changing the arguments that way made no difference. "
                         + "Use the earlier result, or change a different argument."
                 } else {

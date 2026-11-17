@@ -393,9 +393,13 @@ private func approve(_ session: URLSession) -> @Sendable (URL) async throws -> U
         let tool = MCPTool(connection: connection, server: config, info: MCPToolInfo(name: "search", description: "Search notes", inputSchema: [:]))
         #expect(tool.spec.name == "notes_search")
         #expect(tool.spec.description == "[Notes] Search notes")
-        let long = await tool.call(["query": .string(String(repeating: "x", count: 9000))])
-        #expect(long.text.count < 6200)
-        #expect(long.text.contains("Result cut"))
+        // Plain text of a file's length is passed on whole, for the agent to show a part at a time.
+        let file = await tool.call(["query": .string(String(repeating: "x", count: 9000))])
+        #expect(file.text.count > 9000)
+        #expect(!file.text.contains("Result cut"))
+        let huge = await tool.call(["query": .string(String(repeating: "x", count: 70000))])
+        #expect(huge.text.count < 60200)
+        #expect(huge.text.contains("Result cut"))
     }
 }
 

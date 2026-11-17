@@ -517,7 +517,7 @@ case "suite":
     groups = ToolGroup.linking(connectorSummaries.filter { $0.group != "github" }.map { group, summary in
         ToolGroup(name: group, title: group, summary: summary, tools: connectors.filter { $0.group == group })
     } + [
-        ToolGroup(name: "github", title: "GitHub", summary: "Repositories, issues and pull requests", tools: loadGitHubTools(recorder: recorder)),
+        ToolGroup(name: "github", title: "GitHub", summary: "Repositories, issues and pull requests", tools: FileEditTool.adding(to: loadGitHubTools(recorder: recorder), title: "GitHub")),
         ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance),
     ], to: suiteSkills)
     systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", skills: suiteSkills, connectors: groups)
