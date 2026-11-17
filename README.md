@@ -2,7 +2,7 @@
 
 <img src="site/assets/img/icon.png" width="120" alt="Resident icon" />
 
-# Resident
+# Resident: Fully local AI in the iPhone
 
 **A fully local AI agent for iPhone.**
 
