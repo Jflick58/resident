@@ -83,6 +83,7 @@ final class AppModel {
         for builtIn in Skill.builtIns.reversed() where !savedSkills.contains(where: { $0.id == builtIn.id }) {
             savedSkills.insert(builtIn, at: 0)
         }
+        savedSkills = savedSkills.map(\.withCurrentInstructions)
         presets = loaded
         skills = savedSkills
 
@@ -456,7 +457,8 @@ final class AppModel {
                 name: connector.rawValue, title: connector.title, summary: connector.detail,
                 tools: connector.tools(source: EventKitSource.shared))
         }
-        return (builtIn, onDevice + connectors.groups(for: preset.servers))
+        let groups = onDevice + connectors.groups(for: preset.servers)
+        return (builtIn, preset.tools.contains(.skills) ? ToolGroup.linking(groups, to: skills) : groups)
     }
 
     // MARK: Connectors

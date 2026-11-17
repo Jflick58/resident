@@ -306,6 +306,15 @@ private final class SeenMessages: @unchecked Sendable {
         #expect(names("", request: "Mark ENG-431 as done").contains("linear_save_issue"))
     }
 
+    @Test func openingAConnectorNamesTheSkillsThatUseIt() {
+        let skill = Skill(name: "close-ticket", summary: "Closing a ticket", instructions: "1. Call `linear_save_issue` with state Done.")
+        var shelf = ToolShelf(groups: ToolGroup.linking([bigGroup()], to: [skill, Skill.builtIns[0]]))
+        let result = shelf.open(["connector": "linear", "need": "close a ticket"], request: "")
+        #expect(result.text.contains("Skills for Linear: close-ticket: Closing a ticket."))
+        #expect(!result.text.contains("write-email"))
+        #expect(shelf.usageNotes?.contains("load it with use_skill first") == true)
+    }
+
     @Test func getWithNothingNamedMeansList() {
         #expect(names("Get my open linear tickets").first == "linear_list_issues")
         var shelf = ToolShelf(groups: [bigGroup()])

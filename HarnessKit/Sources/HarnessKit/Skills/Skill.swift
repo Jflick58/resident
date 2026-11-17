@@ -75,6 +75,24 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
     public static let savingGuidance =
         "When the user tells you how they want a kind of task done from now on, save it as a skill."
 
+    /// Earlier wordings of the built-in skills. A saved copy that still matches one was
+    /// never edited by the user, so it follows the app's current wording.
+    static let earlierEndings: [UUID: [String]] = [
+        UUID(uuidString: "B0000000-0000-4000-8000-000000000001")!: [
+            "Give the draft in a block the user can copy, then one line offering a change of tone or length."
+        ]
+    ]
+
+    /// This skill with the built-in instructions brought up to date, if they were never edited.
+    public var withCurrentInstructions: Skill {
+        guard isBuiltIn, let current = Self.builtIns.first(where: { $0.id == id }), current.instructions != instructions,
+            Self.earlierEndings[id]?.contains(where: { instructions.hasSuffix($0) }) == true
+        else { return self }
+        var copy = self
+        copy.instructions = current.instructions
+        return copy
+    }
+
     public static let builtIns: [Skill] = [
         Skill(
             id: UUID(uuidString: "B0000000-0000-4000-8000-000000000001")!, name: "write-email",

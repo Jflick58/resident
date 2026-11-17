@@ -37,6 +37,29 @@ public struct ToolGroup: Sendable {
     /// opens the connector, shortened to `guidanceLimit`.
     public var guidance: String
     public static let guidanceLimit = 900
+    /// Skills whose steps use this connector's tools, as "name: when to use it".
+    /// Told to the model when the connector opens, because a model that has
+    /// opened a connector looks at the tools in front of it and not back at the
+    /// skill list: asked to open a pull request, LFM3 on a phone went straight to
+    /// GitHub's tools and made a branch with nothing on it, twice.
+    public var skillHints: [String] = []
+
+    /// These connectors, each knowing the skills that name its tools.
+    public static func linking(_ groups: [ToolGroup], to skills: [Skill]) -> [ToolGroup] {
+        groups.map { group in
+            var group = group
+            group.skillHints = skills.filter { $0.isEnabled && $0.instructions.contains(group.name + "_") }
+                .map { "\($0.name): \($0.summary)" }
+            return group
+        }
+    }
+
+    /// What to say about those skills, or nothing.
+    var skillNote: String? {
+        guard !skillHints.isEmpty else { return nil }
+        return "Before you use these tools, check whether a skill covers the job and load it with \(BuiltInTool.skills.rawValue) first. "
+            + "Skills for \(title): " + skillHints.joined(separator: "; ") + "."
+    }
 
     public init(name: String, title: String, summary: String = "", tools: [any Tool], guidance: String = "") {
         self.name = name
@@ -220,10 +243,11 @@ struct ToolShelf {
     /// "my open linear tickets", LFM3 listed every ticket in the workspace page by page
     /// for six minutes, never having read that `assignee: "me"` is how to ask for its own.
     var usageNotes: String? {
-        let notes = groups.compactMap { group -> String? in
+        let notes = groups.flatMap { group -> [String] in
+            guard group.tools.contains(where: { loaded.contains($0.spec.name) }) else { return [] }
             let text = group.guidance.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty, group.tools.contains(where: { loaded.contains($0.spec.name) }) else { return nil }
-            return "How \(group.title) says to use its tools: " + SchemaTrim.shorten(text, to: ToolGroup.guidanceLimit)
+            return (text.isEmpty ? [] : ["How \(group.title) says to use its tools: " + SchemaTrim.shorten(text, to: ToolGroup.guidanceLimit)])
+                + (group.skillNote.map { [$0] } ?? [])
         }
         return notes.isEmpty ? nil : notes.joined(separator: "\n")
     }
@@ -266,6 +290,7 @@ struct ToolShelf {
         if !notes.isEmpty {
             text += "\nHow \(group.title) says to use its tools: " + SchemaTrim.shorten(notes, to: ToolGroup.guidanceLimit)
         }
+        if let skills = group.skillNote { text += "\n" + skills }
         return ToolResult(text)
     }
 

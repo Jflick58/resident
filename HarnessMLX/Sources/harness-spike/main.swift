@@ -514,12 +514,12 @@ case "suite":
     let suiteCore: [any Tool] = [web.searchTool(), web.fetchTool(), JavaScriptTool(), SaveMemoryTool(store: memory), UseSkillTool(skills: suiteSkills)]
     agentTools = suiteCore.map { RecordedTool(base: $0, recorder: recorder) }
     // GitHub and Linear are their real tool definitions; the toy GitHub of the older setups stays out.
-    groups = connectorSummaries.filter { $0.group != "github" }.map { group, summary in
+    groups = ToolGroup.linking(connectorSummaries.filter { $0.group != "github" }.map { group, summary in
         ToolGroup(name: group, title: group, summary: summary, tools: connectors.filter { $0.group == group })
     } + [
         ToolGroup(name: "github", title: "GitHub", summary: "Repositories, issues and pull requests", tools: loadGitHubTools(recorder: recorder)),
         ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance),
-    ]
+    ], to: suiteSkills)
     systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", skills: suiteSkills, connectors: groups)
 case "disclose":
     let finder = FindToolsTool(index: toolIndex, count: disclosedPerRequest)
