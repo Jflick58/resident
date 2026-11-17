@@ -92,7 +92,7 @@ public actor Workspace {
         for case let url as URL in walker {
             guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
             let path = url.resolvingSymlinksInPath().path
-            if path.hasPrefix(base + "/") { paths.append(String(path.dropFirst(base.count + 1))) }
+            if path.hasPrefix(base + "/"), url.lastPathComponent != ".DS_Store" { paths.append(String(path.dropFirst(base.count + 1))) }
         }
         return paths.sorted()
     }
@@ -188,6 +188,8 @@ public actor Workspace {
         guard !paths.isEmpty else { return .error("There is nothing at \(folder)." + suggestions(for: folder)) }
         func isVendored(_ path: String) -> Bool { Self.vendored.contains { (path.lowercased() + "/").contains($0) || path.lowercased().hasPrefix($0) } }
         paths = paths.filter { !isVendored($0) } + paths.filter(isVendored)
+        // One file searched on its own shows every match, up to the limit.
+        let perFile = paths.count == 1 ? Self.searchMatches : Self.searchMatchesPerFile
 
         var lines: [String] = []
         var total = 0
@@ -205,7 +207,7 @@ public actor Workspace {
                 for (number, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() where matches(String(line)) {
                     total += 1
                     inFile += 1
-                    if lines.count < Self.searchMatches, inFile <= Self.searchMatchesPerFile {
+                    if lines.count < Self.searchMatches, inFile <= perFile {
                         lines.append("\(path):\(number + 1): \(line.trimmingCharacters(in: .whitespaces).prefix(160))")
                     }
                 }
@@ -246,7 +248,9 @@ public actor Workspace {
         var result = shown.joined(separator: "\n")
         if first > 1 || last < lines.count {
             result += "\n[Lines \(first) to \(last) of \(lines.count) in \(path)."
-                + (last < lines.count ? " To read on, call repo_read_file again with start_line \(last + 1)." : " That is the end of the file.") + "]"
+                + (last < lines.count
+                    ? " To read on, call repo_read_file again with start_line \(last + 1). To find one thing in this file, call repo_search with this path."
+                    : " That is the end of the file.") + "]"
         }
         return ToolResult(result)
     }

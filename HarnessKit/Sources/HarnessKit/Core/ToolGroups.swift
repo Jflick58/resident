@@ -43,6 +43,9 @@ public struct ToolGroup: Sendable {
     /// skill list: asked to open a pull request, LFM3 on a phone went straight to
     /// GitHub's tools and made a branch with nothing on it, twice.
     public var skillHints: [String] = []
+    /// Steps a turn gets on top of the usual ones while this connector's tools are declared.
+    /// Nil is the amount every connector gets, `Agent.connectorSteps`.
+    public var extraSteps: Int?
 
     /// These connectors, each knowing the skills that name its tools.
     public static func linking(_ groups: [ToolGroup], to skills: [Skill]) -> [ToolGroup] {
@@ -235,6 +238,12 @@ struct ToolShelf {
     var loadedSpecs: [ToolSpec] { loaded.compactMap { toolsByName[$0]?.spec } }
 
     func holds(_ name: String) -> Bool { toolsByName[name] != nil }
+
+    /// The steps a turn gets on top of the usual ones: the most any connector with tools declared asks for.
+    var extraSteps: Int {
+        groups.filter { group in group.tools.contains { loaded.contains($0.spec.name) } }
+            .map { $0.extraSteps ?? Agent.connectorSteps }.max() ?? 0
+    }
 
     /// Each service's own notes on using its tools, for the connectors with tools declared now.
     ///

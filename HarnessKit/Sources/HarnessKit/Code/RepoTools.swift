@@ -19,11 +19,19 @@ public struct RepoTool: Tool {
 
     /// The connector these tools make up.
     public static func group(workspace: Workspace, onCall: (@Sendable (String, JSONValue) -> Void)? = nil) -> ToolGroup {
-        ToolGroup(
+        var group = ToolGroup(
             name: prefix, title: "Code",
             summary: "Work on the code of a GitHub repository: clone it, list, search, read and edit its files, and open a pull request",
             tools: Kind.allCases.map { RepoTool(kind: $0, workspace: workspace, onCall: onCall) })
+        group.extraSteps = codeSteps
+        return group
     }
+
+    /// Steps a turn gets on top of the usual ones while it works on code. Finding the place for a
+    /// change in a real project is most of the work: asked to change a colour in an app of 944
+    /// files, a model used all 14 of a connector's steps reading and searching, twice, and each
+    /// step was cheap (a second or two on a phone).
+    public static let codeSteps = 18
 
     public var spec: ToolSpec {
         func object(_ properties: [String: JSONValue], required: [String]) -> JSONValue {
