@@ -155,8 +155,40 @@ public actor MLXEngine {
                         .data(using: .utf8)!)
             }
             let history = try transcript[..<pendingStart].map(Self.chatMessage)
-            activeSession = try await makeSession(
-                container: container, key: key, request: request, history: history)
+            let fresh = try await makeSession(container: container, key: key, request: request, history: history)
+            // A new chat starts the same way as the last one: the same instructions and tools,
+            // some 2,000 tokens that a large model takes most of a minute to read. So that
+            // opening is read once into a session of its own, and each chat starts from a copy
+            // of it and reads only what follows. The opening is kept beside the model, so the
+            // next run does not read it either.
+            // The opening is not kept in memory between chats. A copy shares its arrays with the
+            // original, so while the original lives, the chat's first write copies them all: on a
+            // phone running a model as large as its memory, that second copy (275 MB for a 27B)
+            // pushed half the weights out and took writing from 5 tokens a second to under 1.
+            // Read from the file each time, the arrays have one owner and are added to in place.
+            var opening = await savedOpening(container: container, like: fresh, key: key)
+            // Tools declared part-way through a chat change the prompt from its start. An opening
+            // for them is used if there is one, but only the start of a chat is worth making one for.
+            if opening == nil, history.isEmpty,
+                let made = try? await makeSession(container: container, key: key, request: request, history: []),
+                (try? await made.readSharedOpening()) != nil
+            {
+                await saveOpening(made, key: key)
+                opening = made
+            }
+            if let made = opening {
+                opening = nil
+                let forked = await made.fork(history: history)
+                forked.instructions = fresh.instructions
+                forked.generateParameters = fresh.generateParameters
+                forked.components = fresh.components
+                forked.processing = fresh.processing
+                forked.additionalContext = fresh.additionalContext
+                forked.tools = fresh.tools
+                activeSession = forked
+            } else {
+                activeSession = fresh
+            }
             session = activeSession
             sessionKey = key
             newMessages = Array(transcript[pendingStart...])
@@ -211,6 +243,11 @@ public actor MLXEngine {
                         tokensPerSecond: info.tokensPerSecond,
                         timeToFirstToken: firstToken.map { $0.timeIntervalSince(started) })
                     MLXEngine.noteMemory(tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount)
+                    if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
+                        FileHandle.standardError.write(
+                            String(format: "STEP read %d tokens, first token after %.2fs, prompt time %.2fs\n", info.promptTokenCount,
+                                firstToken.map { $0.timeIntervalSince(started) } ?? -1, info.promptTime).data(using: .utf8)!)
+                    }
                     switch info.stopReason {
                     case .length: stop = .length
                     case .cancelled: stop = .cancelled
@@ -244,6 +281,60 @@ public actor MLXEngine {
             pendingAssistant = true
         }
         continuation.yield(.finished(sawToolCall ? .toolCalls : stop, stats))
+    }
+
+    // MARK: The opening of a chat, kept between chats and between runs
+
+    /// Openings kept beside a model: one for each set of instructions and tools, the newest few.
+    static let savedOpenings = 3
+    private static func savedOpeningName(_ key: SessionKey) -> String { "prompt-cache-\(fingerprint(key)).safetensors" }
+
+    /// A mark of everything the opening's tokens depend on, to tell whether a saved one still fits.
+    private static func fingerprint(_ key: SessionKey) -> String {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in "\(key.instructions)|\(key.tools)|\(key.thinking)|\(key.contextTokens)".utf8 {
+            hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211
+        }
+        return String(hash, radix: 16)
+    }
+
+    /// The opening saved beside the loaded model for these instructions and tools, if there is one.
+    private func savedOpening(container: ModelContainer, like fresh: ChatSession, key: SessionKey) async -> ChatSession? {
+        guard let url = loadedDirectory?.appendingPathComponent(Self.savedOpeningName(key)),
+            FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        guard let snapshot = try? loadPromptCacheSnapshot(url: url),
+            let saved = ChatSession(container, savedCache: snapshot, generateParameters: fresh.generateParameters)
+        else {
+            // Written by another version, or cut short: of no use, and it would be read again every time.
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        // Used now, so it outlasts the ones that are not.
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+        return saved
+    }
+
+    private func saveOpening(_ session: ChatSession, key: SessionKey) async {
+        guard let directory = loadedDirectory else { return }
+        let final = directory.appendingPathComponent(Self.savedOpeningName(key))
+        let partial = directory.appendingPathComponent("partial-" + final.lastPathComponent)
+        do {
+            guard try await session.saveCacheWithTokens(to: partial) != nil else { return }
+            try? FileManager.default.removeItem(at: final)
+            try FileManager.default.moveItem(at: partial, to: final)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+        }
+        // The prompt changes with the day, the user's memory and their connectors: old openings go.
+        let saved = ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [])
+            .filter { $0.lastPathComponent.hasPrefix("prompt-cache") }
+            .sorted {
+                let first = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let second = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return first > second
+            }
+        for old in saved.dropFirst(Self.savedOpenings) { try? FileManager.default.removeItem(at: old) }
     }
 
     /// True when the session holds an assistant reply whose transcript ID has not been seen yet.
