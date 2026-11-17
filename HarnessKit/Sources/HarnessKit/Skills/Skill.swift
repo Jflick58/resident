@@ -87,7 +87,8 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
                 4. Keep it under 120 words unless asked for more. Short paragraphs, plain words.
                 5. End with the one thing you need from the reader, and by when if there is a date.
                 6. Match the user's tone from the conversation; default to friendly and direct.
-                Give the draft in a block the user can copy, then one line offering a change of tone or length.
+                If you have a tool that saves an email draft, save the draft with it and say that you did. Otherwise give the draft in a block the user can copy.
+                End with one line offering a change of tone or length.
                 """, isBuiltIn: true),
         Skill(
             id: UUID(uuidString: "B0000000-0000-4000-8000-000000000002")!, name: "plan-day",
@@ -109,6 +110,20 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
                 3. Then three to six bullets: decisions, numbers, dates, names, and what is asked of the reader.
                 4. Use the source's own figures and wording for facts. Do not add anything it does not say.
                 5. If something important is unclear or missing in the source, say so in a last line.
+                """, isBuiltIn: true),
+        Skill(
+            id: UUID(uuidString: "B0000000-0000-4000-8000-000000000004")!, name: "open-pull-request",
+            summary: "Changing a file in a GitHub repository and opening a pull request for it",
+            instructions: """
+                Needs the github connector. If you have none, say to add GitHub under Settings > Connectors, and stop.
+                1. You need the repository's owner and name. If the user gave neither, ask, and stop.
+                2. Find the file. If the user named it, go on. Otherwise use `github_search_code` with a word from the change and `repo:owner/name`, or list a folder with `github_get_file_contents`.
+                3. Read the file with `github_get_file_contents`. Keep the SHA it reports.
+                4. Make a branch with `github_create_branch`: a short name for the change, from the default branch.
+                5. Save the changed file to that branch with `github_create_or_update_file`. `content` is the whole file with your change made and every other line exactly as it was. Give the `sha` from step 3.
+                6. Open the pull request with `github_create_pull_request`: `head` is your branch, `base` is the default branch, and the title says what changed.
+                7. Give the user the pull request's link. Do not merge it.
+                If a step fails, read the error and try that step again before going on.
                 """, isBuiltIn: true),
     ]
 }

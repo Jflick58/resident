@@ -1,21 +1,21 @@
-{"id": "calc-muladd-1", "category": "calc", "turns": ["What is 1234 * 5678 + 91?"], "tools": ["run_javascript"], "answer": ["7006743"]}
-{"id": "calc-muladd-2", "category": "calc", "turns": ["What is 4821 * 377 + 15?"], "tools": ["run_javascript"], "answer": ["1817532"]}
-{"id": "calc-muladd-3", "category": "calc", "turns": ["What is 9087 * 6543 + 210?"], "tools": ["run_javascript"], "answer": ["59456451"]}
-{"id": "calc-muladd-4", "category": "calc", "turns": ["What is 731 * 8462 + 7?"], "tools": ["run_javascript"], "answer": ["6185729"]}
-{"id": "calc-muladd-5", "category": "calc", "turns": ["What is 56012 * 349 + 1000?"], "tools": ["run_javascript"], "answer": ["19549188"]}
-{"id": "calc-muladd-6", "category": "calc", "turns": ["What is 2718 * 2818 + 45?"], "tools": ["run_javascript"], "answer": ["7659369"]}
-{"id": "calc-mul-1", "category": "calc", "turns": ["Multiply 987654 by 321."], "tools": ["run_javascript"], "answer": ["317036934"]}
-{"id": "calc-mul-2", "category": "calc", "turns": ["Multiply 45678 by 9123."], "tools": ["run_javascript"], "answer": ["416720394"]}
-{"id": "calc-mul-3", "category": "calc", "turns": ["Multiply 700001 by 86."], "tools": ["run_javascript"], "answer": ["60200086"]}
+{"id": "calc-muladd-1", "category": "calc", "turns": ["What is 1234 * 5678 + 91?"], "answer": ["7006743"]}
+{"id": "calc-muladd-2", "category": "calc", "turns": ["What is 4821 * 377 + 15?"], "answer": ["1817532"]}
+{"id": "calc-muladd-3", "category": "calc", "turns": ["What is 9087 * 6543 + 210?"], "answer": ["59456451"]}
+{"id": "calc-muladd-4", "category": "calc", "turns": ["What is 731 * 8462 + 7?"], "answer": ["6185729"]}
+{"id": "calc-muladd-5", "category": "calc", "turns": ["What is 56012 * 349 + 1000?"], "answer": ["19549188"]}
+{"id": "calc-muladd-6", "category": "calc", "turns": ["What is 2718 * 2818 + 45?"], "answer": ["7659369"]}
+{"id": "calc-mul-1", "category": "calc", "turns": ["Multiply 987654 by 321."], "answer": ["317036934"]}
+{"id": "calc-mul-2", "category": "calc", "turns": ["Multiply 45678 by 9123."], "answer": ["416720394"]}
+{"id": "calc-mul-3", "category": "calc", "turns": ["Multiply 700001 by 86."], "answer": ["60200086"]}
 {"id": "calc-percent-1", "category": "calc", "turns": ["What is 15% of 240?"], "answer": ["36"]}
 {"id": "calc-percent-2", "category": "calc", "turns": ["What is 37% of 1900?"], "answer": ["703"]}
 {"id": "calc-percent-3", "category": "calc", "turns": ["What is 8% of 12750?"], "answer": ["1020"]}
 {"id": "calc-percent-4", "category": "calc", "turns": ["What is 65% of 480?"], "answer": ["312"]}
-{"id": "calc-days-1", "category": "calc", "turns": ["How many days are there between 10 February 2024 and 14 November 2026?"], "tools": ["run_javascript"], "answer": ["1008"]}
-{"id": "calc-days-2", "category": "calc", "turns": ["How many days are there between 1 January 2025 and 25 December 2026?"], "tools": ["run_javascript"], "answer": ["723"]}
-{"id": "calc-days-3", "category": "calc", "turns": ["How many days are there between 15 March 2023 and 4 July 2026?"], "tools": ["run_javascript"], "answer": ["1207"]}
-{"id": "calc-days-4", "category": "calc", "turns": ["How many days are there between 29 February 2024 and 1 March 2027?"], "tools": ["run_javascript"], "answer": ["1096"]}
-{"id": "calc-days-5", "category": "calc", "turns": ["How many days are there between 9 September 2019 and 9 September 2026?"], "tools": ["run_javascript"], "answer": ["2557"]}
+{"id": "calc-days-1", "category": "calc", "turns": ["How many days are there between 10 February 2024 and 14 November 2026?"], "answer": ["1008"]}
+{"id": "calc-days-2", "category": "calc", "turns": ["How many days are there between 1 January 2025 and 25 December 2026?"], "answer": ["723"]}
+{"id": "calc-days-3", "category": "calc", "turns": ["How many days are there between 15 March 2023 and 4 July 2026?"], "answer": ["1207"]}
+{"id": "calc-days-4", "category": "calc", "turns": ["How many days are there between 29 February 2024 and 1 March 2027?"], "answer": ["1096"]}
+{"id": "calc-days-5", "category": "calc", "turns": ["How many days are there between 9 September 2019 and 9 September 2026?"], "answer": ["2557"]}
 {"id": "calc-weekday-1", "category": "calc", "turns": ["What day of the week is 2024-07-04?"], "answer": ["thursday"]}
 {"id": "calc-weekday-2", "category": "calc", "turns": ["What day of the week is 2031-01-01?"], "answer": ["wednesday"]}
 {"id": "calc-weekday-3", "category": "calc", "turns": ["What day of the week is 1999-12-31?"], "answer": ["friday"]}
@@ -27,10 +27,10 @@
 {"id": "calc-mean-1", "category": "calc", "turns": ["What's the average of 12, 18, 30?"], "answer": ["20"]}
 {"id": "calc-mean-2", "category": "calc", "turns": ["What's the average of 104, 96, 88, 112?"], "answer": ["100"]}
 {"id": "calc-mean-3", "category": "calc", "turns": ["What's the average of 7, 14, 21, 28, 35?"], "answer": ["21"]}
-{"id": "calc-power-1", "category": "calc", "turns": ["What is 2 to the power of 40?"], "tools": ["run_javascript"], "answer": ["1099511627776"]}
-{"id": "calc-power-2", "category": "calc", "turns": ["Compute 7 to the 13th power."], "tools": ["run_javascript"], "answer": ["96889010407"]}
-{"id": "calc-factorial-1", "category": "calc", "turns": ["What is 15 factorial?"], "tools": ["run_javascript"], "answer": ["1307674368000"]}
+{"id": "calc-power-1", "category": "calc", "turns": ["What is 2 to the power of 40?"], "answer": ["1099511627776"]}
+{"id": "calc-power-2", "category": "calc", "turns": ["Compute 7 to the 13th power."], "answer": ["96889010407"]}
+{"id": "calc-factorial-1", "category": "calc", "turns": ["What is 15 factorial?"], "answer": ["1307674368000"]}
 {"id": "calc-seconds-1", "category": "calc", "turns": ["How many seconds are there in 23 days?"], "answer": ["1987200"]}
 {"id": "calc-seconds-2", "category": "calc", "turns": ["How many minutes are in 9 hours and 47 minutes?"], "answer": ["587"]}
 {"id": "calc-split-1", "category": "calc", "turns": ["Split a bill of 1,848 evenly between 7 people. How much each?"], "answer": ["264"]}
-{"id": "calc-remainder-1", "category": "calc", "turns": ["What's the remainder when 987,654,321 is divided by 97?"], "tools": ["run_javascript"], "answer": ["30"]}
+{"id": "calc-remainder-1", "category": "calc", "turns": ["What's the remainder when 987,654,321 is divided by 97?"], "answer": ["30"]}

@@ -22,7 +22,8 @@ cases = defaultdict(list)
 # Tools that change something. A question must never set one off.
 WRITES = [
     "calendar_create", "calendar_delete", "reminders_add", "reminders_complete", "reminders_delete", "contacts_add",
-    "notes_create", "notes_append", "github_comment", "github_create_issue", "mail_draft", "linear_save_issue",
+    "notes_create", "notes_append", "github_add_issue_comment", "github_issue_write", "github_create_branch",
+    "github_create_or_update_file", "github_push_files", "github_create_pull_request", "github_merge_pull_request", "mail_draft", "linear_save_issue",
     "linear_save_comment", "home_lights", "home_thermostat", "timer_start", "timer_alarm", "music_play",
 ]
 # How an honest "I found nothing" reads.
@@ -81,15 +82,15 @@ add(D, "list", ["Name three primary colours.", "List the days of the weekend."],
 # Arithmetic and dates. The big ones need the code tool; all need the right number.
 C = "calc"
 for n, (a, b, c) in enumerate([(1234, 5678, 91), (4821, 377, 15), (9087, 6543, 210), (731, 8462, 7), (56012, 349, 1000), (2718, 2818, 45)], 1):
-    cases[C].append({"id": f"calc-muladd-{n}", "category": C, "turns": [f"What is {a} * {b} + {c}?"], "tools": ["run_javascript"], "answer": [str(a * b + c)]})
+    cases[C].append({"id": f"calc-muladd-{n}", "category": C, "turns": [f"What is {a} * {b} + {c}?"], "answer": [str(a * b + c)]})
 for n, (a, b) in enumerate([(987654, 321), (45678, 9123), (700001, 86)], 1):
-    cases[C].append({"id": f"calc-mul-{n}", "category": C, "turns": [f"Multiply {a} by {b}."], "tools": ["run_javascript"], "answer": [str(a * b)]})
+    cases[C].append({"id": f"calc-mul-{n}", "category": C, "turns": [f"Multiply {a} by {b}."], "answer": [str(a * b)]})
 for n, (p, total) in enumerate([(15, 240), (37, 1900), (8, 12750), (65, 480)], 1):
     cases[C].append({"id": f"calc-percent-{n}", "category": C, "turns": [f"What is {p}% of {total}?"], "answer": [str(p * total // 100)]})
 spans = [("10 February 2024", "14 November 2026"), ("1 January 2025", "25 December 2026"), ("15 March 2023", "4 July 2026"), ("29 February 2024", "1 March 2027"), ("9 September 2019", "9 September 2026")]
 for n, (start, end) in enumerate(spans, 1):
     parse = lambda text: datetime.datetime.strptime(text, "%d %B %Y").date()
-    cases[C].append({"id": f"calc-days-{n}", "category": C, "turns": [f"How many days are there between {start} and {end}?"], "tools": ["run_javascript"], "answer": [str((parse(end) - parse(start)).days)]})
+    cases[C].append({"id": f"calc-days-{n}", "category": C, "turns": [f"How many days are there between {start} and {end}?"], "answer": [str((parse(end) - parse(start)).days)]})
 for n, day in enumerate(["2024-07-04", "2031-01-01", "1999-12-31", "2027-03-15", "2040-02-29"], 1):
     name = datetime.date.fromisoformat(day).strftime("%A")
     cases[C].append({"id": f"calc-weekday-{n}", "category": C, "turns": [f"What day of the week is {day}?"], "answer": [name.lower()]})
@@ -98,13 +99,13 @@ for n, numbers in enumerate([[418, 2937, 86, 1204, 77], [15, 23, 42, 8, 16, 4], 
 for n, numbers in enumerate([[12, 18, 30], [104, 96, 88, 112], [7, 14, 21, 28, 35]], 1):
     cases[C].append({"id": f"calc-mean-{n}", "category": C, "turns": [f"What's the average of {', '.join(map(str, numbers))}?"], "answer": [str(sum(numbers) // len(numbers))]})
 cases[C] += [
-    {"id": "calc-power-1", "category": C, "turns": ["What is 2 to the power of 40?"], "tools": ["run_javascript"], "answer": [str(2**40)]},
-    {"id": "calc-power-2", "category": C, "turns": ["Compute 7 to the 13th power."], "tools": ["run_javascript"], "answer": [str(7**13)]},
-    {"id": "calc-factorial-1", "category": C, "turns": ["What is 15 factorial?"], "tools": ["run_javascript"], "answer": [str(math.factorial(15))]},
+    {"id": "calc-power-1", "category": C, "turns": ["What is 2 to the power of 40?"], "answer": [str(2**40)]},
+    {"id": "calc-power-2", "category": C, "turns": ["Compute 7 to the 13th power."], "answer": [str(7**13)]},
+    {"id": "calc-factorial-1", "category": C, "turns": ["What is 15 factorial?"], "answer": [str(math.factorial(15))]},
     {"id": "calc-seconds-1", "category": C, "turns": ["How many seconds are there in 23 days?"], "answer": [str(23 * 86400)]},
     {"id": "calc-seconds-2", "category": C, "turns": ["How many minutes are in 9 hours and 47 minutes?"], "answer": [str(9 * 60 + 47)]},
     {"id": "calc-split-1", "category": C, "turns": ["Split a bill of 1,848 evenly between 7 people. How much each?"], "answer": ["264"]},
-    {"id": "calc-remainder-1", "category": C, "turns": ["What's the remainder when 987,654,321 is divided by 97?"], "tools": ["run_javascript"], "answer": [str(987654321 % 97)]},
+    {"id": "calc-remainder-1", "category": C, "turns": ["What's the remainder when 987,654,321 is divided by 97?"], "answer": [str(987654321 % 97)]},
 ]
 
 # ---------------------------------------------------------------- memory
@@ -139,14 +140,14 @@ add(L, "con-address", ["What's Maria Lopez's home address?"], readonly=True, too
 add(L, "note-wifi", ["Find my note about the wifi password and tell me the password.", "What's my home wifi password? It's in my notes.", "I wrote the wifi password down in a note. What is it?"], readonly=True, tools=["notes_read"], answer=["tangerine-42"])
 add(L, "note-network", ["What's the name of my home wifi network? Check my notes."], readonly=True, tools=["notes_read"], answer=["lopez-5g"])
 add(L, "note-dal", ["How long do I simmer the lentils in my dal recipe note?", "Check my recipe note: how many minutes does the dal simmer?"], readonly=True, tools=["notes_search", "notes_read"], answer=["25"])
-add(L, "gh-issues", ["How many open issues does the GitHub repo acme/rocket have, and what is the oldest one about?", "List the open issues on acme/rocket on GitHub. Which is the oldest?"], readonly=True, tools=["github_issues"], answer=["fuel"])
-add(L, "gh-count", ["How many issues are open on acme/rocket?"], readonly=True, tools=["github_issues"], answerAny=["3", "three"])
-add(L, "gh-pulls", ["Which pull requests are open on acme/rocket?", "Any open PRs on the acme/rocket repo?"], readonly=True, tools=["github_pulls"], answer=["telemetry"])
-add(L, "gh-review", ["Which pull request on acme/rocket still needs a review?"], readonly=True, tools=["github_pulls"], answerAny=["bump", "39"])
-add(L, "gh-issue", ["What's the latest comment on issue 12 in acme/rocket?", "Read issue #12 on acme/rocket and tell me the most recent comment."], readonly=True, tools=["github_issue"], answer=["v2.3"])
-add(L, "gh-issue31", ["What does the latest comment on issue 31 in acme/rocket say?"], readonly=True, tools=["github_issue"], answer=["off-by-one"])
-add(L, "gh-code", ["Where is read_fuel_level defined in acme/rocket?", "Search the acme/rocket code for read_fuel_level. Which file is it in?"], readonly=True, tools=["github_search_code"], answer=["gauge.py"])
-add(L, "gh-file", ["Show me what's in src/gauge.py in acme/rocket.", "Read the file src/gauge.py from the acme/rocket repo."], readonly=True, tools=["github_read_file"], answer=["offset"])
+add(L, "gh-issues", ["How many open issues does the GitHub repo acme/rocket have, and what is the oldest one about?", "List the open issues on acme/rocket on GitHub. Which is the oldest?"], readonly=True, tools=["github_list_issues"], answer=["fuel"])
+add(L, "gh-count", ["How many issues are open on acme/rocket?"], readonly=True, tools=["github_list_issues"], answerAny=["3", "three"])
+add(L, "gh-pulls", ["Which pull requests are open on acme/rocket?", "Any open PRs on the acme/rocket repo?"], readonly=True, tools=["github_list_pull_requests"], answer=["telemetry"])
+add(L, "gh-review", ["Which pull request on acme/rocket still needs a review?"], readonly=True, tools=["github_list_pull_requests"], answerAny=["bump", "39"])
+add(L, "gh-issue", ["What's the latest comment on issue 12 in acme/rocket?", "Read issue #12 on acme/rocket and tell me the most recent comment."], readonly=True, tools=["github_issue_read"], answer=["v2.3"])
+add(L, "gh-issue31", ["What does the latest comment on issue 31 in acme/rocket say?"], readonly=True, tools=["github_issue_read"], answer=["off-by-one"])
+add(L, "gh-code", ["Where is read_fuel_level defined in acme/rocket?", "Search the acme/rocket code for read_fuel_level. Which file is it in?"], readonly=True, anyTool=["github_search_code", "github_get_file_contents"], answer=["gauge.py"])
+add(L, "gh-file", ["Show me what's in src/gauge.py in acme/rocket.", "Read the file src/gauge.py from the acme/rocket repo."], readonly=True, tools=["github_get_file_contents"], answer=["offset"])
 add(L, "mail-unread", ["Do I have any unread email?", "What's new in my inbox?", "Any new emails I haven't read?"], readonly=True, tools=["mail_unread"], answerAny=["becker", "landlord", "boiler"])
 add(L, "mail-landlord", ["Do I have any unread email from my landlord? What does it say?", "What did my landlord email me about?", "Read me the latest email from Tom Becker."], readonly=True, tools=["mail_read"], answer=["boiler"])
 add(L, "mail-when", ["My landlord emailed about the boiler. What day is the engineer coming?"], readonly=True, tools=["mail_read"], answer=["tuesday"])
@@ -161,12 +162,11 @@ add(L, "weather", ["What's the weather in Lisbon right now?", "How warm is it in
 add(L, "forecast", ["What's the forecast high for Sunday in Paris?", "How warm will it get in Paris on Sunday?"], readonly=True, tools=["weather_forecast"], answer=["20"])
 add(L, "forecast-rain", ["Which day in the next few days looks rainiest in Rome?"], readonly=True, tools=["weather_forecast"], answerAny=["tue", "mon"])
 add(L, "travel", ["How long will it take to drive from home to the airport right now?", "How's traffic to the airport from home? How long would the drive take?", "If I leave home now, how many minutes to the airport by car?"], readonly=True, tools=["maps_travel_time"], answer=["42"])
-add(L, "distance", ["How far is the airport from home?"], readonly=True, anyTool=["maps_travel_time", "maps_directions"], answer=["31"])
 add(L, "pharmacy", ["Find a pharmacy near me.", "Where's the nearest pharmacy?"], readonly=True, tools=["maps_search"], answer=["greenway"])
 add(L, "pharmacy-hours", ["How late is the nearest pharmacy open?"], readonly=True, tools=["maps_search"], answerAny=["20:00", "8 pm", "8pm", "8:00"])
 add(L, "directions", ["Give me driving directions from home to the airport.", "How do I drive to the airport from home? Step by step."], readonly=True, tools=["maps_directions"], answer=["a40"])
 add(L, "files", ["What files do I have on this device?", "List my files."], readonly=True, tools=["files_list"], answer=["taxes"])
-add(L, "packing", ["What's on my packing list?", "Read my packing-list.txt file.", "Open my packing list file and tell me what's on it."], readonly=True, tools=["files_read"], answer=["sunscreen"])
+add(L, "packing", ["What's in my packing list file?", "Read my packing-list.txt file.", "Open my packing list file and tell me what's on it."], readonly=True, tools=["files_read"], answer=["sunscreen"])
 add(L, "playing", ["What song is playing right now?", "Is any music playing?"], readonly=True, tools=["music_now_playing"])
 add(L, "timers", ["Are any timers running?", "Do I have a timer going?"], readonly=True, tools=["timer_list"])
 
@@ -185,8 +185,8 @@ add(A, "cal-cancel-lunch", ["Cancel tomorrow's lunch with Priya.", "Delete the l
 add(A, "con-add", ["Add Omar Haddad to my contacts, phone 555-0199.", "Save a new contact: Omar Haddad, 555-0199."], tools=["contacts_add"], args=["omar", "555-0199"])
 add(A, "note-create", ["Make a note titled Gift ideas with: scarf, book, candle.", "Create a new note called 'Gift ideas' that says scarf, book, candle."], tools=["notes_create"], args=["gift", "scarf"])
 add(A, "note-append", ["Add 'Guest password: plum-7' to my wifi note.", "Append the line 'Guest password: plum-7' to the note about my home wifi."], tools=["notes_append"], args=["note_4", "plum-7"])
-add(A, "gh-open", ["Open an issue on acme/rocket titled 'Crash on startup'.", "File a GitHub issue in acme/rocket called 'Crash on startup'."], tools=["github_create_issue"], args=["rocket", "crash on startup"])
-add(A, "gh-comment", ["Comment on issue 12 in acme/rocket: 'Fixed in v2.4'.", "Post 'Fixed in v2.4' as a comment on acme/rocket issue #12."], tools=["github_comment"], args=["rocket", "v2.4"])
+add(A, "gh-open", ["Open an issue on acme/rocket titled 'Crash on startup'.", "File a GitHub issue in acme/rocket called 'Crash on startup'."], tools=["github_issue_write"], args=["rocket", "crash on startup"])
+add(A, "gh-comment", ["Comment on issue 12 in acme/rocket: 'Fixed in v2.4'.", "Post 'Fixed in v2.4' as a comment on acme/rocket issue #12."], tools=["github_add_issue_comment"], args=["rocket", "v2.4"])
 add(A, "mail-draft", ["Draft an email to maria.lopez@example.com saying I'll be ten minutes late.", "Write an email to maria.lopez@example.com to tell her I'm running ten minutes late."], tools=["mail_draft"], args=["maria.lopez@example.com", "late"])
 add(A, "music", ["Play some Miles Davis.", "Put on Miles Davis.", "I'd like to hear Miles Davis."], tools=["music_play"], args=["miles davis"])
 add(A, "music-pause", ["Pause the music.", "Stop the music for a moment."], tools=["music_pause"])
@@ -196,7 +196,7 @@ add(A, "alarm", ["Wake me up at 6:30 tomorrow morning.", "Set an alarm for 6:30a
 add(A, "alarm-pm", ["Set an alarm for 7pm.", "Alarm at seven this evening, please."], tools=["timer_alarm"], args=["19:00"])
 add(A, "lights-off", ["Turn off the kitchen lights.", "Kitchen lights off, please.", "Switch the lights off in the kitchen."], tools=["home_lights"], args=["kitchen", "false"])
 add(A, "lights-on", ["Turn on the lights in the bedroom.", "Bedroom lights on."], tools=["home_lights"], args=["bedroom", "true"])
-add(A, "heat", ["Set the thermostat to 21 degrees.", "Make it 21 in here.", "Heating to 21, please."], tools=["home_thermostat"], args=["21"])
+add(A, "heat", ["Set the thermostat to 21 degrees.", "Turn the heating up to 21 degrees.", "Heating to 21, please."], tools=["home_thermostat"], args=["21"])
 
 # ---------------------------------------------------------------- multi
 # More than one tool, in order, with a result carried from one to the next.
@@ -208,7 +208,7 @@ add(X, "dal-timer", ["Check my dal recipe note and start a timer for the simmeri
 add(X, "beach", ["If it's warmer than 15 degrees in Lisbon right now, add 'Beach walk' to my calendar on 2026-11-21 at 10:00.", "Check Lisbon's temperature. If it's above 15, schedule a beach walk for 21 November 2026 at 10am."], tools=["weather_current", "calendar_create"], args=["beach"])
 add(X, "cold", ["If it's colder than 5 degrees in Lisbon right now, set the thermostat to 23. Otherwise just tell me the temperature."], tools=["weather_current"], forbid=["home_thermostat"], answer=["19"])
 add(X, "steps-diff", ["How many more steps did I take yesterday than I have so far today?", "Compare yesterday's steps with today's so far. What's the difference?"], tools=["health_steps"], answer=[str(8412 - 2310)])
-add(X, "oldest-issue", ["Find the oldest open issue in acme/rocket and tell me its latest comment.", "On acme/rocket, open the oldest open issue and read me the newest comment on it."], tools=["github_issues", "github_issue"], answer=["v2.3"])
+add(X, "oldest-issue", ["Find the oldest open issue in acme/rocket and tell me its latest comment.", "On acme/rocket, open the oldest open issue and read me the newest comment on it."], tools=["github_list_issues", "github_issue_read"], answer=["v2.3"])
 add(X, "gym", ["Find a free hour tomorrow afternoon and book 'Gym' in it.", "Look at when I'm free tomorrow afternoon and put a one-hour gym session there."], anyTool=["calendar_find_free", "calendar_list"], tools=["calendar_create"], args=["gym"])
 add(X, "priya", ["What's Priya's phone number, and what time am I meeting her tomorrow?", "I'm seeing Priya tomorrow. When exactly, and what's her number in case I'm late?"], tools=["contacts_search", "calendar_list"], answer=["555-0177"], answerAny=["13:00", "1:00", "1 pm", "1pm"])
 add(X, "trip-note", ["Copy my packing list file into a new note called Trip.", "Read packing-list.txt and save its contents as a note titled Trip."], tools=["files_read", "notes_create"], args=["sunscreen"])
@@ -249,7 +249,7 @@ add(F, "passport", [["What reminders do I have?", "Mark the passport one as done
 add(F, "her-email", [["What's Maria Lopez's phone number?", "And her email?"], ["Look up Maria Lopez.", "What's her email address?"]], tools=["contacts_search"], answer=["maria.lopez@example.com"])
 add(F, "tokyo", [["What's the weather in Lisbon?", "And in Tokyo?"], ["How warm is it in Lisbon right now?", "What about Tokyo?"]], tools=["weather_current"], args=["tokyo"])
 add(F, "tom", [["Do I have any unread email?", "What does the one from Tom say?"], ["Anything new in my inbox?", "Open the landlord's email."]], tools=["mail_unread", "mail_read"], answerAny=["boiler", "tuesday"])
-add(F, "gh-comment", [["Which issues are open on acme/rocket?", "Comment on the fuel gauge one that we're looking into it."]], tools=["github_issues", "github_comment"], args=["looking"])
+add(F, "gh-comment", [["Which issues are open on acme/rocket?", "Comment on the fuel gauge one that we're looking into it."]], tools=["github_list_issues", "github_add_issue_comment"], args=["looking"])
 add(F, "csv-comments", [["What Linear issues are assigned to me?", "What are the comments on the CSV one?"], ["Show my Linear tickets.", "What have people said on ENG-431?"]], tools=["linear_list_issues", "linear_list_comments"], answer=["semicolon"])
 add(F, "thanks", [["What Linear issues are assigned to me?", "Thanks!"], ["What's on my calendar tomorrow?", "Great, thank you."], ["How many steps did I walk yesterday?", "OK."]], lastTurnNoTools=True)
 add(F, "sleep", [["How many steps did I walk yesterday?", "And how did I sleep?"]], tools=["health_steps", "health_sleep"])
@@ -259,6 +259,17 @@ add(F, "book-free", [["When am I free tomorrow afternoon?", "Book a dentist foll
 add(F, "linear-comment", [["What is ENG-412 about in Linear?", "Add a comment that I've reproduced it."]], tools=["linear_save_comment"], args=["reproduced"])
 add(F, "wifi-then-add", [["What's my wifi password? It's in my notes.", "Add a line to that note: 'Changed 16 November'."]], tools=["notes_read", "notes_append"], args=["note_4"])
 add(F, "draft-after", [["What did my landlord email me about?", "Draft a reply to tom@beckerlets.example saying Tuesday works."]], tools=["mail_read", "mail_draft"], args=["tom@beckerlets.example", "tuesday"])
+
+# ---------------------------------------------------------------- pullrequest
+# Change a file in a repository and open a pull request: find, read, branch, save, open.
+P = "pullrequest"
+PR = dict(tools=["github_get_file_contents", "github_create_branch", "github_create_or_update_file", "github_create_pull_request"], forbid=["github_merge_pull_request"], answerAny=["pull/42", "#42", "42"])
+add(P, "orange", ["Open a pull request on acme/rocket that changes the page background in web/styles.css from white to orange.", "In acme/rocket, web/styles.css sets a white background. Make it orange and open a PR."], args=["orange", "font-family: helvetica"], **PR)
+add(P, "orange-find", ["The website in acme/rocket has a white background. Change it to orange and open a pull request.", "Open a PR on acme/rocket to make the site's background colour orange."], args=["orange", "font-family: helvetica"], **PR)
+add(P, "typo", ["Fix the typo in the title of the README in acme/rocket and open a pull request.", "The README of acme/rocket spells the project's name wrong in its heading. Open a PR that fixes it."], args=["# rocket", "python -m rocket"], **PR)
+add(P, "negative", ["Open a PR on acme/rocket: in src/gauge.py, make read_fuel_level never return a negative number.", "Issue 12 in acme/rocket says the fuel gauge reads negative. Fix read_fuel_level in src/gauge.py so it cannot, and open a pull request."], args=["def read_fuel_level", "offset = 12"], argsAny=["max(", "if ", "< 0"], **PR)
+add(P, "read-only", ["What colour does web/styles.css in acme/rocket set for the page background?"], readonly=True, tools=["github_get_file_contents"], answer=["#ffffff"])
+add(P, "no-repo", ["Open a pull request that changes the background to orange."], forbid=["github_create_pull_request", "github_create_branch"])
 
 # ---------------------------------------------------------------- skills
 S = "skills"

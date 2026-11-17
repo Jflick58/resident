@@ -25,10 +25,10 @@
 {"id": "action-note-create-2", "category": "action", "turns": ["Create a new note called 'Gift ideas' that says scarf, book, candle."], "tools": ["notes_create"], "args": ["gift", "scarf"]}
 {"id": "action-note-append-1", "category": "action", "turns": ["Add 'Guest password: plum-7' to my wifi note."], "tools": ["notes_append"], "args": ["note_4", "plum-7"]}
 {"id": "action-note-append-2", "category": "action", "turns": ["Append the line 'Guest password: plum-7' to the note about my home wifi."], "tools": ["notes_append"], "args": ["note_4", "plum-7"]}
-{"id": "action-gh-open-1", "category": "action", "turns": ["Open an issue on acme/rocket titled 'Crash on startup'."], "tools": ["github_create_issue"], "args": ["rocket", "crash on startup"]}
-{"id": "action-gh-open-2", "category": "action", "turns": ["File a GitHub issue in acme/rocket called 'Crash on startup'."], "tools": ["github_create_issue"], "args": ["rocket", "crash on startup"]}
-{"id": "action-gh-comment-1", "category": "action", "turns": ["Comment on issue 12 in acme/rocket: 'Fixed in v2.4'."], "tools": ["github_comment"], "args": ["rocket", "v2.4"]}
-{"id": "action-gh-comment-2", "category": "action", "turns": ["Post 'Fixed in v2.4' as a comment on acme/rocket issue #12."], "tools": ["github_comment"], "args": ["rocket", "v2.4"]}
+{"id": "action-gh-open-1", "category": "action", "turns": ["Open an issue on acme/rocket titled 'Crash on startup'."], "tools": ["github_issue_write"], "args": ["rocket", "crash on startup"]}
+{"id": "action-gh-open-2", "category": "action", "turns": ["File a GitHub issue in acme/rocket called 'Crash on startup'."], "tools": ["github_issue_write"], "args": ["rocket", "crash on startup"]}
+{"id": "action-gh-comment-1", "category": "action", "turns": ["Comment on issue 12 in acme/rocket: 'Fixed in v2.4'."], "tools": ["github_add_issue_comment"], "args": ["rocket", "v2.4"]}
+{"id": "action-gh-comment-2", "category": "action", "turns": ["Post 'Fixed in v2.4' as a comment on acme/rocket issue #12."], "tools": ["github_add_issue_comment"], "args": ["rocket", "v2.4"]}
 {"id": "action-mail-draft-1", "category": "action", "turns": ["Draft an email to maria.lopez@example.com saying I'll be ten minutes late."], "tools": ["mail_draft"], "args": ["maria.lopez@example.com", "late"]}
 {"id": "action-mail-draft-2", "category": "action", "turns": ["Write an email to maria.lopez@example.com to tell her I'm running ten minutes late."], "tools": ["mail_draft"], "args": ["maria.lopez@example.com", "late"]}
 {"id": "action-music-1", "category": "action", "turns": ["Play some Miles Davis."], "tools": ["music_play"], "args": ["miles davis"]}
@@ -50,5 +50,5 @@
 {"id": "action-lights-on-1", "category": "action", "turns": ["Turn on the lights in the bedroom."], "tools": ["home_lights"], "args": ["bedroom", "true"]}
 {"id": "action-lights-on-2", "category": "action", "turns": ["Bedroom lights on."], "tools": ["home_lights"], "args": ["bedroom", "true"]}
 {"id": "action-heat-1", "category": "action", "turns": ["Set the thermostat to 21 degrees."], "tools": ["home_thermostat"], "args": ["21"]}
-{"id": "action-heat-2", "category": "action", "turns": ["Make it 21 in here."], "tools": ["home_thermostat"], "args": ["21"]}
+{"id": "action-heat-2", "category": "action", "turns": ["Turn the heating up to 21 degrees."], "tools": ["home_thermostat"], "args": ["21"]}
 {"id": "action-heat-3", "category": "action", "turns": ["Heating to 21, please."], "tools": ["home_thermostat"], "args": ["21"]}

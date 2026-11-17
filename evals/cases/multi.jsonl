@@ -11,8 +11,8 @@
 {"id": "multi-cold-1", "category": "multi", "turns": ["If it's colder than 5 degrees in Lisbon right now, set the thermostat to 23. Otherwise just tell me the temperature."], "tools": ["weather_current"], "forbid": ["home_thermostat"], "answer": ["19"]}
 {"id": "multi-steps-diff-1", "category": "multi", "turns": ["How many more steps did I take yesterday than I have so far today?"], "tools": ["health_steps"], "answer": ["6102"]}
 {"id": "multi-steps-diff-2", "category": "multi", "turns": ["Compare yesterday's steps with today's so far. What's the difference?"], "tools": ["health_steps"], "answer": ["6102"]}
-{"id": "multi-oldest-issue-1", "category": "multi", "turns": ["Find the oldest open issue in acme/rocket and tell me its latest comment."], "tools": ["github_issues", "github_issue"], "answer": ["v2.3"]}
-{"id": "multi-oldest-issue-2", "category": "multi", "turns": ["On acme/rocket, open the oldest open issue and read me the newest comment on it."], "tools": ["github_issues", "github_issue"], "answer": ["v2.3"]}
+{"id": "multi-oldest-issue-1", "category": "multi", "turns": ["Find the oldest open issue in acme/rocket and tell me its latest comment."], "tools": ["github_list_issues", "github_issue_read"], "answer": ["v2.3"]}
+{"id": "multi-oldest-issue-2", "category": "multi", "turns": ["On acme/rocket, open the oldest open issue and read me the newest comment on it."], "tools": ["github_list_issues", "github_issue_read"], "answer": ["v2.3"]}
 {"id": "multi-gym-1", "category": "multi", "turns": ["Find a free hour tomorrow afternoon and book 'Gym' in it."], "anyTool": ["calendar_find_free", "calendar_list"], "tools": ["calendar_create"], "args": ["gym"]}
 {"id": "multi-gym-2", "category": "multi", "turns": ["Look at when I'm free tomorrow afternoon and put a one-hour gym session there."], "anyTool": ["calendar_find_free", "calendar_list"], "tools": ["calendar_create"], "args": ["gym"]}
 {"id": "multi-priya-1", "category": "multi", "turns": ["What's Priya's phone number, and what time am I meeting her tomorrow?"], "tools": ["contacts_search", "calendar_list"], "answer": ["555-0177"], "answerAny": ["13:00", "1:00", "1 pm", "1pm"]}

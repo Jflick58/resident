@@ -384,7 +384,7 @@ let connectorTools: [ConnectorTool] = [
         "weather", "forecast", "Get the weather forecast for the coming days.",
         "Returns one line per day with high, low and conditions.",
         [Param("city", "City name"), Param("days", "Number of days, 1 to 7", type: "integer", required: false)]
-    ) { _ in ToolResult("Sun 20/13 sunny\nMon 18/12 showers\nTue 17/11 rain") },
+    ) { _ in ToolResult("Sun  high 20°C  low 13°C  sunny\nMon  high 18°C  low 12°C  showers\nTue  high 17°C  low 11°C  rain") },
 
     // MARK: Maps
     tool(

@@ -80,8 +80,11 @@ public struct ToolGroup: Sendable {
         for term in Self.expand(Self.terms(request)) { query[term] = 0.25 }
         for term in Self.expand(Self.terms(need)) { query[term] = 1 }
         // An identifier in the text ("ENG-412") means one particular thing is wanted: fetch it.
+        // Unless the text asks for a change: "Mark ENG-431 as done" wants the tool that saves,
+        // and the six that fetch crowded it out (LFM3, 3 chats in 3).
+        let changes = !Set(Self.terms(need + " " + request)).isDisjoint(with: Self.changeWords)
         if (need + " " + request).range(of: #"\b[A-Z][A-Z0-9]{1,9}-\d+\b"#, options: .regularExpression) != nil {
-            query["get"] = 1
+            if changes { query["save"] = 1 } else { query["get"] = 1 }
         } else if let weight = query["get"], !(need + " " + request).lowercased().contains("get_") {
             // With nothing particular named, "get my open tickets" asks for a list. Left as
             // "get", it brought Linear's six get_ tools and not list_issues, and LFM3
@@ -149,6 +152,12 @@ public struct ToolGroup: Sendable {
         "people": ["user"], "teammate": ["user"], "sprint": ["cycle"], "status": ["state"], "show": ["list"], "find": ["search", "list"],
         "check": ["list"], "create": ["save"], "add": ["save", "create"], "update": ["save"], "edit": ["save"], "change": ["save"],
         "mark": ["save"], "move": ["save"], "assign": ["save"], "close": ["save"],
+    ]
+
+    /// Words that ask for something to be changed, not looked up.
+    private static let changeWords: Set<String> = [
+        "mark", "close", "move", "assign", "give", "set", "update", "change", "edit", "rename", "reopen", "bump", "raise", "lower",
+        "comment", "reply", "create", "delete", "remove", "add", "finish", "complete", "done", "cancel",
     ]
 
     /// Verbs that tool names start with, which say nothing of what a connector is about.
@@ -269,12 +278,31 @@ struct ToolShelf {
     mutating func preload(for message: String) -> Bool {
         let words = Set(message.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
         let before = loaded
+        // "acme/rocket" names a repository without naming the service that holds it. Left to
+        // choose, LFM3 took "issues on acme/rocket" to Linear (9 cases in 388).
+        let namesRepository = Self.namesRepository(message)
         for group in groups {
             let title = group.title.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
-            guard !title.isEmpty, title.allSatisfy(words.contains) else { continue }
+            let holdsRepositories = namesRepository && (group.summary + " " + group.title).lowercased().contains("repositor")
+            guard holdsRepositories || (!title.isEmpty && title.allSatisfy(words.contains)) else { continue }
             add(affordable(group.pick(message).map(\.spec.name)))
         }
         return loaded != before
+    }
+
+    /// True when the text holds something written like a repository: `owner/name`,
+    /// two words joined by a slash, neither a file with an extension nor a common pair.
+    static func namesRepository(_ text: String) -> Bool {
+        let pairs: Set<String> = ["and/or", "either/or", "he/she", "his/her", "km/h", "yes/no", "on/off", "w/o", "n/a", "am/pm", "input/output"]
+        for word in text.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "," || $0 == "(" || $0 == ")" || $0 == "\"" || $0 == "'" || $0 == "`" }) {
+            let token = word.trimmingCharacters(in: CharacterSet(charactersIn: ".?!:;")).lowercased()
+            let parts = token.split(separator: "/", omittingEmptySubsequences: false)
+            guard parts.count == 2, !pairs.contains(token), !token.contains("."), !token.contains(":") else { continue }
+            if parts.allSatisfy({ $0.count >= 2 && $0.contains(where: \.isLetter) && $0.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" } }) {
+                return true
+            }
+        }
+        return false
     }
 
     /// Notes that a declared tool was called earlier in the chat, so it outlasts ones that never were.

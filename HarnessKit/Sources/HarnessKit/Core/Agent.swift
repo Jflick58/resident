@@ -27,6 +27,8 @@ public struct Agent: Sendable {
     /// Model round trips allowed in one turn. The last one runs without tools so
     /// the model has to answer.
     public var maxSteps: Int
+    /// Steps added to `maxSteps` for a turn that works with a connector's tools.
+    public static let connectorSteps = 6
     /// Largest tool result passed back to the model, in characters.
     public var maxToolResultCharacters: Int
     /// Approximate context size to stay within, in tokens.
@@ -114,11 +116,15 @@ public struct Agent: Sendable {
         var answerWithoutTools = false
 
         var step = 0
-        while step < max(1, maxSteps) || answerWithoutTools {
+        // Work in a connected service takes more steps than a search and an answer: opening
+        // a pull request is five calls before anything goes wrong. A turn that has connector
+        // tools declared gets more room.
+        var stepLimit: Int { maxSteps + (shelf.loaded.isEmpty ? 0 : Self.connectorSteps) }
+        while step < max(1, stepLimit) || answerWithoutTools {
             step += 1
             try Task.checkCancellation()
             let outOfTime = step > 1 && deadline.map { Date() >= $0 } ?? false
-            let isLastStep = step >= maxSteps || outOfTime || answerWithoutTools
+            let isLastStep = step >= stepLimit || outOfTime || answerWithoutTools
             var stepMessages = ContextBudget.fit(transcript, budgetTokens: contextBudgetTokens)
             if let usageNotes, stepMessages.first?.role == .system { stepMessages[0].text += "\n\n" + usageNotes }
             if isLastStep, stepMessages.last?.role == .tool {

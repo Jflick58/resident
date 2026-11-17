@@ -14,7 +14,7 @@ public struct JavaScriptTool: Tool {
         ToolSpec(
             name: BuiltInTool.runJavaScript.rawValue,
             description:
-                "Run JavaScript and get the output. This is the only language you can run. Use it for arithmetic, dates and data work instead of working them out yourself. When asked to write code and no language is named, write JavaScript and run it here to check that it works. Use console.log to print; the value of the last expression is also returned. No network, files or DOM.",
+                "Run JavaScript and get the output. This is the only language you can run. Use it for arithmetic, dates and data work instead of working them out yourself. When asked to write code and no language is named, write JavaScript and run it here to check that it works. A date written as YYYY-MM-DD is read as UTC: use getUTCDay, getUTCDate and the other getUTC methods on it. Use console.log to print; the value of the last expression is also returned. No network, files or DOM.",
             parameters: [
                 "type": "object",
                 "properties": [

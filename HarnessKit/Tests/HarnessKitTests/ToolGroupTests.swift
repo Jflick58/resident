@@ -290,6 +290,22 @@ private final class SeenMessages: @unchecked Sendable {
         #expect(shelf.nearest(to: "weather_now") == nil)
     }
 
+    @Test func aRepositoryWrittenOutOpensTheConnectorThatHoldsRepositories() {
+        #expect(ToolShelf.namesRepository("How many issues are open on acme/rocket?"))
+        #expect(!ToolShelf.namesRepository("Read src/gauge.py and/or the docs, 24/7"))
+        let hub = ToolGroup(
+            name: "github", title: "GitHub", summary: "Repositories, issues and pull requests",
+            tools: ["list_issues", "issue_read"].map { NamedTool(name: "github_" + $0, description: "About a repository") })
+        var shelf = ToolShelf(groups: [bigGroup(), hub])
+        _ = shelf.preload(for: "How many issues are open on acme/rocket?")
+        #expect(shelf.loaded.contains("github_list_issues"))
+        #expect(!shelf.loaded.contains { $0.hasPrefix("linear_") })
+    }
+
+    @Test func anIdentifierWithAChangeBringsTheSavingTool() {
+        #expect(names("", request: "Mark ENG-431 as done").contains("linear_save_issue"))
+    }
+
     @Test func getWithNothingNamedMeansList() {
         #expect(names("Get my open linear tickets").first == "linear_list_issues")
         var shelf = ToolShelf(groups: [bigGroup()])

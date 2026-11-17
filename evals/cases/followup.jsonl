@@ -10,7 +10,7 @@
 {"id": "followup-tokyo-2", "category": "followup", "turns": ["How warm is it in Lisbon right now?", "What about Tokyo?"], "tools": ["weather_current"], "args": ["tokyo"]}
 {"id": "followup-tom-1", "category": "followup", "turns": ["Do I have any unread email?", "What does the one from Tom say?"], "tools": ["mail_unread", "mail_read"], "answerAny": ["boiler", "tuesday"]}
 {"id": "followup-tom-2", "category": "followup", "turns": ["Anything new in my inbox?", "Open the landlord's email."], "tools": ["mail_unread", "mail_read"], "answerAny": ["boiler", "tuesday"]}
-{"id": "followup-gh-comment-1", "category": "followup", "turns": ["Which issues are open on acme/rocket?", "Comment on the fuel gauge one that we're looking into it."], "tools": ["github_issues", "github_comment"], "args": ["looking"]}
+{"id": "followup-gh-comment-1", "category": "followup", "turns": ["Which issues are open on acme/rocket?", "Comment on the fuel gauge one that we're looking into it."], "tools": ["github_list_issues", "github_add_issue_comment"], "args": ["looking"]}
 {"id": "followup-csv-comments-1", "category": "followup", "turns": ["What Linear issues are assigned to me?", "What are the comments on the CSV one?"], "tools": ["linear_list_issues", "linear_list_comments"], "answer": ["semicolon"]}
 {"id": "followup-csv-comments-2", "category": "followup", "turns": ["Show my Linear tickets.", "What have people said on ENG-431?"], "tools": ["linear_list_issues", "linear_list_comments"], "answer": ["semicolon"]}
 {"id": "followup-thanks-1", "category": "followup", "turns": ["What Linear issues are assigned to me?", "Thanks!"], "lastTurnNoTools": true}
