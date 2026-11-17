@@ -476,6 +476,7 @@ extension MLXEngine {
             + "MLX in use \(megabytes(held.active)) cache \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
             + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))\n"
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: url) {
             defer { try? handle.close() }
             _ = try? handle.seekToEnd()
