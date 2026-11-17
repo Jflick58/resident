@@ -300,6 +300,23 @@ struct ToolShelf {
         return loaded != before
     }
 
+    /// Answers a call to a connector tool that does not exist: declares the connector's
+    /// tools whose names come closest and returns them, or nil when no connector owns the name.
+    ///
+    /// A model that has seen a connector's tool names remembers their gist, not their
+    /// spelling. Wanting to change a file on GitHub, LFM3 called `github_list_files`,
+    /// was told only what was already declared, and gave up without ever asking for
+    /// `github_create_or_update_file`.
+    mutating func nearest(to name: String) -> (title: String, tools: [String])? {
+        let lowered = name.lowercased()
+        guard let group = groups.first(where: { lowered.hasPrefix($0.name + "_") }) else { return nil }
+        let wanted = lowered.dropFirst(group.name.count + 1).replacingOccurrences(of: "_", with: " ")
+        let picked = affordable(group.pick(wanted, matchingOnly: true).prefix(4).map(\.spec.name))
+        guard !picked.isEmpty else { return nil }
+        add(picked)
+        return (group.title, picked)
+    }
+
     /// Declares connector tools that the text names outright, such as a skill's
     /// instructions saying "use linear_list_issues". Told the name, the model
     /// should not have to search for the tool. True when that declared something new.

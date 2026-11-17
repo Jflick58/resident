@@ -1,12 +1,15 @@
 #!/bin/zsh
 # Takes the screenshots the website uses, from the simulator, in dark mode.
 #   tools/site-shots.sh
-# They land in site/assets/img/ as shot-<name>.png. The simulator holds no
+#   SIM="iPad Pro 13-inch (M5)" OUT=store/screenshots/ipad-13 tools/site-shots.sh   for the App Store
+# They land in site/assets/img/ as shot-<name>.png, or in OUT at full size. The simulator holds no
 # real data, so nothing private can end up on the site. Build the app for the
 # simulator first (./run-sim.sh does).
 cd "$(dirname "$0")/.."
 source tools/local-config.sh
 device=${SIM:-iPhone 18 Pro}
+out=${OUT:-site/assets/img}
+mkdir -p "$out"
 # Every simulator command gets a time limit: a stuck simulator hangs them for good.
 limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 
@@ -28,8 +31,8 @@ shot() {
   limit 40 xcrun simctl io "$device" screenshot $new >/dev/null 2>&1 \
     || limit 40 xcrun simctl io "$device" screenshot --display=1 $new >/dev/null 2>&1 \
     || { echo "$name: no screenshot"; return 1; }
-  mv $new site/assets/img/shot-$name.png
-  echo "$name: $(sips -g pixelWidth -g pixelHeight site/assets/img/shot-$name.png 2>/dev/null | awk '/pixel/ {printf "%s ", $2}')"
+  mv $new $out/shot-$name.png
+  echo "$name: $(sips -g pixelWidth -g pixelHeight $out/shot-$name.png 2>/dev/null | awk '/pixel/ {printf "%s ", $2}')"
 }
 
 # The simulator cannot run a model, so the chat is one LFM3 really had, run on
@@ -63,4 +66,4 @@ shot agents 6 -openSheet presets
 shot settings 6 -openSheet settings
 shot chat 6 -openLatestChat YES
 # The agent list is short: keep the top of the screen.
-sips --cropOffset 1 1 -c 1500 1206 site/assets/img/shot-agents.png >/dev/null
+[[ -n $OUT ]] || sips --cropOffset 1 1 -c 1500 1206 site/assets/img/shot-agents.png >/dev/null

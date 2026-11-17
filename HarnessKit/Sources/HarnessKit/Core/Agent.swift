@@ -238,6 +238,10 @@ public struct Agent: Sendable {
                         }
                         result = outcome
                     }
+                } else if let near = shelf.nearest(to: call.name) {
+                    emit(.toolsLoaded(shelf.loaded))
+                    result = .error(
+                        "There is no tool named \(call.name). The closest \(near.title) tools, which you can call now: \(near.tools.joined(separator: ", ")).")
                 } else {
                     let names = (alwaysDeclared + shelf.loadedSpecs).map(\.name).joined(separator: ", ")
                     result = .error(

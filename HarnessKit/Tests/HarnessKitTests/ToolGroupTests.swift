@@ -281,6 +281,15 @@ private final class SeenMessages: @unchecked Sendable {
         #expect(shelf.usageNotes == "How Linear says to use its tools: Use list_issues with assignee \"me\" for the user's own issues.")
     }
 
+    @Test func aMisnamedToolBringsTheClosestOnes() {
+        var shelf = ToolShelf(groups: [bigGroup()])
+        let near = shelf.nearest(to: "linear_list_document")
+        #expect(near?.title == "Linear")
+        #expect(near?.tools.contains("linear_list_documents") == true)
+        #expect(shelf.loaded.contains("linear_list_documents"))
+        #expect(shelf.nearest(to: "weather_now") == nil)
+    }
+
     @Test func getWithNothingNamedMeansList() {
         #expect(names("Get my open linear tickets").first == "linear_list_issues")
         var shelf = ToolShelf(groups: [bigGroup()])
