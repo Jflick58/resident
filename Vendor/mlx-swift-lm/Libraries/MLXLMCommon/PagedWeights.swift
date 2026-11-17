@@ -79,9 +79,13 @@ final class PagedWeights: @unchecked Sendable {
                 try reader.seek(toOffset: UInt64(span.begin))
                 var left = span.bytes
                 while left > 0 {
-                    guard let data = try reader.read(upToCount: min(chunk, left)), !data.isEmpty else { throw Malformed() }
-                    try writer.write(contentsOf: data)
-                    left -= data.count
+                    // Each chunk is freed before the next is read. Without the pool they pile up
+                    // until the loop ends, and the copy of a large model uses as much memory as the model.
+                    left -= try autoreleasepool {
+                        guard let data = try reader.read(upToCount: min(chunk, left)), !data.isEmpty else { throw Malformed() }
+                        try writer.write(contentsOf: data)
+                        return data.count
+                    }
                 }
                 let padding = (page - span.bytes % page) % page
                 if padding > 0 { try writer.write(contentsOf: Data(count: padding)) }
