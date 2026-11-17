@@ -148,11 +148,17 @@ public enum PromptBuilder {
     /// not in letter: it is something the agent has, like the date, and a model
     /// only keeps it up if told that doing so is its job. The date is day-granular so the prompt prefix stays stable within a day and the
     /// model's cache of it can be reused.
+    /// What the app is, so a model asked what it is or where it comes from can say.
+    /// Every agent gets it, the user's own included: a model left to guess names
+    /// whichever company trained it, or invents an app.
+    public static let about =
+        "You are running in Resident, an open source app for iPhone that runs AI models entirely on the user's device. Its code is at https://github.com/jflick58/resident. Say this only when the user asks what you are, what app this is or who made it."
+
     public static func systemPrompt(
         preset: HarnessPreset, memory: String, skills: [Skill] = [], connectors: [ToolGroup] = [], date: Date = Date(),
         calendar: Calendar = .current, canRemember: Bool? = nil, earlier: String? = nil
     ) -> String {
-        var parts = [preset.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)]
+        var parts = [preset.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines), about]
         if preset.tools.contains(.skills) {
             parts.append([Skill.promptSection(skills), Skill.savingGuidance].compactMap { $0 }.joined(separator: "\n"))
         }

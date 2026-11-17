@@ -8,6 +8,9 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- The app uses only the encryption built into iOS (HTTPS, the Keychain), which is exempt from export paperwork. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Client IDs for services where an app cannot register itself. Set in Config/Local.xcconfig; empty when not. -->
 	<key>GitHubClientID</key>
 	<string>$(GITHUB_CLIENT_ID)</string>
