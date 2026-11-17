@@ -37,236 +37,217 @@ questions:
 ---
 
 <section class="hero">
-  <div>
-    <p class="label"><b>Resident</b> / Fully local AI agent for iPhone</p>
-    <h1>Small model. <em>Serious</em> agent.</h1>
-    <p class="lede">
-      Resident runs open models on your iPhone and builds around them everything an agent needs.
-      The parts small models are bad at, the app does for them. Your chats stay with you.
-    </p>
-    <p class="actions">
-      <a class="button" href="https://github.com/jflick58/resident">Read the source on GitHub</a>
-      <span class="status">Coming soon to the App Store</span>
-    </p>
-  </div>
-  <div class="hero-art">
-    {% include shot.html name="models" alt="The list of models, each marked with whether it fits this device" %}
+  <img class="hero-mark" src="{{ '/assets/img/mark.png' | relative_url }}" alt="" width="120" height="130">
+  <h1>Small model. Serious agent.</h1>
+  <p class="lede">
+    Resident runs open models on your iPhone and builds around them everything an agent needs.
+    The parts small models are bad at, the app does for them. Your chats stay with you.
+  </p>
+  <p class="actions">
+    <span class="button soon" aria-disabled="true">Coming soon to the App Store</span>
+    <a class="quiet" href="#how">See how it works</a>
+    <a class="quiet" href="https://github.com/jflick58/resident">Source on GitHub</a>
+  </p>
+  <div class="shots">
+    {% include shot.html name="home" alt="Resident's opening screen, greeting you by the time of day" %}
     {% include shot.html name="chat" alt="A chat in which LFM3 searches the web and reads three pages before answering" %}
+    {% include shot.html name="models" alt="The list of models, each marked with whether it fits this device" %}
   </div>
 </section>
 
-<section class="facts" aria-label="At a glance">
+<section class="band facts" aria-label="At a glance">
   <div><strong>1 GB</strong><span>is enough to start: the model we recommend first</span></div>
   <div><strong>70 tools</strong><span>in one connector, and a small model still copes</span></div>
   <div><strong>0</strong><span>accounts, analytics or servers of ours</span></div>
 </section>
 
-<section id="how" class="sec">
-  <p class="label"><b>01</b> Why it works</p>
-  <div>
-    <h2>Built for how small models actually behave.</h2>
-    <p class="sub">
-      A model that fits on a phone is capable and easily overwhelmed. Give it a long prompt, fifty tools
-      and a page of raw data and it falls over. Most of Resident is the work of not doing that.
-    </p>
-
-    <div class="flow" role="img" aria-label="A connector with seventy tools is shown to the model as one line, and four tools are opened when a request needs them.">
-      <div><span class="num">70</span><span class="what">tools in Linear's connector</span></div>
-      <div class="arrow" aria-hidden="true"></div>
-      <div><span class="num">1</span><span class="what">line in the model's prompt</span></div>
-      <div class="arrow" aria-hidden="true"></div>
-      <div><span class="num">4</span><span class="what">opened for “my open issues”</span></div>
-    </div>
-
-    <div class="points">
-      <article>
-        <h3>Tools appear when they are needed</h3>
-        <p>
-          Describing every tool of a real service takes more text than a phone-sized model can hold.
-          Resident tells the model each connector exists in one line, then opens only the few tools a
-          request calls for. Connect several services and the model still sees a short, clear list.
-        </p>
-      </article>
-      <article>
-        <h3>Answers from tools are made to fit</h3>
-        <p>
-          Ask for your issues and a service sends twenty, each with pages of description. Cut that off and
-          the model sees five and goes round in circles. Resident shortens the long parts first, keeps
-          every item, and says plainly when something was left out.
-        </p>
-      </article>
-      <article>
-        <h3>The chores are done for it</h3>
-        <p>
-          A small model busy answering will not stop to remember a fact about you, name the chat or tidy
-          a long conversation. Resident does each as a short request of its own after the reply, so they
-          happen every time.
-        </p>
-      </article>
-      <article>
-        <h3>It keeps its place</h3>
-        <p>
-          Leave the app mid-answer and the reply holds where it is, then carries on from the same word
-          when you come back. Long chats are summarised behind the scenes, so the tenth question is as
-          quick as the first.
-        </p>
-      </article>
-      <article>
-        <h3>You see every step</h3>
-        <p>
-          Each search, page and tool call is shown as it happens, with what was sent and what came back.
-          When an answer is wrong you can see where it went wrong.
-        </p>
-      </article>
-      <article>
-        <h3>Nothing downloads that will not run</h3>
-        <p>
-          Before a model downloads, Resident works out the memory it needs at full context and checks it
-          against your device. Paste any MLX model from Hugging Face and get a straight answer first.
-        </p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section id="agent" class="sec">
-  <p class="label"><b>02</b> What it does</p>
-  <div>
-    <h2>An agent, not a chat box.</h2>
-    <div class="points three">
-      <article>
-        <h3>Looks things up</h3>
-        <p>Searches the web and reads pages when a question needs something recent.</p>
-      </article>
-      <article>
-        <h3>Works it out</h3>
-        <p>Runs code in a sandbox for arithmetic, dates and data, so answers are computed, not guessed.</p>
-      </article>
-      <article>
-        <h3>Uses your apps</h3>
-        <p>Calendar and Reminders on the device. GitHub, Linear, Notion and anything else that speaks MCP, by pasting an address.</p>
-      </article>
-      <article>
-        <h3>Remembers you</h3>
-        <p>Keeps a short list of lasting facts you mention. Read it, edit it or switch it off.</p>
-      </article>
-      <article>
-        <h3>Learns your way</h3>
-        <p>Turn something it just did into a skill with one tap. You see and approve every skill before it is kept.</p>
-      </article>
-      <article>
-        <h3>Reads what you give it</h3>
-        <p>Photos, PDFs and documents, and dictation by a speech model that also runs on the device.</p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section class="sec">
-  <p class="label"><b>03</b> Agents</p>
-  <div class="split">
-    <div>
-      <h2>Opinionated, and yours to change.</h2>
-      <p>
-        An agent is a set of instructions, the tools it may use and how hard it thinks. Start with the
-        Assistant, switch to the Coder, or make your own for the things you do often.
-      </p>
-      <p>
-        The defaults are meant to be right. The numbers are there when you want them: temperature and
-        reply length per agent, sampling per model, thinking per chat.
-      </p>
-    </div>
-    {% include shot.html name="settings" alt="Settings: agents, connectors, skills and memory, and the memory this device gives to models" %}
-  </div>
-</section>
-
-<section class="sec">
-  <p class="label"><b>04</b> Automation</p>
-  <div class="split">
-    <div>
-      <h2>Runs from Shortcuts, in the background.</h2>
-      <p>
-        The Ask Resident action takes a message, an agent and a model, and hands back the reply as plain
-        text. A model on your phone answers without the app ever opening. Chain it with anything, or run it on a schedule.
-      </p>
-      <p>
-        Jobs that take a while show their progress as a Live Activity, with a button to stop them.
-      </p>
-    </div>
-    <div class="ticket" role="img" aria-label="A shortcut that asks the Assistant to summarise a web page with the model LFM3, and a Live Activity showing it is three steps of eight through.">
-      <p>Shortcut</p>
-      <div>
-        Ask <span class="token">Assistant</span>: <span class="token">Summarise today’s front page of Hacker News</span>
-        <div class="field"><span>Model</span><span>LFM3 1.7B</span></div>
-      </div>
-      <p>Live Activity</p>
-      <div class="activity">
-        <div><strong>Reading news.ycombinator.com</strong><span>3 of 8</span></div>
-        <div class="meter"><i></i></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="models" class="sec">
-  <p class="label"><b>05</b> Models</p>
-  <div>
-    <h2>The newest small models, and any you bring.</h2>
-    <p class="sub">Tested models are a tap away, and any MLX model on Hugging Face can be added by its link.</p>
-    <div class="models">
-      {% for model in page.models %}
-      <article>
-        <h3>{{ model.name }}</h3>
-        <p class="maker">{{ model.maker }}</p>
-        <p>{{ model.note }}</p>
-      </article>
-      {% endfor %}
-    </div>
-    <p class="fine">Runs on Apple silicon with <a href="https://github.com/ml-explore/mlx">MLX</a>. You can also point Resident at a server you run, such as Ollama or LM Studio.</p>
-  </div>
-</section>
-
-<section id="private" class="sec">
-  <p class="label"><b>06</b> Privacy</p>
-  <div>
-    <h2>Private because it is local.</h2>
-    <div class="points three">
-      <article>
-        <h3>On your device</h3>
-        <p>The model, your chats, your memory and your skills are files on your iPhone. There is no account to make.</p>
-      </article>
-      <article>
-        <h3>Nothing watching</h3>
-        <p>No analytics and no tracking. Resident has no server of its own to send anything to.</p>
-      </article>
-      <article>
-        <h3>You choose what goes out</h3>
-        <p>Web search and connectors reach the internet only when the agent uses them. Each has a switch, per agent.</p>
-      </article>
-    </div>
-  </div>
-</section>
-
-<section id="questions" class="sec">
-  <p class="label"><b>07</b> Questions</p>
-  <div>
-    <h2>Things people ask.</h2>
-    <div class="questions">
-      {% for item in page.questions %}
-      <details>
-        <summary>{{ item.q }}</summary>
-        <p>{{ item.a }}</p>
-      </details>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-
-<section class="closing">
-  <h2>Resident</h2>
-  <p>Fully local AI agent. Open source, and yours.</p>
-  <p class="actions">
-    <a class="button" href="https://github.com/jflick58/resident">Read the source on GitHub</a>
-    <span class="status">Coming soon to the App Store</span>
+<section id="how" class="band">
+  <p class="eyebrow">Why it works</p>
+  <h2>Built for how small models actually behave.</h2>
+  <p class="sub">
+    A model that fits on a phone is capable and easily overwhelmed. Give it a long prompt, fifty tools
+    and a page of raw data and it falls over. Most of Resident is the work of not doing that.
   </p>
+
+  <div class="flow" role="img" aria-label="A connector with seventy tools is shown to the model as one line, and four tools are opened when a request needs them.">
+    <div><span class="num">70</span><span class="what">tools in Linear's connector</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div><span class="num">1</span><span class="what">line in the model's prompt</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div><span class="num">4</span><span class="what">opened for “my open issues”</span></div>
+  </div>
+
+  <div class="pairs">
+    <article>
+      <h3>Tools appear when they are needed</h3>
+      <p>
+        Describing every tool of a real service takes more text than a phone-sized model can hold.
+        Resident tells the model each connector exists in one line, then opens only the few tools a
+        request calls for. Connect several services and the model still sees a short, clear list.
+      </p>
+    </article>
+    <article>
+      <h3>Answers from tools are made to fit</h3>
+      <p>
+        Ask for your issues and a service sends twenty, each with pages of description. Cut that off and
+        the model sees five and goes round in circles. Resident shortens the long parts first, keeps
+        every item, and says plainly when something was left out.
+      </p>
+    </article>
+    <article>
+      <h3>The chores are done for it</h3>
+      <p>
+        A small model busy answering will not stop to remember a fact about you, name the chat or tidy
+        a long conversation. Resident does each as a short request of its own after the reply, so they
+        happen every time.
+      </p>
+    </article>
+    <article>
+      <h3>It keeps its place</h3>
+      <p>
+        Leave the app mid-answer and the reply holds where it is, then carries on from the same word
+        when you come back. Long chats are summarised behind the scenes, so the tenth question is as
+        quick as the first.
+      </p>
+    </article>
+    <article>
+      <h3>You see every step</h3>
+      <p>
+        Each search, page and tool call is shown as it happens, with what was sent and what came back.
+        When an answer is wrong you can see where it went wrong.
+      </p>
+    </article>
+    <article>
+      <h3>Nothing downloads that will not run</h3>
+      <p>
+        Before a model downloads, Resident works out the memory it needs at full context and checks it
+        against your device. Paste any MLX model from Hugging Face and get a straight answer first.
+      </p>
+    </article>
+  </div>
+</section>
+
+<section id="agent" class="band">
+  <p class="eyebrow">What it does</p>
+  <h2>An agent, not a chat box.</h2>
+  <div class="grid six">
+    <article>
+      <h3>Looks things up</h3>
+      <p>Searches the web and reads pages when a question needs something recent.</p>
+    </article>
+    <article>
+      <h3>Works it out</h3>
+      <p>Runs code in a sandbox for arithmetic, dates and data, so answers are computed, not guessed.</p>
+    </article>
+    <article>
+      <h3>Uses your apps</h3>
+      <p>Calendar and Reminders on the device. Linear, Notion and anything else that speaks MCP, by pasting an address.</p>
+    </article>
+    <article>
+      <h3>Remembers you</h3>
+      <p>Keeps a short list of lasting facts you mention. Read it, edit it or switch it off.</p>
+    </article>
+    <article>
+      <h3>Learns your way</h3>
+      <p>Turn something it just did into a skill with one tap. You see and approve every skill before it is kept.</p>
+    </article>
+    <article>
+      <h3>Reads what you give it</h3>
+      <p>Photos, PDFs and documents, and dictation by a speech model that also runs on the device.</p>
+    </article>
+  </div>
+</section>
+
+<section class="band split">
+  <div>
+    <p class="eyebrow">Agents</p>
+    <h2>Opinionated, and yours to change.</h2>
+    <p>
+      An agent is a set of instructions, the tools it may use and how hard it thinks. Start with the
+      Assistant, switch to the Coder, or make your own for the things you do often.
+    </p>
+    <p>
+      The defaults are meant to be right. The numbers are there when you want them: temperature and
+      reply length per agent, sampling per model, thinking per chat.
+    </p>
+  </div>
+  {% include shot.html name="agents" alt="The list of agents: Assistant, Coder and Chat, each with the tools it may use" %}
+</section>
+
+<section class="band split reverse">
+  <div>
+    <p class="eyebrow">Automation</p>
+    <h2>Runs from Shortcuts, in the background.</h2>
+    <p>
+      The Ask Resident action takes a message, an agent and a model, and hands back the reply as plain
+      text. A model on your phone answers without the app ever opening. Chain it with anything, or run it on a schedule.
+    </p>
+    <p>
+      Jobs that take a while show their progress as a Live Activity, with a button to stop them.
+    </p>
+  </div>
+  <div class="panel" role="img" aria-label="A shortcut that asks the Assistant to summarise a web page with the model LFM3, and a Live Activity showing it is three steps of eight through.">
+    <p class="panel-title">Shortcut</p>
+    <div class="action">
+      Ask <span class="token">Assistant</span> <span class="token">Summarise today’s front page of Hacker News</span>
+      <div class="field"><span>Model</span><span>LFM3 1.7B</span></div>
+    </div>
+    <p class="panel-title">Live Activity</p>
+    <div class="activity">
+      <div><strong>Reading news.ycombinator.com</strong><span>3 of 8</span></div>
+      <div class="meter"><i></i></div>
+    </div>
+  </div>
+</section>
+
+<section id="models" class="band">
+  <p class="eyebrow">Models</p>
+  <h2>The newest small models, and any you bring.</h2>
+  <p class="sub">Tested models are a tap away, and any MLX model on Hugging Face can be added by its link.</p>
+  <div class="grid six models">
+    {% for model in page.models %}
+    <article>
+      <p class="maker">{{ model.maker }}</p>
+      <h3>{{ model.name }}</h3>
+      <p>{{ model.note }}</p>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="fine">Runs on Apple silicon with <a href="https://github.com/ml-explore/mlx">MLX</a>. You can also point Resident at a server you run, such as Ollama or LM Studio.</p>
+</section>
+
+<section id="private" class="band">
+  <p class="eyebrow">Privacy</p>
+  <h2>Private because it is local.</h2>
+  <div class="grid three">
+    <article>
+      <h3>On your device</h3>
+      <p>The model, your chats, your memory and your skills are files on your iPhone. There is no account to make.</p>
+    </article>
+    <article>
+      <h3>Nothing watching</h3>
+      <p>No analytics and no tracking. Resident has no server of its own to send anything to.</p>
+    </article>
+    <article>
+      <h3>You choose what goes out</h3>
+      <p>Web search and connectors reach the internet only when the agent uses them. Each has a switch, per agent.</p>
+    </article>
+  </div>
+</section>
+
+<section id="questions" class="band narrow">
+  <h2>Questions</h2>
+  {% for item in page.questions %}
+  <details>
+    <summary>{{ item.q }}</summary>
+    <p>{{ item.a }}</p>
+  </details>
+  {% endfor %}
+</section>
+
+<section class="band closing">
+  <img src="{{ '/assets/img/icon.png' | relative_url }}" alt="" width="96" height="96">
+  <h2>Resident</h2>
+  <p>Fully local AI agent.</p>
+  <p class="actions"><span class="button soon" aria-disabled="true">Coming soon to the App Store</span></p>
 </section>
