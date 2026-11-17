@@ -152,6 +152,11 @@ let repo = ModelFit.repoID(from: arguments.first ?? "mlx-community/Qwen3-4B-4bit
 // MARK: Tools for each setup
 
 let recorder = CallRecorder()
+let suiteHost = RecordingHost(
+    base: FixedRepositoryHost(owner: "acme", repo: "rocket", files: Dictionary(uniqueKeysWithValues: GitHubTool.files.map { ($0.path, $0.text) })),
+    recorder: recorder)
+let suiteWorkspace = Workspace(
+    directory: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-workspace-\(UUID().uuidString)"), host: suiteHost)
 let memory = MemoryStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-memory-\(UUID().uuidString).md"))
 let coreTools: [any Tool] = [WebSearchTool(), FetchPageTool(), JavaScriptTool(), SaveMemoryTool(store: memory)]
 let recordedCore: [any Tool] = coreTools.map { RecordedTool(base: $0, recorder: recorder) }
@@ -518,6 +523,7 @@ case "suite":
         ToolGroup(name: group, title: group, summary: summary, tools: connectors.filter { $0.group == group })
     } + [
         ToolGroup(name: "github", title: "GitHub", summary: "Repositories, issues and pull requests", tools: FileEditTool.adding(to: loadGitHubTools(recorder: recorder), title: "GitHub")),
+        RepoTool.group(workspace: suiteWorkspace) { name, arguments in recorder.record(name, arguments) },
         ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance),
     ], to: suiteSkills)
     systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", skills: suiteSkills, connectors: groups)
@@ -608,6 +614,8 @@ if let suitePath {
         _ = recorder.take()
         memory.setFacts([])
         GitHubState.shared.reset()
+        await suiteWorkspace.reset()
+        suiteHost.reset()
         var messages: [Message] = [
             .system(PromptBuilder.systemPrompt(preset: preset, memory: item.memory ?? "", skills: suiteSkills, connectors: groups))
         ]

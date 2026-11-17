@@ -63,28 +63,11 @@ public struct FileEditTool: Tool {
         }
         guard let file = Self.file(in: found.text) else { return .error("\(path) is not a text file that can be edited.") }
 
-        let find = text("find")
-        var count = file.text.components(separatedBy: find).count - 1
-        var target = find
-        if count == 0 {
-            // Models often add or drop the space or line break at either end.
-            let trimmed = find.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                target = trimmed
-                count = file.text.components(separatedBy: trimmed).count - 1
-            }
+        let changed: String
+        switch TextEdit.replace(text("find"), with: text("replace"), in: file.text, path: path) {
+        case .changed(let text): changed = text
+        case .failed(let message): return .error(message)
         }
-        guard count > 0 else {
-            var message = "That text is not in \(path), so nothing was changed. `find` must be copied exactly from the file."
-            if let line = Self.closestLine(to: find, in: file.text) { message += " The closest line in the file is:\n\(line)" }
-            return .error(message)
-        }
-        guard count == 1 else {
-            return .error("That text is in \(path) \(count) times, so nothing was changed. Add more of the words around it to `find` so it matches once.")
-        }
-        guard target != text("replace") else { return .error("`find` and `replace` are the same, so there is nothing to change.") }
-
-        let changed = file.text.replacingOccurrences(of: target, with: text("replace"))
         let saved = await write.call([
             "owner": .string(text("owner")), "repo": .string(text("repo")), "path": .string(path), "branch": .string(branch),
             "content": .string(changed), "message": .string(text("message").isEmpty ? "Update \(path)" : text("message")),
@@ -100,17 +83,5 @@ public struct FileEditTool: Tool {
         let first = String(result[..<end])
         guard let match = first.range(of: #"SHA: ([0-9a-f]{7,64})"#, options: .regularExpression) else { return nil }
         return (String(first[match].dropFirst(5)), String(result[result.index(after: end)...]))
-    }
-
-    /// The line of the file that shares the most words with what the model looked for.
-    static func closestLine(to text: String, in file: String) -> String? {
-        func words(_ line: String) -> Set<String> {
-            Set(line.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count > 2 })
-        }
-        let wanted = words(text)
-        guard !wanted.isEmpty else { return nil }
-        let best = file.split(separator: "\n").map(String.init).max { words($0).intersection(wanted).count < words($1).intersection(wanted).count }
-        guard let best, words(best).intersection(wanted).count * 2 >= wanted.count else { return nil }
-        return String(best.prefix(400))
     }
 }

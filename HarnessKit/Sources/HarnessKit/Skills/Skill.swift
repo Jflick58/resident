@@ -82,7 +82,8 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
             "Give the draft in a block the user can copy, then one line offering a change of tone or length."
         ],
         UUID(uuidString: "B0000000-0000-4000-8000-000000000004")!: [
-            "7. Give the user the pull request's link. Do not merge it.\nIf a step fails, read the error and try that step again before going on."
+            "7. Give the user the pull request's link. Do not merge it.\nIf a step fails, read the error and try that step again before going on.",
+            "8. Give the user the pull request's link. Do not merge it.\nIf a step fails, read the error and try that step again before going on.",
         ],
     ]
 
@@ -134,17 +135,18 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
                 """, isBuiltIn: true),
         Skill(
             id: UUID(uuidString: "B0000000-0000-4000-8000-000000000004")!, name: "open-pull-request",
-            summary: "Changing a file in a GitHub repository and opening a pull request for it",
+            summary: "Changing code or a file in a GitHub repository and opening a pull request for it",
             instructions: """
-                Needs the github connector. If you have none, say to add GitHub under Settings > Connectors, and stop.
-                1. You need the repository's owner and name. If the user gave neither, ask, and stop.
-                2. Find the file. If the user named it, go on. Otherwise use `github_search_code` with a word from the change and `repo:owner/name`, or list a folder with `github_get_file_contents`.
-                3. Read the file with `github_get_file_contents`. If the result says it is one part of several, make the same call again until you have read the part you need.
-                4. If the user did not say exactly what to change, and reading the file does not show it, ask, and stop.
-                5. Make a branch with `github_create_branch`: a short name for the change, from the default branch.
-                6. Change the file with `github_edit_file` on that branch: `find` is the text to replace, copied exactly from the file, and `replace` is the new text. To add a new file, use `github_create_or_update_file`.
-                7. Open the pull request with `github_create_pull_request`: `head` is your branch, `base` is the default branch, and the title says what changed.
+                Needs the repo tools, which come with the GitHub connector. If you have neither, say to add GitHub under Settings > Connectors, and stop.
+                1. You need the repository as owner/name. If the user gave none and the chat does not say which, ask, and stop.
+                2. Get a copy with `repo_clone`. It returns the repository's files.
+                3. Find the file to change. If the user named it, go on. Otherwise search for a word from the change with `repo_search`, or look in a folder with `repo_list_files`.
+                4. Read the file with `repo_read_file`.
+                5. If the user did not say exactly what to change, and reading the file does not show it, ask, and stop.
+                6. Change the file with `repo_edit_file`: `find` is the text to replace, copied exactly from the file, and `replace` is the new text. For a new file, use `repo_write_file`.
+                7. Open the pull request with `repo_open_pull_request`: the title says what changed. It makes the branch and the commit itself.
                 8. Give the user the pull request's link. Do not merge it.
+                Do not change files with the github_ tools: they need the whole file written back.
                 If a step fails, read the error and try that step again before going on.
                 """, isBuiltIn: true),
     ]

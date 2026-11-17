@@ -115,6 +115,13 @@ public actor MCPConnection {
         try await authorized { try await self.client.callTool(name, arguments: arguments, token: $0) }
     }
 
+    /// The current access token, renewed first if it has run out. For calling the
+    /// service's own API beside its MCP server, as the code workspace does with GitHub.
+    public func accessToken() async -> String? {
+        if let credentials, credentials.tokens.isExpired(), credentials.tokens.refreshToken != nil { _ = try? await renew() }
+        return credentials?.tokens.accessToken
+    }
+
     /// Runs a request with the current token. A token the server no longer
     /// accepts is renewed once; if that fails, the user has to sign in again.
     private func authorized<T: Sendable>(_ operation: (String?) async throws -> T) async throws -> T {
