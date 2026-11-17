@@ -92,8 +92,6 @@ public actor MLXEngine {
         // would also abort in the simulator, where there is no Metal device for it.
         guard container != nil else { return }
         session = nil
-        opening = nil
-        openingKey = nil
         sessionKey = nil
         sessionMessageIDs = []
         container = nil
@@ -163,24 +161,24 @@ public actor MLXEngine {
             // opening is read once into a session of its own, and each chat starts from a copy
             // of it and reads only what follows. The opening is kept beside the model, so the
             // next run does not read it either.
-            if openingKey != key {
-                // Tools declared part-way through a chat change the prompt from its start. An opening
-                // for them is used if there is one, but only the start of a chat is worth making one for.
-                var found = await savedOpening(container: container, like: fresh, key: key)
-                if found == nil, history.isEmpty,
-                    let made = try? await makeSession(container: container, key: key, request: request, history: []),
-                    (try? await made.readSharedOpening()) != nil
-                {
-                    found = made
-                    await saveOpening(made, key: key)
-                }
-                if let found {
-                    opening = found
-                    openingKey = key
-                }
+            // The opening is not kept in memory between chats. A copy shares its arrays with the
+            // original, so while the original lives, the chat's first write copies them all: on a
+            // phone running a model as large as its memory, that second copy (275 MB for a 27B)
+            // pushed half the weights out and took writing from 5 tokens a second to under 1.
+            // Read from the file each time, the arrays have one owner and are added to in place.
+            var opening = await savedOpening(container: container, like: fresh, key: key)
+            // Tools declared part-way through a chat change the prompt from its start. An opening
+            // for them is used if there is one, but only the start of a chat is worth making one for.
+            if opening == nil, history.isEmpty,
+                let made = try? await makeSession(container: container, key: key, request: request, history: []),
+                (try? await made.readSharedOpening()) != nil
+            {
+                await saveOpening(made, key: key)
+                opening = made
             }
-            if let opening, openingKey == key {
-                let forked = await opening.fork(history: history)
+            if let made = opening {
+                opening = nil
+                let forked = await made.fork(history: history)
                 forked.instructions = fresh.instructions
                 forked.generateParameters = fresh.generateParameters
                 forked.components = fresh.components
@@ -265,7 +263,6 @@ public actor MLXEngine {
         }
         if let failure = MLXFailure.take() {
             session = nil
-            opening = nil
             sessionKey = nil
             throw ModelStoppedError(failure)
         }
@@ -287,9 +284,6 @@ public actor MLXEngine {
 
     // MARK: The opening of a chat, kept between chats and between runs
 
-    /// A session whose cache holds what every chat with `openingKey` starts with, and nothing else.
-    private var opening: ChatSession?
-    private var openingKey: SessionKey?
     /// Openings kept beside a model: one for each set of instructions and tools, the newest few.
     static let savedOpenings = 3
     private static func savedOpeningName(_ key: SessionKey) -> String { "prompt-cache-\(fingerprint(key)).safetensors" }
