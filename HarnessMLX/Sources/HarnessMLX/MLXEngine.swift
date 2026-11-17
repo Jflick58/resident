@@ -440,3 +440,11 @@ public struct MLXProvider: ModelProvider {
         }
     }
 }
+
+// MARK: Experiment: weights mapped from a file
+
+extension MLXEngine {
+    /// EXPERIMENT. When on, the next model loaded uses its weights straight from a mapped file. See `WeightMapping`.
+    public nonisolated static func setMapsWeights(_ on: Bool) { WeightMapping.isOn = on }
+    public nonisolated static var mapsWeights: Bool { WeightMapping.isOn }
+}

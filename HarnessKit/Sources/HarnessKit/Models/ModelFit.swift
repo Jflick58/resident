@@ -181,10 +181,19 @@ public enum ModelFit {
         return Int64(2 * layers * kvHeads * headDimension * 2)
     }
 
+    /// EXPERIMENT. True when weights are used straight from a mapped file, so they are not charged to the app.
+    nonisolated(unsafe) public static var weightsAreMapped = UserDefaults.standard.bool(forKey: "mapWeights")
+
     static func estimatedMemory(weightBytes: Int64, cacheBytesPerToken: Int64, contextTokens: Int) -> Int64 {
         // Weights are held in memory at about their file size. Add the cache for
         // the context, plus working memory for activations and the app itself.
         let overhead = Int64(400 << 20) + weightBytes / 10
+        if weightsAreMapped {
+            // Mapped weights are not charged, but they still have to fit in the device's memory
+            // beside everything else, or every token waits on storage.
+            let physical = Int64(ProcessInfo.processInfo.physicalMemory)
+            return weightBytes > physical * 3 / 4 ? Int64.max / 4 : cacheBytesPerToken * Int64(contextTokens) + overhead
+        }
         return weightBytes + cacheBytesPerToken * Int64(contextTokens) + overhead
     }
 
@@ -266,7 +275,7 @@ public enum ModelFit {
 
         // 4. Storage, checked only for a model that would otherwise run.
         func storageProblem() -> FitReport? {
-            guard device.freeDiskBytes > 0, downloadBytes + (500 << 20) > device.freeDiskBytes else { return nil }
+            guard device.freeDiskBytes > 0, downloadBytes * (weightsAreMapped ? 2 : 1) + (500 << 20) > device.freeDiskBytes else { return nil }
             return report(
                 .wontRun, "Not enough storage",
                 "The download is \(format(downloadBytes)) and this device has \(format(device.freeDiskBytes)) free.")

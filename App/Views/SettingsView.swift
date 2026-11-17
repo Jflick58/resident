@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("mapWeights") private var mapsWeights = false
 
     var body: some View {
         NavigationStack {
@@ -78,6 +79,16 @@ struct SettingsView: View {
                     Text("This Device")
                 } footer: {
                     Text("Models run entirely on this device. Web search and page reading send only the search or address, and connectors only what a tool is asked, in agents where they are turned on.")
+                }
+
+                // EXPERIMENT: see WeightMapping. Not for release as it is.
+                Section {
+                    Toggle("Map Model Weights", isOn: $mapsWeights)
+                        .onChange(of: mapsWeights) { ModelFit.weightsAreMapped = mapsWeights }
+                } header: {
+                    Text("Experimental")
+                } footer: {
+                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model makes a second copy of its weights. Takes effect the next time a model is loaded.")
                 }
             }
             .navigationTitle("Settings")

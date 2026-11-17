@@ -398,6 +398,8 @@ final class AppModel {
             if await MLXEngine.shared.loadedModelDirectory != directory {
                 loadState = .loading(name: model.name, fraction: 0)
                 defer { loadState = .idle }
+                // EXPERIMENT: weights used straight from a mapped file, when switched on in Settings.
+                MLXEngine.setMapsWeights(UserDefaults.standard.bool(forKey: "mapWeights"))
                 try await MLXEngine.shared.load(directory: directory) { fraction in
                     Task { @MainActor in
                         if case .loading = self.loadState {

@@ -259,6 +259,8 @@ if useApple {
         }
     }
 
+    // EXPERIMENT: use the weights straight from a mapped file.
+    if arguments.contains("--mapped") { MLXEngine.setMapsWeights(true) }
     let loadStart = Date()
     try await MLXEngine.shared.load(directory: directory)
     print(String(format: "Loaded in %.1fs, memory %@", Date().timeIntervalSince(loadStart), ModelFit.format(residentMemory())))
@@ -670,6 +672,7 @@ if let suitePath {
     print(String(format: "   total        %d/%d  (%d%%, likely between %d%% and %d%%)  %.1fs a case, %.0f minutes in all",
         right, ran, ran == 0 ? 0 : right * 100 / ran, range.low, range.high, seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count),
         Date().timeIntervalSince(suiteStart) / 60))
+    print("   peak memory \(ModelFit.format(peak)), now \(ModelFit.format(residentMemory()))")
     failed.forEach { print("   fail \($0)") }
     exit(0)
 }
