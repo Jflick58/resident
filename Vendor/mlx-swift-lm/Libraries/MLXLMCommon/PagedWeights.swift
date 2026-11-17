@@ -18,6 +18,9 @@ public enum WeightMapping {
     nonisolated(unsafe) public static var isOn = false
     /// Tensors smaller than this are loaded the usual way: a page each would waste more than it saves.
     static let smallest = 64 * 1024
+
+    /// How much of the mapped weights is in memory right now, and how much is mapped, in bytes.
+    public static var resident: (inMemory: Int, mapped: Int) { PagedWeights.resident }
 }
 
 final class PagedWeights: @unchecked Sendable {
@@ -34,7 +37,23 @@ final class PagedWeights: @unchecked Sendable {
         return made
     }
 
+    static var resident: (inMemory: Int, mapped: Int) {
+        lock.lock()
+        let all = Array(open.values)
+        lock.unlock()
+        let page = Int(getpagesize())
+        var inMemory = 0
+        var mapped = 0
+        for weights in all {
+            mapped += weights.length
+            var pages = [CChar](repeating: 0, count: (weights.length + page - 1) / page)
+            if mincore(weights.base, weights.length, &pages) == 0 { inMemory += pages.reduce(0) { $0 + ($1 & 1 != 0 ? page : 0) } }
+        }
+        return (inMemory, mapped)
+    }
+
     private let base: UnsafeMutableRawPointer
+    private let length: Int
     /// Where each tensor starts in the mapping, and how long it is.
     private let places: [String: (offset: Int, bytes: Int)]
 
@@ -100,6 +119,7 @@ final class PagedWeights: @unchecked Sendable {
         defer { close(descriptor) }
         guard total > 0, let base = mmap(nil, total, PROT_READ, MAP_PRIVATE, descriptor, 0), base != MAP_FAILED else { throw Malformed() }
         self.base = base
+        length = total
     }
 
     /// The tensor as a view of the mapped file, or nil when it is not in the mapping.

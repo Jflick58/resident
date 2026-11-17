@@ -190,10 +190,11 @@ public enum ModelFit {
         let overhead = Int64(400 << 20) + weightBytes / 10
         if weightsAreMapped {
             // Mapped weights are not charged, but they still have to fit in the device's memory
-            // beside everything else, or every token waits on storage. A 12 GB iPhone had about
-            // 6.7 GB to spare; an 8 GB model on it ran at 1.5 tokens a second.
+            // beside everything else, or every token waits on storage. How much room that leaves is
+            // what the experiment is measuring, so for now anything under three quarters is let through:
+            // Private LLM runs an 8 GB model on a 12 GB iPhone at 9.6 tokens a second.
             let physical = Int64(ProcessInfo.processInfo.physicalMemory)
-            return weightBytes > physical * 55 / 100 ? Int64.max / 4 : cacheBytesPerToken * Int64(contextTokens) + overhead
+            return weightBytes > physical * 3 / 4 ? Int64.max / 4 : cacheBytesPerToken * Int64(contextTokens) + overhead
         }
         return weightBytes + cacheBytesPerToken * Int64(contextTokens) + overhead
     }
