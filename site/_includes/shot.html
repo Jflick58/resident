@@ -1,9 +1,9 @@
 {%- comment -%}
-  One screenshot, if it has been taken: shot.html name="home" alt="…".
+  One screenshot inside a drawn phone, if it has been taken: shot.html name="home" alt="…".
   A page built before tools/site-shots.sh has run simply has fewer pictures.
 {%- endcomment -%}
 {%- assign path = "/assets/img/shot-" | append: include.name | append: ".png" -%}
 {%- assign found = site.static_files | where: "path", path | size -%}
 {%- if found > 0 -%}
-<img src="{{ path | relative_url }}" alt="{{ include.alt }}" loading="lazy">
+<span class="device"><img src="{{ path | relative_url }}" alt="{{ include.alt }}" loading="lazy"></span>
 {%- endif -%}

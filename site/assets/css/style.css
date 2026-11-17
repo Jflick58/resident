@@ -134,13 +134,56 @@ p { margin: 0.7em 0 0; }
   margin-top: 60px;
 }
 
-.shots img, .split img {
+/* A phone drawn around each screenshot: the body, its edge, the side buttons
+   and the Dynamic Island. Every size is a share of the phone's width, so the
+   drawing keeps its proportions at any size. */
+.device {
+  position: relative;
+  display: block;
+  flex: none;
   width: min(31%, 300px);
-  border-radius: clamp(18px, 3.4vw, 40px);
-  border: 1px solid var(--line);
-  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.7);
+  padding: clamp(5px, 0.7vw, 8px);
+  border-radius: 15.5% / 7.2%;
+  background: #08080a;
+  box-shadow:
+    0 0 0 1px #55555c,
+    0 0 0 2.5px #1c1c20,
+    0 0 0 3.5px #3c3c43,
+    0 40px 80px -34px rgba(0, 0, 0, 0.75);
 }
-.shots img:nth-child(2) { margin-top: 34px; }
+.device img {
+  display: block;
+  width: 100%;
+  border-radius: 13.4% / 6.2%;
+}
+/* The Dynamic Island, which a screenshot does not include. */
+.device::before {
+  content: "";
+  position: absolute;
+  top: 2.05%;
+  left: 50%;
+  width: 29%;
+  aspect-ratio: 3.35;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #000;
+  z-index: 1;
+}
+/* The buttons: volume on the left, power on the right. */
+.device::after {
+  content: "";
+  position: absolute;
+  inset: 0 -1.6%;
+  z-index: -1;
+  background:
+    linear-gradient(#3c3c43, #3c3c43) left 21% / 1.6% 4.5% no-repeat,
+    linear-gradient(#3c3c43, #3c3c43) left 29.5% / 1.6% 7.5% no-repeat,
+    linear-gradient(#3c3c43, #3c3c43) left 39.5% / 1.6% 7.5% no-repeat,
+    linear-gradient(#3c3c43, #3c3c43) right 32% / 1.6% 11.5% no-repeat;
+  border-radius: 4px;
+}
+
+.shots .device:nth-child(2) { margin-top: 34px; }
 
 .band { border-top: 1px solid var(--line); }
 
@@ -340,7 +383,7 @@ p { margin: 0.7em 0 0; }
   border-radius: 3px;
   background: linear-gradient(90deg, var(--yellow), var(--orange), var(--rose));
 }
-.split img { width: min(40%, 300px); flex: none; }
+.split .device { width: min(40%, 300px); }
 
 .narrow > * { max-width: 760px; }
 
@@ -410,10 +453,10 @@ details p { color: var(--muted); }
   .bar nav { gap: 14px; font-size: 0.88rem; }
   .bar nav a:nth-child(n + 3) { display: none; }
   .hero, .band { padding-top: 60px; padding-bottom: 60px; }
-  .shots img:nth-child(3) { display: none; }
-  .shots img { width: 46%; }
+  .shots .device:nth-child(3) { display: none; }
+  .shots .device { width: 46%; }
   .split, .split.reverse { flex-direction: column; align-items: flex-start; }
-  .split img { width: min(70%, 300px); align-self: center; }
+  .split .device { width: min(70%, 300px); align-self: center; }
   .panel { max-width: none; width: 100%; }
 }
 
@@ -422,4 +465,4 @@ details p { color: var(--muted); }
 }
 
 /* One screenshot on its own is shown a little larger. */
-.shots img:only-child { width: min(60%, 320px); }
+.shots .device:only-child { width: min(60%, 320px); }

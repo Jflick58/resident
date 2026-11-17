@@ -65,5 +65,3 @@ shot models 6 -openSheet models
 shot agents 6 -openSheet presets
 shot settings 6 -openSheet settings
 shot chat 6 -openLatestChat YES
-# The agent list is short: keep the top of the screen.
-[[ -n $OUT ]] || sips --cropOffset 1 1 -c 1500 1206 site/assets/img/shot-agents.png >/dev/null
