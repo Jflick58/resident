@@ -242,6 +242,14 @@ func loadModelCheckpoint(urls: [URL], isRead: @escaping @Sendable (String) -> Bo
                     selected = all.filter { isRead($0.key) }
                 }
 
+                // EXPERIMENT (Resident): take the large tensors as views of a mapped file. The arrays
+                // from `loadArrays` are not read until evaluated, so the ones replaced here never are.
+                if WeightMapping.isOn, let paged = try? PagedWeights.shared(for: item.url) {
+                    for (name, array) in selected {
+                        if let mapped = paged.array(named: name, like: array) { selected[name] = mapped }
+                    }
+                }
+
                 // force this range's I/O here, on this stream, in file-offset order
                 if !selected.isEmpty { eval(Array(selected.values)) }
                 state.merge(file: item.file, weights: selected, metadata: metadata)

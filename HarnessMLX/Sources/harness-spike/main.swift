@@ -259,6 +259,11 @@ if useApple {
         }
     }
 
+    // EXPERIMENT: use the weights straight from a mapped file.
+    if arguments.contains("--mapped") { MLXEngine.setMapsWeights(true) }
+    if let index = arguments.firstIndex(of: "--cache-mb"), index + 1 < arguments.count, let megabytes = Int(arguments[index + 1]) {
+        MLXEngine.setCacheLimit(megabytes: megabytes)
+    }
     let loadStart = Date()
     try await MLXEngine.shared.load(directory: directory)
     print(String(format: "Loaded in %.1fs, memory %@", Date().timeIntervalSince(loadStart), ModelFit.format(residentMemory())))
@@ -670,6 +675,7 @@ if let suitePath {
     print(String(format: "   total        %d/%d  (%d%%, likely between %d%% and %d%%)  %.1fs a case, %.0f minutes in all",
         right, ran, ran == 0 ? 0 : right * 100 / ran, range.low, range.high, seconds.isEmpty ? 0 : seconds.reduce(0, +) / Double(seconds.count),
         Date().timeIntervalSince(suiteStart) / 60))
+    print("   peak memory \(ModelFit.format(peak)), now \(ModelFit.format(residentMemory()))")
     failed.forEach { print("   fail \($0)") }
     exit(0)
 }
@@ -780,6 +786,10 @@ let meanPrompt = mean(promptSizes.map(Double.init))
 print("Spoke before a tool call in \(spokeBeforeCall) of \(callingSteps) calling steps.")
 print(String(format: "\n== %@ %@: %d/%d passed, first-step prompt %.0f tokens, %.1fs and %.1f steps per task, peak memory %@",
     repo, setup, passed, total, meanPrompt, mean(durations), mean(stepCounts.map(Double.init)), ModelFit.format(peak)))
+do {
+    let held = MLXEngine.memoryInUse
+    print("   MLX: \(ModelFit.format(Int64(held.active))) in use, \(ModelFit.format(Int64(held.cache))) kept for reuse, \(ModelFit.format(Int64(held.peak))) at most. Charged to the process now: \(ModelFit.format(residentMemory()))")
+}
 if let largest = loadedSizes.max() { print("   connector tools declared at once: up to about \(largest) tokens") }
 failures.forEach { print("   fail \($0)") }
 

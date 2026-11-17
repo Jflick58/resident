@@ -398,6 +398,11 @@ final class AppModel {
             if await MLXEngine.shared.loadedModelDirectory != directory {
                 loadState = .loading(name: model.name, fraction: 0)
                 defer { loadState = .idle }
+                // EXPERIMENT: weights used straight from a mapped file, when switched on in Settings.
+                MLXEngine.setMapsWeights(UserDefaults.standard.bool(forKey: "mapWeights"))
+                // With weights mapped, the memory MLX keeps for reuse is what crowds them out of
+                // memory: capped at 64 MB, Bonsai 9B on a Mac peaked at 419 MB charged, not 1.1 GB, at the same speed.
+                if UserDefaults.standard.bool(forKey: "mapWeights") { MLXEngine.setCacheLimit(megabytes: 64) }
                 try await MLXEngine.shared.load(directory: directory) { fraction in
                     Task { @MainActor in
                         if case .loading = self.loadState {

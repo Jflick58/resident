@@ -210,6 +210,7 @@ public actor MLXEngine {
                         promptTokens: info.promptTokenCount, outputTokens: info.generationTokenCount,
                         tokensPerSecond: info.tokensPerSecond,
                         timeToFirstToken: firstToken.map { $0.timeIntervalSince(started) })
+                    MLXEngine.noteMemory(tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount)
                     switch info.stopReason {
                     case .length: stop = .length
                     case .cancelled: stop = .cancelled
@@ -438,5 +439,56 @@ public struct MLXProvider: ModelProvider {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+}
+
+// MARK: Experiment: weights mapped from a file
+
+extension MLXEngine {
+    /// EXPERIMENT. When on, the next model loaded uses its weights straight from a mapped file. See `WeightMapping`.
+    public nonisolated static func setMapsWeights(_ on: Bool) { WeightMapping.isOn = on }
+    public nonisolated static var mapsWeights: Bool { WeightMapping.isOn }
+
+    /// EXPERIMENT. Caps the freed memory MLX keeps for reuse. That memory counts against the app
+    /// like any it wrote to, and by default MLX keeps as much as it likes.
+    public nonisolated static func setCacheLimit(megabytes: Int) { MLX.Memory.cacheLimit = megabytes << 20 }
+
+    /// EXPERIMENT. Adds a line to `memory-log.txt` after each reply while weights are mapped: how fast it
+    /// went, what the app is charged, what the system will still give it, what MLX holds, and how much
+    /// of the mapped model is in memory. Numbers only, nothing of the chat.
+    nonisolated static func noteMemory(tokensPerSecond: Double, promptTokens: Int) {
+        guard WeightMapping.isOn else { return }
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        _ = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        func megabytes(_ bytes: Int) -> String { "\(bytes >> 20) MB" }
+        let held = memoryInUse
+        let weights = WeightMapping.resident
+        #if os(iOS)
+            let available = megabytes(os_proc_available_memory())
+        #else
+            let available = "n/a"
+        #endif
+        let line = String(format: "%@  %.1f tok/s  prompt %d  ", ISO8601DateFormatter().string(from: Date()), tokensPerSecond, promptTokens)
+            + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  "
+            + "MLX in use \(megabytes(held.active)) cache \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
+            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))\n"
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(line.utf8))
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+    }
+
+    /// What MLX holds: in use, kept for reuse, and the most it has held, in bytes.
+    public nonisolated static var memoryInUse: (active: Int, cache: Int, peak: Int) {
+        let now = MLX.Memory.snapshot()
+        return (now.activeMemory, now.cacheMemory, now.peakMemory)
     }
 }
