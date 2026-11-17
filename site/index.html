@@ -40,9 +40,9 @@ questions:
   <img class="hero-mark" src="{{ '/assets/img/mark.png' | relative_url }}" alt="" width="120" height="130">
   <h1>Small model. Serious agent.</h1>
   <p class="lede">
-    Plenty of apps can run an AI model on your phone. Resident is built to get work out of one.
-    It connects to the services you use, takes a task through as many steps as it needs,
-    and keeps every chat on your iPhone.
+    Resident runs open models on your iPhone inside a harness built for them. Aggressive context
+    management and constrained decoding make a 1 GB model dependable with real tools.
+    Your chats stay with you.
   </p>
   <p class="actions">
     <span class="button soon" aria-disabled="true">Coming soon to the App Store</span>
@@ -58,102 +58,108 @@ questions:
 
 <section class="band facts" aria-label="At a glance">
   <div><strong>1 GB</strong><span>is enough to start: the model we recommend first</span></div>
-  <div><strong>388</strong><span>scored test requests behind the way it works, all in the open</span></div>
+  <div><strong>6× less</strong><span>for the model to read on the same job, with a better score</span></div>
   <div><strong>0</strong><span>accounts, analytics or servers of ours</span></div>
 </section>
 
 <section id="how" class="band">
   <p class="eyebrow">What is different</p>
-  <h2>Running the model is the easy part.</h2>
+  <h2>The harness matters more than the model.</h2>
   <p class="sub">
-    A model small enough for a phone can reason well and still fail at real work. It picks the wrong
-    tool, drowns in what a service sends back, or stops halfway. Most apps leave that to the model.
-    Resident treats it as the app's job.
+    A model small enough for a phone reasons well and is easily overwhelmed. What decides whether it
+    gets real work done is what it is shown and what it is allowed to write. Resident controls both,
+    hard, and that is where the reliability comes from.
   </p>
 
-  <div class="versus" role="table" aria-label="A typical local chat app compared with Resident">
+  <div class="versus" role="table" aria-label="The same model and tasks, with every tool declared and with Resident's harness">
     <div class="head" role="row">
-      <span role="columnheader"></span>
-      <span role="columnheader">A typical local chat app</span>
-      <span role="columnheader">Resident</span>
+      <span role="columnheader">Same model, same 12 tasks</span>
+      <span role="columnheader">Every tool declared up front</span>
+      <span role="columnheader">Resident's harness</span>
     </div>
     <div role="row">
-      <span role="rowheader">Tools</span>
-      <span role="cell">None, or a handful built in</span>
-      <span role="cell">Web search, page reading, code, memory, skills, your calendar and reminders</span>
+      <span role="rowheader">Tasks done right</span>
+      <span role="cell">10 of 12</span>
+      <span role="cell">12 of 12</span>
     </div>
     <div role="row">
-      <span role="rowheader">Your services</span>
-      <span role="cell">Not connected</span>
-      <span role="cell">GitHub, Linear, Notion and anything else that speaks MCP, with a proper sign-in</span>
+      <span role="rowheader">What the model has to read</span>
+      <span role="cell">18,600 tokens</span>
+      <span role="cell">Under 3,000 tokens</span>
     </div>
     <div role="row">
-      <span role="rowheader">A job with several steps</span>
-      <span role="cell">One reply, then it is over to you</span>
-      <span role="cell">Works through the steps itself, and picks up where it stopped if you leave</span>
-    </div>
-    <div role="row">
-      <span role="rowheader">A tool used wrongly</span>
-      <span role="cell">The reply fails or makes something up</span>
-      <span role="cell">A broken call cannot be written, and a wrong one comes back with how to put it right</span>
-    </div>
-    <div role="row">
-      <span role="rowheader">With the app closed</span>
-      <span role="cell">Nothing happens</span>
-      <span role="cell">Runs from Shortcuts, on a schedule if you like</span>
-    </div>
-    <div role="row">
-      <span role="rowheader">How you know it works</span>
-      <span role="cell">You try it and see</span>
-      <span role="cell">388 scored test requests, and the code, are public</span>
+      <span role="rowheader">Time for each task</span>
+      <span role="cell">97 seconds</span>
+      <span role="cell">21 seconds</span>
     </div>
   </div>
+  <p class="fine">
+    LFM3 1.7B on a Mac, working with Linear's real tool definitions beside 13 other connectors. One run
+    of each, so read it as a direction, not a decimal place. The
+    <a href="https://github.com/jflick58/resident/tree/main/evals">388-case suite</a> that measures every model is public.
+  </p>
 
+  <h3 class="group">Context management: what the model is shown</h3>
   <div class="pairs">
     <article>
-      <h3>It finishes what it starts</h3>
+      <h3>Tools appear when they are needed</h3>
       <p>
-        Resident runs a tool, reads what came back and decides what to do next, for as many steps as
-        the job takes. The chat is saved after every step, so a job cut off by a phone call carries
-        on from where it was, without doing anything twice.
+        A connected service is one line in the prompt until a request needs it. Then the model gets
+        the handful of tools that fit, not all seventy.
       </p>
     </article>
     <article>
-      <h3>It signs in to your real accounts</h3>
+      <h3>Tool definitions are trimmed</h3>
       <p>
-        Add a service and you sign in on that service's own page, the way you would for any app.
-        Resident never sees a password, keeps the access it is given in the iPhone's Keychain, and
-        renews it without asking you again.
+        Services describe their tools for large models. Resident cuts each description and schema to
+        what is needed to make the call, which halves what the opened tools cost.
       </p>
     </article>
     <article>
-      <h3>Tool calls come out right</h3>
+      <h3>Answers from tools are made to fit</h3>
       <p>
-        Once a model starts to call a tool, Resident lets it write only a tool that exists with
-        arguments that fit. If a call still fails, the model is told why and what the tool expects,
-        so it can correct itself instead of giving up.
+        Twenty issues with pages of description would fill the context. Resident shortens the long
+        parts first, keeps every item, and says plainly when something was left out. Long web pages
+        are ranked against the question and only the best passages kept.
       </p>
     </article>
     <article>
-      <h3>Everything is cut to fit</h3>
+      <h3>Nothing is read twice</h3>
       <p>
-        A small model has little room to think in. Resident shows it a service's tools only when a
-        request needs them, shortens long answers while keeping every item, and summarises old parts
-        of a chat, so the tenth question is as quick as the first.
+        Each step feeds the model only what is new, old tool results shrink as a chat grows, and long
+        chats are summarised behind the scenes. The tenth question is as quick as the first.
+      </p>
+    </article>
+  </div>
+
+  <h3 class="group">Decoding: what the model is allowed to write</h3>
+  <div class="pairs">
+    <article>
+      <h3>A broken tool call cannot be written</h3>
+      <p>
+        Once the model starts a call, a grammar admits only a tool that exists and arguments that fit
+        its schema. Text and thinking stay free; the call itself cannot come out malformed.
       </p>
     </article>
     <article>
-      <h3>The chores are done for it</h3>
+      <h3>Thinking has a budget</h3>
       <p>
-        A small model busy answering will not stop to remember a fact about you or name the chat.
-        Resident does each as a short request of its own after the reply, so they happen every time.
+        Thinking is switched per chat and capped, so a model does not spend its whole reply reasoning.
+        One that thinks itself out of room is asked again with thinking off.
       </p>
     </article>
     <article>
-      <h3>You see every step</h3>
+      <h3>Mistakes come back with the fix</h3>
       <p>
-        Each search, page and tool call is shown as it happens, with what was sent and what came back.
-        When an answer is wrong you can see where it went wrong.
+        A call that fails returns what the tool expects. A tool called by the wrong name brings the
+        closest real ones. A repeated call is refused. The model corrects itself instead of looping.
+      </p>
+    </article>
+    <article>
+      <h3>The chores are separate requests</h3>
+      <p>
+        Remembering a fact, naming the chat and tidying a long conversation are each a short request
+        of their own after the reply, so they happen every time and never crowd the answer.
       </p>
     </article>
   </div>

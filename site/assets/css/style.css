@@ -246,7 +246,7 @@ p { margin: 0.7em 0 0; }
 
 /* What the app does for the model: two columns of plain text */
 
-/* A typical local chat app set against Resident, row by row. */
+/* Two ways of running the same tasks, set against each other row by row. */
 .versus { margin-top: 46px; border-top: 1px solid var(--line); }
 .versus > div {
   display: grid;
@@ -259,6 +259,9 @@ p { margin: 0.7em 0 0; }
 .versus span:nth-child(2) { color: var(--muted); }
 .versus .head span { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .versus .head span:nth-child(3) { color: var(--orange); }
+.versus > div:not(.head) span:nth-child(3) { font-weight: 600; }
+.group { margin-top: 64px; font-size: 1.35rem; }
+.group + .pairs { margin-top: 22px; }
 
 .pairs {
   display: grid;
@@ -469,8 +472,8 @@ details p { color: var(--muted); }
   .shots .device:nth-child(3) { display: none; }
   .versus > div { grid-template-columns: 1fr; gap: 4px; }
   .versus .head { display: none; }
-  .versus span:nth-child(2)::before { content: "Elsewhere: "; }
-  .versus span:nth-child(3)::before { content: "Resident: "; font-weight: 600; }
+  .versus span:nth-child(2)::before { content: "Every tool declared: "; }
+  .versus span:nth-child(3)::before { content: "Resident: "; }
   .shots .device { width: 46%; }
   .split, .split.reverse { flex-direction: column; align-items: flex-start; }
   .split .device { width: min(70%, 300px); align-self: center; }
