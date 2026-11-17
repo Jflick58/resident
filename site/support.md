@@ -23,4 +23,4 @@ description: Help with Resident.
 
 ## Contact
 
-Write to <a href="mailto:support@example.com">support@example.com</a>. This address is a placeholder until the app is published.
+Write to <a href="mailto:resident.ai.dev@gmail.com">resident.ai.dev@gmail.com</a>, or open an issue on <a href="https://github.com/jflick58/resident/issues">GitHub</a>.
