@@ -96,11 +96,27 @@ public actor MLXEngine {
     public func load(directory: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
         if loadedDirectory == directory, container != nil { return }
         unload()
+        // A ternary model that fills the device's memory is computed without reading the tenth
+        // of its weights that repeats another tenth. It costs a few per cent of speed, which is
+        // worth it only where every token would otherwise wait on storage.
+        switch ProcessInfo.processInfo.environment["HARNESS_SHARE_SCALES"] {
+        case "1", "check": HadamardQuantizedLinear.sharesScales = true
+        case "0": HadamardQuantizedLinear.sharesScales = false
+        default: HadamardQuantizedLinear.sharesScales = Self.mapsWeights && Self.fillsMemory(directory)
+        }
         let handlers = LoadProgressHandlers(weights: { value in progress?(value.fractionCompleted) })
         let loaded = try await loadModelContainer(
             from: directory, using: #huggingFaceTokenizerLoader(), progress: handlers)
         container = loaded
         loadedDirectory = directory
+    }
+
+    /// True when the model's weights take more than half of the device's memory.
+    nonisolated static func fillsMemory(_ directory: URL) -> Bool {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        let weights = files.filter { $0.pathExtension == "safetensors" && !$0.lastPathComponent.hasPrefix("prompt-cache") }
+            .reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        return UInt64(weights) * 2 > ProcessInfo.processInfo.physicalMemory
     }
 
     public func unload() {
@@ -112,6 +128,7 @@ public actor MLXEngine {
         sessionMessageIDs = []
         container = nil
         loadedDirectory = nil
+        HadamardQuantizedLinear.forgetRotations()
         MLX.Memory.clearCache()
     }
 
@@ -132,6 +149,11 @@ public actor MLXEngine {
         let instructions = request.messages.first { $0.role == .system }?.text ?? ""
         let transcript = request.messages.filter { $0.role != .system }
         guard !transcript.isEmpty else { throw ProviderError("There is nothing to respond to.") }
+
+        if request.options.standsAlone == true {
+            try await answerAlone(request, instructions: instructions, transcript: transcript, contextTokens: contextTokens, continuation: continuation)
+            return
+        }
 
         let key = SessionKey(
             instructions: instructions,
@@ -242,81 +264,18 @@ public actor MLXEngine {
         // or failed turn must not be extended.
         sessionMessageIDs = []
 
-        var sawToolCall = false
-        var sawRejection = false
-        var stats: GenerationStats?
-        var stop = StopReason.stop
-        let started = Date()
-        var firstToken: Date?
-
-        _ = MLXFailure.install
-        _ = MLXFailure.take()
-        let stream = activeSession.streamDetails(to: try newMessages.map(Self.chatMessage))
+        let outcome: Outcome
         do {
-            for try await event in stream {
-                try Task.checkCancellation()
-                // After an MLX error the stream carries on with nonsense; stop at the first sign.
-                if let failure = MLXFailure.take() { throw ModelStoppedError(failure) }
-                switch event {
-                case .chunk(let text):
-                    if firstToken == nil { firstToken = Date() }
-                    continuation.yield(.text(text))
-                case .reasoning(let text):
-                    if firstToken == nil { firstToken = Date() }
-                    continuation.yield(.reasoning(text))
-                case .toolCall(let call):
-                    sawToolCall = true
-                    continuation.yield(.toolCall(Self.toolCall(call)))
-                case .rejectedToolCall(let rejection):
-                    // The library drops calls it cannot use. Hand them to the agent
-                    // instead, so the model gets an error it can react to.
-                    sawToolCall = true
-                    sawRejection = true
-                    if ProcessInfo.processInfo.environment["HARNESS_DEBUG_REJECTED"] != nil {
-                        // Development aid: show what the model wrote. Never on by default, since it can hold user data.
-                        FileHandle.standardError.write(
-                            "REJECTED \(rejection.reason.rawValue) [\(rejection.format)]: \(rejection.rawTextPreview)\n".data(using: .utf8)!)
-                    }
-                    continuation.yield(.toolCall(Self.recover(rejection)))
-                case .info(let info):
-                    stats = GenerationStats(
-                        promptTokens: info.promptTokenCount, outputTokens: info.generationTokenCount,
-                        tokensPerSecond: info.tokensPerSecond,
-                        timeToFirstToken: firstToken.map { $0.timeIntervalSince(started) })
-                    let wait = firstToken.map { $0.timeIntervalSince(started) } ?? -1
-                    let cache = try? await activeSession.cacheStatus()
-                    MLXEngine.noteMemory(
-                        tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount, promptTime: info.promptTime,
-                        outputTokens: info.generationTokenCount, firstToken: wait, cacheBytes: cache?.memoryBytes ?? 0)
-                    if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
-                        let held = MLXEngine.memoryInUse
-                        FileHandle.standardError.write(
-                            String(
-                                format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most\n",
-                                info.promptTokenCount, info.promptTime, wait, info.generationTokenCount, info.tokensPerSecond,
-                                (cache?.memoryBytes ?? 0) >> 20, cache?.compressedLayerCount ?? 0, cache?.pendingLayerCount ?? 0,
-                                cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20
-                            ).data(using: .utf8)!)
-                    }
-                    switch info.stopReason {
-                    case .length: stop = .length
-                    case .cancelled: stop = .cancelled
-                    default: stop = .stop
-                    }
-                case .steering:
-                    break
-                }
-            }
+            outcome = try await relay(activeSession, messages: newMessages, continuation: continuation)
         } catch {
             session = nil
             sessionKey = nil
             throw error
         }
-        if let failure = MLXFailure.take() {
-            session = nil
-            sessionKey = nil
-            throw ModelStoppedError(failure)
-        }
+        let sawToolCall = outcome.sawToolCall
+        let sawRejection = outcome.sawRejection
+        let stats = outcome.stats
+        let stop = outcome.stop
 
         // The session now also holds the assistant reply the caller is about to
         // append. That message's ID is not known here, so remember the transcript
@@ -331,6 +290,131 @@ public actor MLXEngine {
             pendingAssistant = true
         }
         continuation.yield(.finished(sawToolCall ? .toolCalls : stop, stats))
+    }
+
+    private struct Outcome {
+        var sawToolCall = false
+        var sawRejection = false
+        var stats: GenerationStats?
+        var stop = StopReason.stop
+    }
+
+    /// Feeds a session its new messages and passes what it writes to the caller as it comes.
+    private func relay(
+        _ activeSession: ChatSession, messages newMessages: [HarnessKit.Message],
+        continuation: AsyncThrowingStream<ProviderEvent, Error>.Continuation
+    ) async throws -> Outcome {
+        var outcome = Outcome()
+        let started = Date()
+        var firstToken: Date?
+        // When each piece of the reply came, to tell a reply that slows as it goes from one that is slow throughout.
+        var pieces: [Date] = []
+        let readBefore = SystemMemory.now().pageIns
+
+        _ = MLXFailure.install
+        _ = MLXFailure.take()
+        let stream = activeSession.streamDetails(to: try newMessages.map(Self.chatMessage))
+        for try await event in stream {
+            try Task.checkCancellation()
+            // After an MLX error the stream carries on with nonsense; stop at the first sign.
+            if let failure = MLXFailure.take() { throw ModelStoppedError(failure) }
+            switch event {
+            case .chunk(let text):
+                if firstToken == nil { firstToken = Date() }
+                pieces.append(Date())
+                continuation.yield(.text(text))
+            case .reasoning(let text):
+                if firstToken == nil { firstToken = Date() }
+                pieces.append(Date())
+                continuation.yield(.reasoning(text))
+            case .toolCall(let call):
+                outcome.sawToolCall = true
+                continuation.yield(.toolCall(Self.toolCall(call)))
+            case .rejectedToolCall(let rejection):
+                // The library drops calls it cannot use. Hand them to the agent
+                // instead, so the model gets an error it can react to.
+                outcome.sawToolCall = true
+                outcome.sawRejection = true
+                if ProcessInfo.processInfo.environment["HARNESS_DEBUG_REJECTED"] != nil {
+                    // Development aid: show what the model wrote. Never on by default, since it can hold user data.
+                    FileHandle.standardError.write(
+                        "REJECTED \(rejection.reason.rawValue) [\(rejection.format)]: \(rejection.rawTextPreview)\n".data(using: .utf8)!)
+                }
+                continuation.yield(.toolCall(Self.recover(rejection)))
+            case .info(let info):
+                let wait = firstToken.map { $0.timeIntervalSince(started) } ?? -1
+                outcome.stats = GenerationStats(
+                    promptTokens: info.promptTokenCount, outputTokens: info.generationTokenCount,
+                    tokensPerSecond: info.tokensPerSecond, timeToFirstToken: firstToken.map { $0.timeIntervalSince(started) })
+                let cache = try? await activeSession.cacheStatus()
+                // Pieces a second over the first and the last fifty pieces, when there are enough to tell them apart.
+                func rate(_ times: ArraySlice<Date>) -> Double {
+                    guard let first = times.first, let last = times.last, times.count > 1, last > first else { return 0 }
+                    return Double(times.count - 1) / last.timeIntervalSince(first)
+                }
+                let span = min(50, pieces.count / 2)
+                MLXEngine.noteMemory(
+                    tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount, promptTime: info.promptTime,
+                    outputTokens: info.generationTokenCount, firstToken: wait, cacheBytes: cache?.memoryBytes ?? 0,
+                    early: rate(pieces.prefix(span)), late: rate(pieces.suffix(span)),
+                    readBack: SystemMemory.now().pageIns - readBefore)
+                if ProcessInfo.processInfo.environment["HARNESS_SHARE_SCALES"] == "check", HadamardQuantizedLinear.differenceCount > 0 {
+                    FileHandle.standardError.write(
+                        String(
+                            format: "SHARED SCALES against biases: %d layer calls, largest difference %.5f of the largest value (%.5f with plain steps), mean %.6f\n",
+                            HadamardQuantizedLinear.differenceCount, HadamardQuantizedLinear.largestDifference,
+                            HadamardQuantizedLinear.largestPlainDifference,
+                            HadamardQuantizedLinear.differenceSum / Double(HadamardQuantizedLinear.differenceCount)
+                        ).data(using: .utf8)!)
+                }
+                if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
+                    let held = MLXEngine.memoryInUse
+                    FileHandle.standardError.write(
+                        String(
+                            format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most\n",
+                            info.promptTokenCount, info.promptTime, wait, info.generationTokenCount, info.tokensPerSecond,
+                            (cache?.memoryBytes ?? 0) >> 20, cache?.compressedLayerCount ?? 0, cache?.pendingLayerCount ?? 0,
+                            cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20
+                        ).data(using: .utf8)!)
+                }
+                switch info.stopReason {
+                case .length: outcome.stop = .length
+                case .cancelled: outcome.stop = .cancelled
+                default: outcome.stop = .stop
+                }
+            case .steering:
+                break
+            }
+        }
+        if let failure = MLXFailure.take() { throw ModelStoppedError(failure) }
+        return outcome
+    }
+
+    /// Answers a request that nothing will follow, such as the one that names a chat, in a session
+    /// of its own that is then let go.
+    ///
+    /// It used to take the place of the chat's session. The chat's next message then found no
+    /// session of its own, started again from the saved opening and read the whole conversation
+    /// so far: after every reply, since the app asks about memory after each. For a 27B at 43
+    /// tokens a second that is a wait that grows with the chat, and the reload pushes part of the
+    /// model out of memory just before it is needed.
+    private func answerAlone(
+        _ request: GenerationRequest, instructions: String, transcript: [HarnessKit.Message], contextTokens: Int,
+        continuation: AsyncThrowingStream<ProviderEvent, Error>.Continuation
+    ) async throws {
+        guard let container else { throw ProviderError("No model is loaded.") }
+        let key = SessionKey(
+            instructions: instructions,
+            tools: JSONValue.array(request.tools.map(\.functionDeclaration)).jsonString,
+            callable: JSONValue.array((request.callableTools ?? []).map(\.functionDeclaration)).jsonString,
+            thinking: request.options.thinking, maxOutputTokens: request.options.maxOutputTokens,
+            temperature: request.options.temperature, topP: request.options.topP,
+            repetitionPenalty: request.options.repetitionPenalty, contextTokens: contextTokens, tuning: Self.tuningName)
+        let pendingStart = (transcript.lastIndex { $0.role == .assistant }).map { $0 + 1 } ?? 0
+        let alone = try await makeSession(
+            container: container, key: key, request: request, history: try transcript[..<pendingStart].map(Self.chatMessage))
+        let outcome = try await relay(alone, messages: Array(transcript[pendingStart...]), continuation: continuation)
+        continuation.yield(.finished(outcome.sawToolCall ? .toolCalls : outcome.stop, outcome.stats))
     }
 
     // MARK: The opening of a chat, kept between chats and between runs
@@ -409,13 +493,16 @@ public actor MLXEngine {
         continuation: AsyncThrowingStream<ProviderEvent, Error>.Continuation
     ) async {
         let transcript = request.messages.filter { $0.role != .system }
-        adoptPendingAssistant(from: transcript.map(Mark.init), roles: transcript.map(\.role))
+        let alone = request.options.standsAlone == true
+        if !alone { adoptPendingAssistant(from: transcript.map(Mark.init), roles: transcript.map(\.role)) }
         do {
             try await generate(request, contextTokens: contextTokens, continuation: continuation)
             continuation.finish()
         } catch is CancellationError {
-            session = nil
-            sessionKey = nil
+            if !alone {
+                session = nil
+                sessionKey = nil
+            }
             continuation.finish(throwing: CancellationError())
         } catch {
             continuation.finish(throwing: error)
@@ -615,10 +702,12 @@ extension MLXEngine {
 
     /// Adds a line to `memory-log.txt` after each reply while weights are mapped: how fast it went,
     /// what the app is charged, what the system will still give it, what MLX holds, how much of the
-    /// mapped model is in memory, and what the whole phone's memory is doing. Numbers only, nothing
-    /// of the chat.
+    /// mapped model is in memory, and what the whole phone's memory is doing. Also how fast the
+    /// reply was at its start and at its end, how hot the device is (0 to 3), and how much was read
+    /// back from storage while it was written. Numbers only, nothing of the chat.
     nonisolated static func noteMemory(
-        tokensPerSecond: Double, promptTokens: Int, promptTime: Double, outputTokens: Int, firstToken: Double, cacheBytes: Int
+        tokensPerSecond: Double, promptTokens: Int, promptTime: Double, outputTokens: Int, firstToken: Double, cacheBytes: Int,
+        early: Double, late: Double, readBack: Int
     ) {
         guard WeightMapping.isOn else { return }
         var info = task_vm_info_data_t()
@@ -635,18 +724,15 @@ extension MLXEngine {
             let available = "n/a"
         #endif
         let system = SystemMemory.now()
-        let readIn = system.pageIns - lastPageIns.withLock { last in
-            defer { last = system.pageIns }
-            return last ?? system.pageIns
-        }
         let line = String(
-            format: "%@  %.1f tok/s  wrote %d  prompt %d in %.1fs  first token %.1fs  ", ISO8601DateFormatter().string(from: Date()),
-            tokensPerSecond, outputTokens, promptTokens, promptTime, firstToken)
+            format: "%@  %.1f tok/s (%.1f at the start, %.1f at the end)  wrote %d  prompt %d in %.1fs  first token %.1fs  heat %d  ",
+            ISO8601DateFormatter().string(from: Date()), tokensPerSecond, early, late, outputTokens, promptTokens, promptTime, firstToken,
+            ProcessInfo.processInfo.thermalState.rawValue)
             + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  cache \(megabytes(cacheBytes))  "
             + "MLX in use \(megabytes(held.active)) kept \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
             + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))  "
             + "phone: free \(megabytes(system.free)) apps \(megabytes(system.written)) files \(megabytes(system.files)) "
-            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readIn)) since last\n"
+            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readBack)) during the reply\n"
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: url) {
@@ -657,9 +743,6 @@ extension MLXEngine {
             try? Data(line.utf8).write(to: url)
         }
     }
-
-    /// The count of bytes read back from storage at the last line of the log, to show what each reply added.
-    private static let lastPageIns = OSAllocatedUnfairLock<Int?>(initialState: nil)
 
     /// What MLX holds: in use, kept for reuse, and the most it has held, in bytes.
     public nonisolated static var memoryInUse: (active: Int, cache: Int, peak: Int) {

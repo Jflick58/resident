@@ -12,7 +12,8 @@ public enum Housekeeping {
     static func ask(_ provider: any ModelProvider, system: String, user: String, maxOutputTokens: Int) async -> String? {
         let agent = Agent(
             provider: provider, tools: [],
-            options: GenerationOptions(maxOutputTokens: maxOutputTokens, temperature: 0.2, thinking: .off), maxSteps: 1)
+            options: GenerationOptions(maxOutputTokens: maxOutputTokens, temperature: 0.2, thinking: .off, standsAlone: true),
+            maxSteps: 1)
         var answer: String?
         do {
             for try await event in agent.run(messages: [.system(system), .user(user)]) {

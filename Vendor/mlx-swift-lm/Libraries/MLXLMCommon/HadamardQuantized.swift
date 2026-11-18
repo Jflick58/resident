@@ -45,6 +45,52 @@ public struct SignedBlockHadamard: Sendable, Equatable {
         let shape = x.shape
         return hadamardTransform(x.reshaped(-1, blockSize), scale: scale).reshaped(shape)
     }
+
+    /// The two steps of ``forward(_:signs:)`` apart: the input with its signs flipped, in
+    /// float32, and that transformed, in the input's dtype.
+    func forwardSteps(_ x: MLXArray, signs: MLXArray) -> (signed: MLXArray, rotated: MLXArray) {
+        let signed = x.asType(.float32) * signs
+        return (signed, transform(signed).asType(x.dtype))
+    }
+
+    /// The sum of the rotated input over each run of `groupSize` elements, from the input
+    /// before it is transformed. Nil when the runs do not divide the blocks evenly.
+    ///
+    /// A Sylvester matrix of order `n = q·g` is one of order `q` with each entry a matrix of order
+    /// `g`, and every column of a Hadamard matrix but its first sums to nothing. So the sum of
+    /// the transform over a run of `g` rows keeps only every `g`-th input, and is a transform of
+    /// order `q` of those: 32 numbers in place of 4,096.
+    func groupSums(ofSigned signed: MLXArray, groupSize: Int) -> MLXArray? {
+        guard blockSize % groupSize == 0, Self.isValidBlockSize(groupSize), signed.dtype == .float32 else { return nil }
+        let width = signed.dim(-1)
+        let groups = width / groupSize
+        let shape = Array(signed.shape.dropLast()) + [groups]
+        let count = shape.reduce(1, *)
+        return Self.sums(
+            [signed, MLXArray(Float(groupSize) * scale)],
+            template: [("IN", width), ("GROUPS", groups), ("RUNS", blockSize / groupSize), ("GROUP", groupSize)],
+            grid: (count, 1, 1), threadGroup: (min(256, count), 1, 1),
+            outputShapes: [shape], outputDTypes: [.float32])[0]
+    }
+
+    /// One step for the lot: picking out every `GROUP`-th input and transforming them apart
+    /// took two, and a step costs more than this arithmetic.
+    private static let sums = MLXFast.metalKernel(
+        name: "resident_group_sums",
+        inputNames: ["inp", "factor"],
+        outputNames: ["out"],
+        source: """
+            uint elem = thread_position_in_grid.x;
+            uint g = elem % GROUPS;
+            uint a = g % RUNS;
+            uint first = (elem / GROUPS) * IN + (g - a) * GROUP;
+            float m = 0.0f;
+            for (uint c = 0; c < RUNS; c++) {
+                float v = inp[first + c * GROUP];
+                m += (popcount(a & c) & 1u) ? -v : v;
+            }
+            out[elem] = m * factor;
+            """)
 }
 
 // MARK: - Layers
@@ -92,8 +138,174 @@ open class HadamardQuantizedLinear: QuantizedLinear {
     }
 
     open override func callAsFunction(_ x: MLXArray) -> MLXArray {
-        super.callAsFunction(rotation.forward(x, signs: signs))
+        let (signed, rotated) = rotatedInput(x)
+        let groups = scales.dim(-1)
+        guard Self.sharesScales, mode == .affine, let path, Self.mirrored.contains(path),
+            rotation.blockSize % groupSize == 0, SignedBlockHadamard.isValidBlockSize(groupSize),
+            x.dim(-1) == groups * groupSize
+        else {
+            return super.callAsFunction(rotated)
+        }
+        // The packed matmul gives, for each output, the sum over groups of
+        //     scale * (codes . x) + bias * sum(x)
+        // With the scales standing in for the biases that is the wanted value plus twice
+        // `scale * sum(x)` over the groups, which is then taken off.
+        let packed = quantizedMM(
+            rotated, weight, scales: scales, biases: scales, transpose: true,
+            groupSize: groupSize, bits: bits, mode: mode)
+        let positions = rotated.shape.dropLast().reduce(1, *)
+        let sums = groupSums(x, signed: signed)
+        var result = Self.corrected(packed, sums: sums, scales: scales)
+        if Self.checksAgainstBiases, positions > 1, let biases {
+            let reference = quantizedMM(
+                rotated, weight, scales: scales, biases: biases, transpose: true,
+                groupSize: groupSize, bits: bits, mode: mode
+            ).asType(.float32)
+            let plain = addMM(packed, sums.asType(packed.dtype), scales.T, alpha: -2, beta: 1).asType(.float32)
+            let size = abs(reference).max() + 1e-9
+            let off = stacked([abs(result.asType(.float32) - reference).max() / size, abs(plain - reference).max() / size])
+                .asArray(Float.self)
+            Self.largestDifference = max(Self.largestDifference, off[0])
+            Self.largestPlainDifference = max(Self.largestPlainDifference, off[1])
+            Self.differenceCount += 1
+            Self.differenceSum += Double(off[0])
+        }
+        if let bias { result = result + bias }
+        return result
     }
+
+    // MARK: Resident: one rotation for layers given the same input
+
+    /// The input with its signs flipped and that rotated, from the last layer with the same signs
+    /// that was given this very array if there is one.
+    ///
+    /// A pack has one sign vector for each width, and layers side by side are given the same
+    /// array: the three projections of an attention layer, the two inner ones of the feed-forward
+    /// layer. Each rotated it for itself, four steps on the GPU each time, for the same result.
+    /// A step costs much the same whatever its size, so on a model of a few hundred layers the
+    /// steps saved are a tenth of the time a token takes.
+    private func rotatedInput(_ x: MLXArray) -> (signed: MLXArray, rotated: MLXArray) {
+        guard Self.sharesRotations, let path, let signs = Self.signClasses[path] else {
+            return rotation.forwardSteps(x, signs: self.signs)
+        }
+        Self.rotationLock.lock()
+        defer { Self.rotationLock.unlock() }
+        // The array itself and what it holds: an array written to in place is the same object.
+        if let last = Self.lastRotations[signs], last.input === x, last.handle == x.ctx.ctx,
+            last.blockSize == rotation.blockSize
+        {
+            return (last.signed, last.rotated)
+        }
+        let steps = rotation.forwardSteps(x, signs: self.signs)
+        Self.lastRotations[signs] = LastRotation(
+            input: x, handle: x.ctx.ctx, blockSize: rotation.blockSize, signed: steps.signed, rotated: steps.rotated)
+        return steps
+    }
+
+    /// The sum of the rotated input over each group, shared like the rotation it comes from.
+    private func groupSums(_ x: MLXArray, signed: MLXArray) -> MLXArray {
+        guard Self.sharesRotations, let path, let signs = Self.signClasses[path] else {
+            return rotation.groupSums(ofSigned: signed, groupSize: groupSize)!
+        }
+        Self.rotationLock.lock()
+        defer { Self.rotationLock.unlock() }
+        if let last = Self.lastRotations[signs], last.input === x, last.handle == x.ctx.ctx,
+            last.blockSize == rotation.blockSize, last.groupSize == groupSize, let sums = last.sums
+        {
+            return sums
+        }
+        let sums = rotation.groupSums(ofSigned: signed, groupSize: groupSize)!
+        if var last = Self.lastRotations[signs], last.input === x, last.handle == x.ctx.ctx {
+            last.sums = sums
+            last.groupSize = groupSize
+            Self.lastRotations[signs] = last
+        }
+        return sums
+    }
+
+    private struct LastRotation {
+        let input: MLXArray
+        let handle: UnsafeMutableRawPointer?
+        let blockSize: Int
+        let signed: MLXArray
+        let rotated: MLXArray
+        var sums: MLXArray?
+        var groupSize = 0
+    }
+
+    /// Lets go of the arrays kept from the last layers that ran, when their model is unloaded.
+    public static func forgetRotations() {
+        rotationLock.lock()
+        lastRotations = [:]
+        rotationLock.unlock()
+    }
+
+    /// Off with `HARNESS_SHARE_ROTATIONS=0`, to measure what it saves.
+    nonisolated(unsafe) public static var sharesRotations = ProcessInfo.processInfo.environment["HARNESS_SHARE_ROTATIONS"] != "0"
+    nonisolated(unsafe) private static var lastRotations: [Int: LastRotation] = [:]
+    private static let rotationLock = NSLock()
+    /// Which sign vector each layer has, by where the layer is: layers with the same number have the same signs.
+    nonisolated(unsafe) static var signClasses: [String: Int] = [:]
+
+    // MARK: Resident: without the biases
+
+    /// Computes a layer without reading its biases, when they are its scales negated.
+    ///
+    /// A ternary pack stores each weight as a code of 0, 1 or 2 with a scale and a bias for
+    /// every group of weights, and the weight is `scale * code + bias`. For the values to be
+    /// minus the scale, zero and plus the scale, the bias is always minus the scale: a tenth of
+    /// the file that says nothing the scales do not. Read on every token like the rest, it is
+    /// 420 MB of a 27B model that has to stay in memory. On a phone where the model fills the
+    /// memory, that is the difference between every token waiting on storage and none.
+    ///
+    /// Off unless something turns it on before a model is loaded. Each layer's arrays are
+    /// checked when the model loads (``HadamardQuantizedCheckpointPolicy/prepare(_:)``), and one
+    /// whose biases are anything else is computed the ordinary way.
+    nonisolated(unsafe) public static var sharesScales =
+        ["1", "check"].contains(ProcessInfo.processInfo.environment["HARNESS_SHARE_SCALES"] ?? "")
+
+    /// Where the layer is in the model, which is how what was found at load reaches it.
+    var path: String?
+
+    /// The layers whose biases were found to be exactly their scales negated.
+    nonisolated(unsafe) static var mirrored: Set<String> = []
+
+    /// `packed - 2 * (scales . sums)` for every position, where `sums` is the sum of the rotated
+    /// input over each group (``SignedBlockHadamard/groupSums(ofSigned:groupSize:)``).
+    ///
+    /// One kernel, because a matmul of this shape (thousands of rows by a few dozen columns)
+    /// cost as much again as the packed one it follows.
+    private static func corrected(_ packed: MLXArray, sums: MLXArray, scales: MLXArray) -> MLXArray {
+        let count = packed.size
+        return correction(
+            [packed, sums, scales],
+            template: [("T", packed.dtype), ("OUT", scales.dim(0)), ("GROUPS", scales.dim(-1))],
+            grid: (count, 1, 1), threadGroup: (min(256, count), 1, 1),
+            outputShapes: [packed.shape], outputDTypes: [packed.dtype])[0]
+    }
+
+    private static let correction = MLXFast.metalKernel(
+        name: "resident_ternary_correction",
+        inputNames: ["packed", "sums", "scales"],
+        outputNames: ["out"],
+        source: """
+            uint elem = thread_position_in_grid.x;
+            uint row = elem % OUT;
+            uint position = (elem / OUT) * GROUPS;
+            float total = 0.0f;
+            for (uint g = 0; g < GROUPS; g++) {
+                total += float(scales[row * GROUPS + g]) * float(sums[position + g]);
+            }
+            out[elem] = T(float(packed[elem]) - 2.0f * total);
+            """)
+
+    /// Development aid: `HARNESS_SHARE_SCALES=check` also computes each layer the ordinary way
+    /// while a prompt is read, and records how far the two are apart as a share of the largest value.
+    static let checksAgainstBiases = ProcessInfo.processInfo.environment["HARNESS_SHARE_SCALES"] == "check"
+    nonisolated(unsafe) public static var largestDifference: Float = 0
+    nonisolated(unsafe) public static var largestPlainDifference: Float = 0
+    nonisolated(unsafe) public static var differenceSum: Double = 0
+    nonisolated(unsafe) public static var differenceCount = 0
 }
 
 /// A `QuantizedEmbedding` whose rows were quantized in a rotated basis.
@@ -377,6 +589,7 @@ public struct HadamardQuantizedCheckpointPolicy: Sendable {
                 throw HadamardQuantizedCheckpointError.moduleNotSubstitutable(
                     path, found: "\(type(of: module))")
             }
+            (replacement as? HadamardQuantizedLinear)?.path = path
             replacements.append((path, replacement))
         }
         model.update(modules: ModuleChildren.unflattened(replacements))
@@ -394,6 +607,7 @@ public struct HadamardQuantizedCheckpointPolicy: Sendable {
     public func prepare(_ checkpoint: ModelCheckpoint) throws -> ModelCheckpoint {
         let packed = Set(manifest.modules.map { pathPrefix + $0.path })
         try Self.validateSigns(in: checkpoint.weights, packed: packed)
+        Self.noteSharedParts(in: checkpoint.weights, packed: packed)
         guard let activationDType else { return checkpoint }
 
         var prepared = checkpoint
@@ -404,6 +618,45 @@ public struct HadamardQuantizedCheckpointPolicy: Sendable {
             prepared.weights[key] = value.asType(activationDType)
         }
         return prepared
+    }
+
+    /// Records what layers have in common, for ``HadamardQuantizedLinear``: which have the same
+    /// sign vector, and which have biases that are exactly their scales negated. Read here, once,
+    /// the biases need not be read again.
+    private static func noteSharedParts(in weights: [String: MLXArray], packed: Set<String>) {
+        let paths = packed.sorted()
+        // The first layer of each width stands for its sign vector; a layer whose signs differ
+        // from it is in a class of its own.
+        var first: [Int: MLXArray] = [:]
+        let signs = paths.compactMap { path -> (path: String, width: Int, same: MLXArray)? in
+            guard let values = weights[path + ".signs"], values.ndim == 1 else { return nil }
+            let width = values.dim(0)
+            if first[width] == nil { first[width] = values }
+            return (path, width, (values .== first[width]!).all())
+        }
+        if !signs.isEmpty {
+            let same = stacked(signs.map(\.same)).asArray(Bool.self)
+            for (index, entry) in signs.enumerated() {
+                HadamardQuantizedLinear.signClasses[entry.path] = same[index] ? entry.width : -(index + 1)
+            }
+        }
+
+        guard HadamardQuantizedLinear.sharesScales else { return }
+        let pairs = paths.compactMap { path -> (path: String, same: MLXArray)? in
+            guard let scales = weights[path + ".scales"], let biases = weights[path + ".biases"],
+                scales.shape == biases.shape
+            else { return nil }
+            return (path, (biases .== -scales).all())
+        }
+        guard !pairs.isEmpty else { return }
+        let same = stacked(pairs.map(\.same)).asArray(Bool.self)
+        for (pair, isSame) in zip(pairs, same) {
+            if isSame {
+                HadamardQuantizedLinear.mirrored.insert(pair.path)
+            } else {
+                HadamardQuantizedLinear.mirrored.remove(pair.path)
+            }
+        }
     }
 
     private static func rotation(_ entry: HadamardQuantizedModule, at path: String, width: Int)
