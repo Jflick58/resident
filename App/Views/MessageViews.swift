@@ -339,14 +339,17 @@ struct ToolCallView: View {
             if call.name == ToolCall.unreadableName { return "Tried to use a tool" }
             if call.name == ToolGroup.openerName {
                 let wanted = call.arguments["connector"]?.stringValue ?? ""
-                let name = wanted == RepoTool.prefix ? "Code" : app.connectors.servers.first { $0.toolPrefix == wanted }?.name ?? "a connector"
+                // "repo" was the code tools' own connector, in chats from before they joined Files.
+                let name = Connector(rawValue: wanted)?.title ?? (wanted == "repo" ? "Code" : nil)
+                    ?? app.connectors.servers.first { $0.toolPrefix == wanted }?.name ?? "a connector"
                 return isRunning ? "Opening \(name)" : "Opened \(name)"
             }
             if call.name == ReadDocumentTool.name { return isRunning ? "Reading the document" : "Read the document" }
             if call.name == SaveSkillTool.name { return isRunning ? "Proposing a skill" : "Proposed a skill" }
             if call.name == UpdateSkillTool.name { return isRunning ? "Proposing a change to a skill" : "Proposed a change to a skill" }
             return Connector.activity(forTool: call.name, isRunning: isRunning)
-                ?? RepoTool.activity(forTool: call.name, arguments: call.arguments)
+                ?? FileTool.activity(forTool: call.name, arguments: call.arguments)
+                ?? RepositoryTool.activity(forTool: call.name, arguments: call.arguments)
                 ?? app.connectors.activity(forTool: call.name) ?? call.name
         }
     }

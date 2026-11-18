@@ -17,7 +17,7 @@ final class ConnectorsModel {
     private let store: Store
     private(set) var servers: [MCPServerConfig]
     @ObservationIgnored private var connections: [UUID: MCPConnection] = [:]
-    @ObservationIgnored private var workspaces: [UUID: Workspace] = [:]
+    @ObservationIgnored private var repositories: [UUID: RepositoryCopy] = [:]
     @ObservationIgnored private let browser = SignInBrowser()
     static var redirectScheme: String { String(redirectURI.prefix { $0 != ":" }) }
 
@@ -89,17 +89,21 @@ final class ConnectorsModel {
     }
 
     /// The same tools as one group per server, for when they are held back until needed.
-    /// GitHub brings a second group with it: the tools for working on a repository's code.
-    func groups(for ids: [UUID]) -> [ToolGroup] {
-        ids.compactMap { server($0) }.flatMap { server -> [ToolGroup] in
-            guard let connection = connection(for: server), !server.needsSignIn else { return [] }
-            let group = ToolGroup(
-                name: server.toolPrefix, title: server.name, summary: server.summary ?? "",
-                tools: FileEditTool.adding(
-                    to: server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) }, title: server.name),
+    ///
+    /// With `codeGoesThroughFiles`, GitHub comes without its own tools for changing code: the file
+    /// tools do that, with a clone before and a pull request after, and two ways to do it in
+    /// front of a small model is one too many. See `RepositoryTool.replaced`.
+    func groups(for ids: [UUID], codeGoesThroughFiles: Bool = false) -> [ToolGroup] {
+        ids.compactMap { server($0) }.compactMap { server -> ToolGroup? in
+            guard let connection = connection(for: server), !server.needsSignIn else { return nil }
+            var tools = FileEditTool.adding(
+                to: server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) }, title: server.name)
+            if codeGoesThroughFiles, Self.isGitHub(server) {
+                tools.removeAll { RepositoryTool.replaces($0.spec.name, connector: server.toolPrefix) }
+            }
+            return ToolGroup(
+                name: server.toolPrefix, title: server.name, summary: server.summary ?? "", tools: tools,
                 guidance: server.instructions ?? "")
-            guard Self.isGitHub(server) else { return [group] }
-            return [group, RepoTool.group(workspace: workspace(for: server, connection: connection))]
         }
     }
 
@@ -107,14 +111,16 @@ final class ConnectorsModel {
         URL(string: server.url)?.host?.hasSuffix("githubcopilot.com") == true
     }
 
-    /// The copy of a repository that the code tools work on, signed in to GitHub as the connector is.
-    private func workspace(for server: MCPServerConfig, connection: MCPConnection) -> Workspace {
-        if let existing = workspaces[server.id] { return existing }
-        let made = Workspace(
-            directory: store.root.appendingPathComponent("workspace", isDirectory: true),
-            host: GitHubHost { await connection.accessToken() })
-        workspaces[server.id] = made
-        return made
+    /// What GitHub adds to the file tools when it is one of these servers and signed in: a copy of
+    /// a repository in the files folder, cloned and sent back with the connector's own sign-in.
+    func repository(for ids: [UUID], in files: Workspace) -> (copy: RepositoryCopy, connector: String)? {
+        guard let server = ids.compactMap({ server($0) }).first(where: { Self.isGitHub($0) && !$0.needsSignIn }),
+            let connection = connection(for: server)
+        else { return nil }
+        if let existing = repositories[server.id] { return (existing, server.toolPrefix) }
+        let made = RepositoryCopy(workspace: files, host: GitHubHost { await connection.accessToken() })
+        repositories[server.id] = made
+        return (made, server.toolPrefix)
     }
 
     func toolCount(for ids: [UUID]) -> Int {

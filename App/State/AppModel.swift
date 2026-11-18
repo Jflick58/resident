@@ -29,6 +29,8 @@ final class AppModel {
     let store = Store()
     let memory: MemoryStore
     let connectors: ConnectorsModel
+    /// The folder the file tools work on.
+    let files: Workspace
     let device = DeviceProfile.current()
 
     var conversations: [Conversation]
@@ -58,6 +60,7 @@ final class AppModel {
     init() {
         memory = MemoryStore(url: store.memoryURL)
         connectors = ConnectorsModel(store: store)
+        files = Workspace(directory: store.root.appendingPathComponent("workspace", isDirectory: true))
         conversations = store.loadConversations()
         library = store.loadLibrary()
         pending = store.loadPendingInstalls()
@@ -457,13 +460,22 @@ final class AppModel {
             case .saveMemory: return memoryEnabled ? [SaveMemoryTool(store: memory)] : []
             }
         }
+        // The file tools are the same whatever the files. GitHub, when the agent has it, adds its
+        // two ends to them: cloning a repository into the folder, and opening a pull request.
+        let repository = preset.connectors.contains(.files) ? connectors.repository(for: preset.servers, in: files) : nil
         let onDevice = preset.connectors.map { connector in
-            ToolGroup(
+            if connector == .files {
+                return FileTool.group(workspace: files, repository: repository?.copy, connector: repository?.connector ?? "github")
+            }
+            return ToolGroup(
                 name: connector.rawValue, title: connector.title, summary: connector.detail,
                 tools: connector.tools(source: EventKitSource.shared))
         }
-        let groups = onDevice + connectors.groups(for: preset.servers)
-        return (builtIn, preset.tools.contains(.skills) ? ToolGroup.linking(groups, to: skills) : groups)
+        let groups = onDevice + connectors.groups(for: preset.servers, codeGoesThroughFiles: repository != nil)
+        guard preset.tools.contains(.skills) else { return (builtIn, groups) }
+        // A skill that needs the two GitHub tools is not offered where they are missing.
+        let absent = RepositoryTool.names.filter { name in !groups.contains { $0.tools.contains { $0.spec.name == name } } }
+        return (builtIn, ToolGroup.linking(groups, to: skills, absent: absent))
     }
 
     // MARK: Connectors

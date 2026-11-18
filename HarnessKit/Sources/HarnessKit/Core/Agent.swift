@@ -252,6 +252,9 @@ public struct Agent: Sendable {
                         }
                         result = outcome
                     }
+                } else if let say = shelf.redirect(for: call.name) {
+                    emit(.toolsLoaded(shelf.loaded))
+                    result = .error("There is no tool named \(call.name). \(say)")
                 } else if let near = shelf.nearest(to: call.name) {
                     emit(.toolsLoaded(shelf.loaded))
                     result = .error(

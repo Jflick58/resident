@@ -1,12 +1,13 @@
 # Evals
 
-407 cases that put a model through Resident's harness on a Mac and check what it did. They exist to answer two questions with more than a handful of examples: how good is this model inside the harness, and did a change to the harness help or hurt.
+423 cases that put a model through Resident's harness on a Mac and check what it did. They exist to answer two questions with more than a handful of examples: how good is this model inside the harness, and did a change to the harness help or hurt.
 
 Everything outside the model is faked, so a run depends on the model and the harness and nothing else:
 
-- **Connectors** are the 13 stand-ins in `HarnessMLX/Sources/harness-spike/Connectors.swift` (calendar, reminders, contacts, notes, GitHub, mail, health, weather, maps, files, music, timers, home) and Linear's real 27 tool definitions with canned answers (`Linear.swift`). They are opened on demand, as in the app.
+- **Connectors** are 11 stand-ins in `HarnessMLX/Sources/harness-spike/Connectors.swift` (calendar, reminders, contacts, notes, mail, health, weather, maps, music, timers, home), and GitHub's and Linear's real tool definitions with canned answers (`GitHub.swift`, `Linear.swift`). They are opened on demand, as in the app.
+- **Files** are the app's own file tools on a real folder, emptied before each case. A case can say which files are in it to begin with. Cloning a repository and opening a pull request go to a made-up GitHub that holds one repository, `acme/rocket`.
 - **The web** is `web.json`: invented search results and pages. The facts in it are made up, so a model cannot answer from memory, and a run needs no network.
-- **Skills** are the app's three built-in ones plus one a model wrote on a phone.
+- **Skills** are the app's built-in ones plus one a model wrote on a phone.
 
 ## Running it
 
@@ -66,7 +67,8 @@ A model does not give the same answer twice, so a few cases flip between any two
 | `skills` | 10 | Loads a skill when a task matches, and not otherwise. |
 | `web` | 20 | Searches, reads pages, and says so when there is nothing to find. |
 | `honesty` | 21 | Does not invent what it could not find, asks when it lacks what it needs, and ignores orders hidden in a web page. |
-| `pullrequest` | 20 | Opens a pull request on a repository: clones it, finds the file, changes only what was asked, and never merges. |
+| `pullrequest` | 23 | Opens a pull request on a repository: clones it, finds the file, changes only what was asked, and never merges. Three cases have the user's own files in the folder already, or add a file at the top of the repository. |
+| `files` | 13 | Works on the user's own files: writes, lists, finds, reads and changes them, and leaves GitHub out of it. |
 
 ## Writing cases
 
@@ -91,6 +93,6 @@ add("lookup", "con-phone",
 | `answerAny` | One of the texts is. |
 | `answerNot` | None of the texts is. |
 
-Text is compared in lower case with thousands commas removed. A wording that is a list is a chat of several turns. `memory="…"` gives the assistant facts it already remembers.
+Text is compared in lower case with thousands commas removed. A wording that is a list is a chat of several turns. `memory="…"` gives the assistant facts it already remembers, and `files={"notes/trip.md": "…"}` puts files in the files folder before the chat starts.
 
 A check must match what the fake world returns, so read the tool's handler before writing one. A case the best model fails for a reason that is not its fault is noise: fix the case or the world.

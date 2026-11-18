@@ -164,7 +164,8 @@ private actor FakeSource: PersonalDataSource {
              "tools":["web_search"],"thinking":"low","maxOutputTokens":2048,"temperature":0.6,"isBuiltIn":false}
             """
         let preset = try JSONDecoder().decode(HarnessPreset.self, from: Data(old.utf8))
-        #expect(preset.connectors.isEmpty)
+        // None of the ones there were then. The file tools came later and are given to an agent that has tools.
+        #expect(preset.connectors == [.files])
         #expect(preset.tools == [.webSearch])
     }
 }

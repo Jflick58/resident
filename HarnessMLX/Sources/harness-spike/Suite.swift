@@ -14,6 +14,8 @@ struct EvalCase: Decodable {
     var turns: [String]
     /// Facts the assistant already remembers about the user.
     var memory: String?
+    /// Files in the files folder before the chat starts, by path.
+    var files: [String: String]?
     /// Every one of these tools must run.
     var tools: [String]?
     /// At least one of these must run.
