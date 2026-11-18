@@ -32,13 +32,16 @@ public enum WeightMapping {
     ///
     /// Throws only when the file is part-way through and cannot be finished. A file that
     /// cannot be rearranged at all is left as it was and loads the ordinary way.
-    public static func prepare(_ url: URL) throws {
+    ///
+    /// - Parameter progress: called as a rearrangement goes, with the bytes moved so far. An
+    ///   8 GB file takes minutes, and without this a load shows nothing until it is over.
+    public static func prepare(_ url: URL, progress: ((Int) -> Void)? = nil) throws {
         for leftover in ["paged", "paged-partial"] {
             try? FileManager.default.removeItem(at: url.appendingPathExtension(leftover))
         }
         guard isOn || AlignedWeights.isPartWay(url) else { return }
         do {
-            try AlignedWeights.align(url)
+            try AlignedWeights.align(url, progress: progress)
         } catch {
             if AlignedWeights.isPartWay(url) { throw error }
         }

@@ -150,7 +150,9 @@ public enum AlignedWeights {
     /// - Parameters:
     ///   - chunk: how much is moved at a time. Each piece is on storage before the old file gives it up.
     ///   - stopAfter: for tests, stops with ``Failure/interrupted`` after this many pieces.
-    public static func align(_ url: URL, chunk: Int = 32 << 20, stopAfter: Int? = nil) throws {
+    ///   - progress: called after each piece with how many bytes of the file have been moved so far,
+    ///     counting what an earlier run moved.
+    public static func align(_ url: URL, chunk: Int = 32 << 20, stopAfter: Int? = nil, progress: ((Int) -> Void)? = nil) throws {
         let partWay = url.appendingPathExtension(partWayExtension)
         let old = open(url.path, O_RDWR)
         guard old >= 0 else { throw Failure.unreadable }
@@ -211,6 +213,7 @@ public enum AlignedWeights {
                 oldLength = start
                 end = start
                 moved += 1
+                progress?(header.dataEnd - start)
                 if let stopAfter, moved >= stopAfter { throw Failure.interrupted }
             }
         }

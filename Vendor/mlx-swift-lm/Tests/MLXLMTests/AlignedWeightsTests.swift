@@ -94,9 +94,13 @@ struct AlignedWeightsTests {
         let size = try write(tensors, to: url)
         #expect(!AlignedWeights.isAligned(url))
 
-        try AlignedWeights.align(url, chunk: 50_000)
+        var reported: [Int] = []
+        try AlignedWeights.align(url, chunk: 50_000) { reported.append($0) }
 
         try expectRearranged(url, from: tensors, originalSize: size)
+        // Progress only goes up, and ends at all the tensors' bytes.
+        #expect(reported == reported.sorted())
+        #expect(reported.last == tensors.reduce(0) { $0 + $1.bytes.count })
     }
 
     @Test func `a file already rearranged is left as it is`() throws {

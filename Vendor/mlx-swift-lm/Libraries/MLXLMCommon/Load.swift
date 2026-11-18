@@ -184,7 +184,11 @@ func loadModelCheckpoint(urls: [URL], isRead: @escaping @Sendable (String) -> Bo
     // Resident: before anything reads a file's header. A file being mapped is rearranged in
     // place the first time, which moves its tensors, and one whose rearrangement was cut
     // short is not whole until that is finished. Once for each file, not once for each worker.
-    for url in Set(urls) { try WeightMapping.prepare(url) }
+    let rearranging = ModelLoadProgressScope.reporter
+    for url in Set(urls) {
+        let reader = UUID()
+        try WeightMapping.prepare(url) { moved in rearranging?.note(bytes: Int64(moved), reader: reader) }
+    }
 
     let items: [WorkItem] = {
         var spansPerFile = [[SafetensorSpan]?]()
