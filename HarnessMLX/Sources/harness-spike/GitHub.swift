@@ -172,3 +172,24 @@ func loadGitHubTools(recorder: CallRecorder) -> [GitHubTool] {
     }
     return specs.map { GitHubTool(info: $0, recorder: recorder) }
 }
+
+/// The same made-up repository as a place to clone from and open pull requests on, for the code
+/// tools. A pull request's files go in the record whole, so a case can check that a change left
+/// the rest of a file alone.
+struct RecordingHost: RepositoryHost {
+    var base: FixedRepositoryHost
+    var recorder: CallRecorder
+
+    func reset() { base.reset() }
+
+    func download(owner: String, repo: String, into directory: URL) async throws -> RepositoryVersion {
+        try await base.download(owner: owner, repo: repo, into: directory)
+    }
+
+    func openPullRequest(_ draft: PullRequestDraft) async throws -> OpenedPullRequest {
+        recorder.record(
+            "pull_request_content",
+            ["branch": .string(draft.branch), "files": .object(Dictionary(uniqueKeysWithValues: draft.files.map { ($0.path, JSONValue.string($0.text)) }))])
+        return try await base.openPullRequest(draft)
+    }
+}

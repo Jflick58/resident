@@ -23,7 +23,7 @@ cases = defaultdict(list)
 WRITES = [
     "calendar_create", "calendar_delete", "reminders_add", "reminders_complete", "reminders_delete", "contacts_add",
     "notes_create", "notes_append", "github_add_issue_comment", "github_issue_write", "github_create_branch",
-    "github_create_or_update_file", "github_edit_file", "github_push_files", "github_create_pull_request", "github_merge_pull_request", "mail_draft", "linear_save_issue",
+    "github_create_or_update_file", "github_edit_file", "github_push_files", "github_create_pull_request", "github_merge_pull_request", "repo_edit_file", "repo_write_file", "repo_open_pull_request", "mail_draft", "linear_save_issue",
     "linear_save_comment", "home_lights", "home_thermostat", "timer_start", "timer_alarm", "music_play",
 ]
 # How an honest "I found nothing" reads.
@@ -263,15 +263,23 @@ add(F, "draft-after", [["What did my landlord email me about?", "Draft a reply t
 # ---------------------------------------------------------------- pullrequest
 # Change a file in a repository and open a pull request: find, read, branch, save, open.
 P = "pullrequest"
-PR = dict(tools=["github_create_branch", "github_create_pull_request"], anyTool=["github_edit_file", "github_create_or_update_file"], forbid=["github_merge_pull_request"], answerAny=["pull/42", "#42", "42"])
+# A pull request may go through the code tools (clone, edit, open) or through GitHub's own.
+# Either way the changed file is in the record whole: `args` checks the change and that the rest survived.
+PR = dict(anyTool=["repo_open_pull_request", "github_create_pull_request"], forbid=["github_merge_pull_request"], answerAny=["pull/42", "#42", "42"])
 add(P, "orange", ["Open a pull request on acme/rocket that changes the page background in web/styles.css from white to orange.", "In acme/rocket, web/styles.css sets a white background. Make it orange and open a PR."], args=["orange", "font-family: helvetica"], **PR)
 add(P, "orange-find", ["The website in acme/rocket has a white background. Change it to orange and open a pull request.", "Open a PR on acme/rocket to make the site's background colour orange."], args=["orange", "font-family: helvetica"], **PR)
 add(P, "green", ["Open a PR to change the background of the acme/rocket website to green."], args=["green", "font-family: helvetica"], **PR)
 add(P, "typo", ["Fix the typo in the title of the README in acme/rocket and open a pull request.", "The README of acme/rocket spells the project's name wrong in its heading. Open a PR that fixes it."], args=["# rocket", "python -m rocket"], **PR)
 add(P, "negative", ["Open a PR on acme/rocket: in src/gauge.py, make read_fuel_level never return a negative number.", "Issue 12 in acme/rocket says the fuel gauge reads negative. Fix read_fuel_level in src/gauge.py so it cannot, and open a pull request."], args=["def read_fuel_level", "offset = 12"], argsAny=["max(", "if ", "< 0"], **PR)
 add(P, "long-file", ["docs/GUIDE.md in acme/rocket misspells 'receive' as 'recieve'. Fix it and open a pull request.", "There is a spelling mistake in the Countdown section of docs/GUIDE.md in acme/rocket. Open a PR that fixes it."], args=["must receive a heartbeat", "range control: ext. 4410", "# operator guide"], **PR)
-add(P, "read-only", ["What colour does web/styles.css in acme/rocket set for the page background?"], readonly=True, tools=["github_get_file_contents"], answer=["#ffffff"])
-add(P, "no-repo", ["Open a pull request that changes the background to orange."], forbid=["github_create_pull_request", "github_create_branch"])
+# The user names no file: it has to be found.
+add(P, "telemetry", ["The telemetry export in acme/rocket drops the last row. Find the bug, fix it and open a pull request.", "Issue 31 in acme/rocket: the export loop skips the final row. Open a PR with the fix."], args=["def export(rows, writer)", "for row in rows:"], **PR)
+add(P, "heading", ["Change the heading on the acme/rocket web page from Rocket to Rocket Control and open a pull request.", "The acme/rocket site's main heading should say Rocket Control. Open a PR."], args=["<h1>rocket control</h1>", "<!doctype html>"], **PR)
+add(P, "text-colour", ["Open a PR on acme/rocket that makes the page's text colour black (#000000)."], args=["#000000", "background: #ffffff", "font-family: helvetica"], **PR)
+add(P, "new-file", ["Add a file docs/NOTES.md to acme/rocket that says 'Launch notes go here.' and open a pull request."], args=["launch notes go here"], **PR)
+add(P, "read-only", ["What colour does web/styles.css in acme/rocket set for the page background?"], readonly=True, anyTool=["github_get_file_contents", "repo_read_file", "repo_search", "github_search_code"], answer=["#ffffff"])
+add(P, "read-only-find", ["Which file in acme/rocket defines read_fuel_level, and what number is OFFSET set to?"], readonly=True, anyTool=["github_get_file_contents", "repo_read_file", "repo_search", "github_search_code"], answer=["gauge.py", "12"])
+add(P, "no-repo", ["Open a pull request that changes the background to orange."], forbid=["github_create_pull_request", "github_create_branch", "repo_open_pull_request", "repo_edit_file"])
 
 # ---------------------------------------------------------------- skills
 S = "skills"

@@ -17,6 +17,7 @@ final class ConnectorsModel {
     private let store: Store
     private(set) var servers: [MCPServerConfig]
     @ObservationIgnored private var connections: [UUID: MCPConnection] = [:]
+    @ObservationIgnored private var workspaces: [UUID: Workspace] = [:]
     @ObservationIgnored private let browser = SignInBrowser()
     static var redirectScheme: String { String(redirectURI.prefix { $0 != ":" }) }
 
@@ -88,15 +89,32 @@ final class ConnectorsModel {
     }
 
     /// The same tools as one group per server, for when they are held back until needed.
+    /// GitHub brings a second group with it: the tools for working on a repository's code.
     func groups(for ids: [UUID]) -> [ToolGroup] {
-        ids.compactMap { server($0) }.compactMap { server -> ToolGroup? in
-            guard let connection = connection(for: server), !server.needsSignIn else { return nil }
-            return ToolGroup(
+        ids.compactMap { server($0) }.flatMap { server -> [ToolGroup] in
+            guard let connection = connection(for: server), !server.needsSignIn else { return [] }
+            let group = ToolGroup(
                 name: server.toolPrefix, title: server.name, summary: server.summary ?? "",
                 tools: FileEditTool.adding(
                     to: server.enabledTools.map { MCPTool(connection: connection, server: server, info: $0) }, title: server.name),
                 guidance: server.instructions ?? "")
+            guard Self.isGitHub(server) else { return [group] }
+            return [group, RepoTool.group(workspace: workspace(for: server, connection: connection))]
         }
+    }
+
+    private static func isGitHub(_ server: MCPServerConfig) -> Bool {
+        URL(string: server.url)?.host?.hasSuffix("githubcopilot.com") == true
+    }
+
+    /// The copy of a repository that the code tools work on, signed in to GitHub as the connector is.
+    private func workspace(for server: MCPServerConfig, connection: MCPConnection) -> Workspace {
+        if let existing = workspaces[server.id] { return existing }
+        let made = Workspace(
+            directory: store.root.appendingPathComponent("workspace", isDirectory: true),
+            host: GitHubHost { await connection.accessToken() })
+        workspaces[server.id] = made
+        return made
     }
 
     func toolCount(for ids: [UUID]) -> Int {

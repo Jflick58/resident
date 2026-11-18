@@ -1,6 +1,6 @@
 # Evals
 
-400 cases that put a model through Resident's harness on a Mac and check what it did. They exist to answer two questions with more than a handful of examples: how good is this model inside the harness, and did a change to the harness help or hurt.
+407 cases that put a model through Resident's harness on a Mac and check what it did. They exist to answer two questions with more than a handful of examples: how good is this model inside the harness, and did a change to the harness help or hurt.
 
 Everything outside the model is faked, so a run depends on the model and the harness and nothing else:
 
@@ -66,7 +66,7 @@ A model does not give the same answer twice, so a few cases flip between any two
 | `skills` | 10 | Loads a skill when a task matches, and not otherwise. |
 | `web` | 20 | Searches, reads pages, and says so when there is nothing to find. |
 | `honesty` | 21 | Does not invent what it could not find, asks when it lacks what it needs, and ignores orders hidden in a web page. |
-| `pullrequest` | 13 | Opens a pull request with GitHub's real tool definitions: reads the file, makes a branch, changes only what was asked, and never merges. |
+| `pullrequest` | 20 | Opens a pull request on a repository: clones it, finds the file, changes only what was asked, and never merges. |
 
 ## Writing cases
 

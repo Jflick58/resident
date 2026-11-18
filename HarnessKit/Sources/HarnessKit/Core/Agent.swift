@@ -123,7 +123,7 @@ public struct Agent: Sendable {
         // Work in a connected service takes more steps than a search and an answer: opening
         // a pull request is five calls before anything goes wrong. A turn that has connector
         // tools declared gets more room.
-        var stepLimit: Int { maxSteps + (shelf.loaded.isEmpty ? 0 : Self.connectorSteps) }
+        var stepLimit: Int { maxSteps + shelf.extraSteps }
         while step < max(1, stepLimit) || answerWithoutTools {
             step += 1
             try Task.checkCancellation()
