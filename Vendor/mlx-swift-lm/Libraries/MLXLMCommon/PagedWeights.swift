@@ -144,36 +144,41 @@ final class PagedWeights: @unchecked Sendable {
         return held
     }
 
+    /// Where pinning is done, one thing at a time and never on the caller's thread: asking for
+    /// pages the system took back means reading them from storage, gigabytes of them, and the
+    /// caller is often the main thread.
+    private static let pinning = DispatchQueue(label: "resident.weights.pinning", qos: .userInitiated)
     /// Follows the weights as they are read while they are held: once a second, what has come into memory is pinned too.
     nonisolated(unsafe) private static var follower: DispatchSourceTimer?
 
-    static func holdAll() {
+    private static var all: [PagedWeights] {
         lock.lock()
-        let all = Array(open.values)
-        if follower == nil {
-            let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        defer { lock.unlock() }
+        return Array(open.values)
+    }
+
+    static func holdAll() {
+        pinning.async {
+            for weights in all { weights.pin(holding: true) }
+            guard follower == nil else { return }
+            let timer = DispatchSource.makeTimerSource(queue: pinning)
             timer.schedule(deadline: .now() + 1, repeating: 1)
-            timer.setEventHandler {
-                lock.lock()
-                let all = Array(open.values)
-                lock.unlock()
-                for weights in all { weights.pin(holding: true) }
-            }
+            timer.setEventHandler { for weights in all { weights.pin(holding: true) } }
             timer.resume()
             follower = timer
         }
-        lock.unlock()
-        for weights in all { weights.pin(holding: true) }
     }
 
     static func releaseAll() {
-        lock.lock()
-        follower?.cancel()
-        follower = nil
-        let all = Array(open.values)
-        lock.unlock()
-        for weights in all { weights.unpin() }
+        pinning.async {
+            follower?.cancel()
+            follower = nil
+            for weights in all { weights.unpin() }
+        }
     }
+
+    /// Waits until every hold and release asked for so far has been done. For tests.
+    static func settlePinning() { pinning.sync {} }
 
     private let base: UnsafeMutableRawPointer
     private let length: Int

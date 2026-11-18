@@ -98,6 +98,29 @@ struct PagedWeightsTests {
         weights.unpin()
     }
 
+    @Test(.enabled(if: hasGPU)) func `holding is asked for from any thread and done on another`() throws {
+        guard #available(macOS 15, iOS 18, *) else { return }
+        let (url, _) = try weightsFile()
+        let (isOn, shares, holds) = (WeightMapping.isOn, WeightMapping.sharesPages, WeightMapping.holds)
+        defer { (WeightMapping.isOn, WeightMapping.sharesPages, WeightMapping.holds) = (isOn, shares, holds) }
+        (WeightMapping.isOn, WeightMapping.sharesPages, WeightMapping.holds) = (true, true, true)
+        let weights = try PagedWeights.shared(for: url)
+        #expect(PagedWeights.gpuReads(try #require(weights.bytes.baseAddress), length: weights.bytes.count))
+
+        WeightMapping.hold()
+        PagedWeights.settlePinning()
+        #expect(weights.held.pinned > 0 && WeightMapping.held.pinned >= weights.held.pinned)
+        WeightMapping.release()
+        PagedWeights.settlePinning()
+        #expect(weights.held.pinned == 0)
+
+        // Switched off, a hold does nothing.
+        WeightMapping.holds = false
+        WeightMapping.hold()
+        PagedWeights.settlePinning()
+        #expect(weights.held.pinned == 0)
+    }
+
     @Test func `a mapping is private unless asked to be shared, and says so`() throws {
         let (url, large) = try weightsFile(large: 256 * 1024)
         #expect(!WeightMapping.sharesPages)
