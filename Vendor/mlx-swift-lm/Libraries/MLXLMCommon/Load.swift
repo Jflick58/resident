@@ -181,6 +181,11 @@ func loadModelCheckpoint(urls: [URL], isRead: @escaping @Sendable (String) -> Bo
         let names: [String]?
     }
 
+    // Resident: before anything reads a file's header. A file being mapped is rearranged in
+    // place the first time, which moves its tensors, and one whose rearrangement was cut
+    // short is not whole until that is finished. Once for each file, not once for each worker.
+    for url in Set(urls) { try WeightMapping.prepare(url) }
+
     let items: [WorkItem] = {
         var spansPerFile = [[SafetensorSpan]?]()
         var totalBytes: Int64 = 0
@@ -242,8 +247,8 @@ func loadModelCheckpoint(urls: [URL], isRead: @escaping @Sendable (String) -> Bo
                     selected = all.filter { isRead($0.key) }
                 }
 
-                // EXPERIMENT (Resident): take the large tensors as views of a mapped file. The arrays
-                // from `loadArrays` are not read until evaluated, so the ones replaced here never are.
+                // Resident: take the large tensors as views of the file, mapped. The arrays from
+                // `loadArrays` are not read until evaluated, so the ones replaced here never are.
                 if WeightMapping.isOn, let paged = try? PagedWeights.shared(for: item.url) {
                     for (name, array) in selected {
                         if let mapped = paged.array(named: name, like: array) { selected[name] = mapped }

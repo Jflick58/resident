@@ -277,7 +277,7 @@ public enum ModelFit {
 
         // 4. Storage, checked only for a model that would otherwise run.
         func storageProblem() -> FitReport? {
-            guard device.freeDiskBytes > 0, downloadBytes * (weightsAreMapped ? 2 : 1) + (500 << 20) > device.freeDiskBytes else { return nil }
+            guard device.freeDiskBytes > 0, downloadBytes + (500 << 20) > device.freeDiskBytes else { return nil }
             return report(
                 .wontRun, "Not enough storage",
                 "The download is \(format(downloadBytes)) and this device has \(format(device.freeDiskBytes)) free.")

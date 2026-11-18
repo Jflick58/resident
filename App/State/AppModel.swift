@@ -543,6 +543,10 @@ final class AppModel {
             self?.downloadEnded(repo, error: error)
         }
         downloader.start(modelsDirectory: store.modelsDirectory)
+        // An earlier version kept a second copy of each mapped model's weights. Off the main thread:
+        // removing 8 GB takes a moment.
+        let models = store.modelsDirectory
+        Task.detached(priority: .utility) { ModelDownloader.removeLeftoverCopies(in: models) }
 
         for install in pending {
             downloads[install.repo] = DownloadState(fraction: fraction(of: install, receiving: 0))

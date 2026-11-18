@@ -36,12 +36,46 @@ public struct ModelDownloader: Sendable {
     }
 
     static func isPresent(_ file: HubModelInfo.File, in directory: URL) -> Bool {
-        let path = directory.appendingPathComponent(file.path).path
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+        isWhole(directory.appendingPathComponent(file.path), size: file.size)
+    }
+
+    /// Whether the file at `url` is the whole of one that is `size` bytes where it comes from.
+    ///
+    /// A weights file used straight from storage has been rearranged for that (its large
+    /// tensors moved to page boundaries) and is a little longer than what was downloaded. Its
+    /// header says what size it was, in the first few hundred bytes.
+    public static func isWhole(_ url: URL, size expected: Int64) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
             let size = attributes[.size] as? Int64
         else { return false }
-        return file.size == 0 ? size > 0 : size == file.size
+        if expected == 0 { return size > 0 }
+        if size == expected { return true }
+        guard size > expected, url.pathExtension == "safetensors", let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        let start = String(decoding: ((try? handle.read(upToCount: 512)) ?? Data()).dropFirst(8), as: UTF8.self)
+        return start.contains("\"\(rearrangedSizeKey)\":\"\(expected)\"")
     }
+
+    /// Removes the second copy of each model's weights that an earlier version of the app kept
+    /// beside them (`<name>.paged`): it doubled what a model took on the device, and the weights
+    /// file is now used as it is. Returns how many bytes that freed.
+    @discardableResult
+    public static func removeLeftoverCopies(in modelsDirectory: URL) -> Int64 {
+        let manager = FileManager.default
+        var freed: Int64 = 0
+        for folder in (try? manager.contentsOfDirectory(at: modelsDirectory, includingPropertiesForKeys: nil)) ?? [] {
+            for file in (try? manager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+            where file.pathExtension == "paged" || file.pathExtension == "paged-partial" {
+                let size = Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+                if (try? manager.removeItem(at: file)) != nil { freed += size }
+            }
+        }
+        return freed
+    }
+
+    /// The name the engine records a rearranged weights file's first size under. The same
+    /// words as `AlignedWeights.sizeKey` in the vendored model library, which writes it.
+    static let rearrangedSizeKey = "resident.original_size"
 
     public func download(
         _ info: HubModelInfo, to directory: URL, progress: @escaping @Sendable (Progress) -> Void
