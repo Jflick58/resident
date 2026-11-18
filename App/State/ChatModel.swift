@@ -49,11 +49,17 @@ final class ChatModel {
         app.update(conversation)
     }
 
-    /// How hard the model thinks in this chat: the agent's setting unless changed here.
-    var thinking: ThinkingLevel { conversation.thinking ?? preset.thinking }
+    /// How hard the model thinks in this chat when the chat has not said: as the agent is set to,
+    /// or not at all for a model that fills the device's memory.
+    private var standardThinking: ThinkingLevel {
+        ThinkingLevel.standard(agent: preset.thinking, modelFillsMemory: app.fillsMemory(modelOverride ?? app.library.selected))
+    }
+
+    /// How hard the model thinks in this chat: the standard for its agent and model unless changed here.
+    var thinking: ThinkingLevel { conversation.thinking ?? standardThinking }
 
     func setThinking(_ level: ThinkingLevel) {
-        conversation.thinking = level == preset.thinking ? nil : level
+        conversation.thinking = level.kept(standard: standardThinking)
         app.update(conversation)
     }
 
@@ -221,7 +227,7 @@ final class ChatModel {
                     earlier: conversation.activeSummary))
                 var agent = Agent(
                     provider: model.provider, tools: tools,
-                    options: preset.options(sampling: model.sampling, thinking: conversation.thinking),
+                    options: preset.options(sampling: model.sampling, thinking: thinking),
                     // Leave room in the context for the reply itself.
                     contextBudgetTokens: max(2048, model.contextTokens - preset.maxOutputTokens))
                 agent.groups = groups

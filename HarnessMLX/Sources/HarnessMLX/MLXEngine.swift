@@ -123,7 +123,7 @@ public actor MLXEngine {
     }
 
     /// True when the model's weights take more than half of the device's memory.
-    nonisolated static func fillsMemory(_ directory: URL) -> Bool {
+    public nonisolated static func fillsMemory(_ directory: URL) -> Bool {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
         let weights = files.filter { $0.pathExtension == "safetensors" && !$0.lastPathComponent.hasPrefix("prompt-cache") }
             .reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }

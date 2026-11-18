@@ -366,6 +366,9 @@ struct ComposerView: View {
     private func send() {
         guard canSend else { return }
         dictation.cancel()
+        // The keyboard goes away: the reply gets the screen, and the keyboard and what serves it give
+        // their memory back, which a model that fills the device's memory is short of while it writes.
+        isFocused = false
         chat.send(text, images: images, documents: documents)
         text = ""
         images = []

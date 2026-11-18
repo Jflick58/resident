@@ -123,6 +123,19 @@ public enum ThinkingLevel: String, Codable, CaseIterable, Sendable, Identifiable
 
     public var id: String { rawValue }
 
+    /// How hard a model thinks in a chat that has not said: as its agent is set to, or not at all
+    /// when the model fills the device's memory. Such a model writes a few tokens a second and
+    /// slows as a reply goes on, because the rest of the device is left too little to live on: on a
+    /// 12 GB phone a 27B's replies with thinking fell from 6 tokens a second to 2 over 400 tokens,
+    /// and without it came at 7. Thinking can still be switched on in the chat.
+    public static func standard(agent: ThinkingLevel, modelFillsMemory: Bool) -> ThinkingLevel {
+        modelFillsMemory ? .off : agent
+    }
+
+    /// What a chat keeps when this level is picked in it: nothing when it is the standard one, so
+    /// the chat goes on following its agent and its model.
+    public func kept(standard: ThinkingLevel) -> ThinkingLevel? { self == standard ? nil : self }
+
     public var title: String {
         switch self {
         case .off: return "Off"

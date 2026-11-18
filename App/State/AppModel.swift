@@ -47,6 +47,7 @@ final class AppModel {
     var loadState = LoadState.idle
 
     private var chatModels: [UUID: ChatModel] = [:]
+    @ObservationIgnored private var memoryFilling: [String: Bool] = [:]
     /// Downloads in flight. Saved so they can finish after the app is closed and reopened.
     private var pending: [PendingInstall]
     private let downloader = BackgroundDownloader.shared
@@ -259,6 +260,16 @@ final class AppModel {
     /// Lets go of the loaded model, so that the next message loads it afresh with the settings as they are now.
     func reloadModel() {
         Task { await MLXEngine.shared.unload() }
+    }
+
+    /// True when this is a model on the device whose weights fill its memory. Asked on every look at
+    /// the screen, so the answer for each model is kept: the size of its files does not change.
+    func fillsMemory(_ ref: ModelRef?) -> Bool {
+        guard case .local(let repo)? = ref, !isSimulator else { return false }
+        if let known = memoryFilling[repo] { return known }
+        let fills = MLXEngine.fillsMemory(store.modelDirectory(for: repo))
+        memoryFilling[repo] = fills
+        return fills
     }
 
     /// A chat's turn has begun or ended. The model is at work from one to the other.

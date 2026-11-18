@@ -29,6 +29,9 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   it only messages it has not seen, so each agent step processes new tokens
   rather than the whole transcript. Thinking is switched through the model's
   chat template and capped with a token budget at the Low and Medium levels.
+  A model whose weights fill the device's memory thinks only when it is
+  switched on in the chat: on a 12 GB phone a 27B's replies with thinking fell
+  from 6 tokens a second to 2 over 400 tokens, and without it came at 7.
   Tool calls are held to valid syntax by a grammar (`ToolCallGrammar.swift`):
   text and thinking stay free, and once the model opens a tool call only a
   declared tool name and schema-valid arguments can follow.
