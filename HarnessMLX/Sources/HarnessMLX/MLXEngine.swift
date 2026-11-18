@@ -23,6 +23,8 @@ public actor MLXEngine {
 
     private var container: ModelContainer?
     private var loadedDirectory: URL?
+    /// True when the loaded model's weights are mapped and take more than half of the device's memory.
+    private var loadedFillsMemory = false
 
     private var session: ChatSession?
     private var sessionKey: SessionKey?
@@ -104,6 +106,7 @@ public actor MLXEngine {
         case "0": HadamardQuantizedLinear.sharesScales = false
         default: HadamardQuantizedLinear.sharesScales = Self.mapsWeights && Self.fillsMemory(directory)
         }
+        loadedFillsMemory = Self.mapsWeights && Self.fillsMemory(directory)
         let handlers = LoadProgressHandlers(weights: { value in progress?(value.fractionCompleted) })
         let started = Date()
         let loaded = try await loadModelContainer(
@@ -130,6 +133,7 @@ public actor MLXEngine {
         sessionMessageIDs = []
         container = nil
         loadedDirectory = nil
+        loadedFillsMemory = false
         HadamardQuantizedLinear.forgetRotations()
         MLX.Memory.clearCache()
     }
@@ -562,7 +566,12 @@ public actor MLXEngine {
                 temperature: Float(request.options.temperature), topP: Float(request.options.topP))
         }
         parameters.repetitionPenalty = request.options.repetitionPenalty.map(Float.init)
-        if let step = Self.prefillStep { parameters.prefill.stepSize = step }
+        // A prompt is read some hundreds of tokens at a pass, and what a pass works with grows with
+        // its length: 947 tokens read 512 at a time took a 9B's memory 987 MB over where it settles,
+        // 128 at a time 379 MB, in the same time. A model that fills the device's memory has no such
+        // room: on a 12 GB phone a 27B reading a tool's result went 1.25 GB over, and the system
+        // made the room by taking it from everything else.
+        if let step = Self.prefillStep ?? (loadedFillsMemory ? Self.tightPrefillStep : nil) { parameters.prefill.stepSize = step }
 
         // Thinking on or off, expressed the way this model's chat template expects.
         let reasoning = await container.configuration.reasoningConfig
@@ -871,6 +880,9 @@ extension MLXEngine {
     }
 
     public nonisolated static func setPrefillStep(_ tokens: Int?) { tuning.withLock { $0.prefillStep = tokens } }
+
+    /// Tokens of a prompt read in one pass by a model that fills the device's memory, unless a step is set.
+    static let tightPrefillStep = 128
 
     public nonisolated static func setDeclaresToolsLate(_ on: Bool) { tuning.withLock { $0.lateTools = on } }
 
