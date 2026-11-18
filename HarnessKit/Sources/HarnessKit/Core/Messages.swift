@@ -160,16 +160,21 @@ public struct GenerationOptions: Codable, Hashable, Sendable {
     /// Above 1 discourages repeating recent words. Nil leaves repetition alone.
     public var repetitionPenalty: Double?
     public var thinking: ThinkingLevel
+    /// True for a request that nothing will follow: a chat's title, a fact for memory. A provider
+    /// that keeps a model's reading of a chat between requests leaves that as it is, and the chat
+    /// carries on from it afterwards. Nil means false.
+    public var standsAlone: Bool?
 
     public init(
         maxOutputTokens: Int = 2048, temperature: Double = 0.6, topP: Double = 0.95, repetitionPenalty: Double? = nil,
-        thinking: ThinkingLevel = .low
+        thinking: ThinkingLevel = .low, standsAlone: Bool? = nil
     ) {
         self.maxOutputTokens = maxOutputTokens
         self.temperature = temperature
         self.topP = topP
         self.repetitionPenalty = repetitionPenalty
         self.thinking = thinking
+        self.standsAlone = standsAlone
     }
 }
 
