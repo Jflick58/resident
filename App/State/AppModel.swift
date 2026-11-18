@@ -238,6 +238,9 @@ final class AppModel {
     /// file, and nil otherwise. Asks the system about every page of the file, so not for the main thread.
     nonisolated static func weightsInMemory() -> (inMemory: Int, mapped: Int)? { MLXEngine.mappedWeights }
 
+    /// How much of a long prompt the model has read so far, in tokens, and nil when it is not reading one.
+    nonisolated static func promptProgress() -> (read: Int, total: Int)? { MLXEngine.promptProgress }
+
     /// EXPERIMENT. How the next mapped model's weights are kept: "shared" (the file's own pages),
     /// "held" (shared, and pinned while a turn runs), or "copied" (the GPU's own copies, as at first).
     nonisolated static func setWeightKeeping(_ name: String) {
