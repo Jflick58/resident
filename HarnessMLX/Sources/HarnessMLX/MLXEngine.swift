@@ -369,12 +369,14 @@ public actor MLXEngine {
                 }
                 if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
                     let held = MLXEngine.memoryInUse
+                    let weights = WeightMapping.held
                     FileHandle.standardError.write(
                         String(
-                            format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most\n",
+                            format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most, weights %d MB in memory (%@: copies %d MB)\n",
                             info.promptTokenCount, info.promptTime, wait, info.generationTokenCount, info.tokensPerSecond,
                             (cache?.memoryBytes ?? 0) >> 20, cache?.compressedLayerCount ?? 0, cache?.pendingLayerCount ?? 0,
-                            cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20
+                            cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20, weights.inMemory >> 20,
+                            weights.readsFilePages ? "shared" : "private", weights.copied >> 20
                         ).data(using: .utf8)!)
                 }
                 switch info.stopReason {
@@ -717,7 +719,7 @@ extension MLXEngine {
         }
         func megabytes(_ bytes: Int) -> String { "\(bytes >> 20) MB" }
         let held = memoryInUse
-        let weights = WeightMapping.resident
+        let weights = WeightMapping.held
         #if os(iOS)
             let available = megabytes(os_proc_available_memory())
         #else
@@ -730,7 +732,8 @@ extension MLXEngine {
             ProcessInfo.processInfo.thermalState.rawValue)
             + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  cache \(megabytes(cacheBytes))  "
             + "MLX in use \(megabytes(held.active)) kept \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
-            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))  "
+            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped)) "
+            + "(\(weights.readsFilePages ? "shared" : "private"): copies \(megabytes(weights.copied)), squeezed \(megabytes(weights.compressed)))  "
             + "phone: free \(megabytes(system.free)) apps \(megabytes(system.written)) files \(megabytes(system.files)) "
             + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readBack)) during the reply\n"
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")

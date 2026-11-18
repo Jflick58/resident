@@ -1,6 +1,10 @@
 import Foundation
 import MLX
 
+#if canImport(Metal)
+import Metal
+#endif
+
 /// Resident: weights used straight from a file mapped into memory.
 ///
 /// iOS limits an app by the memory it has written to. `loadArrays` reads every weight
@@ -14,14 +18,37 @@ import MLX
 /// weights file is rearranged, in place, with every large tensor moved to the start of
 /// a page (``AlignedWeights``). It stays one file, a few megabytes longer, and loads
 /// the ordinary way as well.
+///
+/// The file is mapped shared, not private. Through a private mapping the system hands the
+/// GPU its own copy of every page it touches. The copies are not charged to the app either,
+/// but they are no longer pages of the file: the system cannot drop them, only compress
+/// them, and packed weights do not compress. A model that fills a phone's memory then leaves
+/// the system nothing it can give back, and when it needs memory the whole phone stalls.
+/// Through a shared mapping the GPU reads the file's own pages, and the first use of a page
+/// costs no copy. The mapping is read only, and a write through it changes nothing.
 public enum WeightMapping {
     /// Off unless something turns it on before a model is loaded.
     nonisolated(unsafe) public static var isOn = false
     /// Tensors smaller than this are loaded the usual way: a page each would waste more than it saves.
     static let smallest = 64 * 1024
+    /// `HARNESS_MAP=private` maps the old way, to compare the two.
+    static let sharesPages = ProcessInfo.processInfo.environment["HARNESS_MAP"] != "private"
 
-    /// How much of the mapped weights is in memory right now, and how much is mapped, in bytes.
-    public static var resident: (inMemory: Int, mapped: Int) { PagedWeights.resident }
+    /// How the mapped weights are held right now, in bytes.
+    public struct Held: Sendable {
+        /// Mapped in all.
+        public var mapped = 0
+        /// In memory.
+        public var inMemory = 0
+        /// In memory as the system's own copies instead of the file's pages.
+        public var copied = 0
+        /// Copies the system has compressed to make room. Pages of the file are never compressed.
+        public var compressed = 0
+        /// False when a file had to be mapped privately, so the GPU works on copies.
+        public var readsFilePages = true
+    }
+
+    public static var held: Held { PagedWeights.held }
 
     /// Puts a weights file right before it is read, whichever way it is about to be loaded.
     ///
@@ -62,29 +89,34 @@ final class PagedWeights: @unchecked Sendable {
         return made
     }
 
-    static var resident: (inMemory: Int, mapped: Int) {
+    static var held: WeightMapping.Held {
         lock.lock()
         let all = Array(open.values)
         lock.unlock()
-        let page = Int(getpagesize())
-        var inMemory = 0
-        var mapped = 0
+        var held = WeightMapping.Held()
         for weights in all {
-            mapped += weights.length
-            var pages = [CChar](repeating: 0, count: (weights.length + page - 1) / page)
-            if mincore(weights.base, weights.length, &pages) == 0 { inMemory += pages.reduce(0) { $0 + ($1 & 1 != 0 ? page : 0) } }
+            let one = weights.held
+            held.mapped += one.mapped
+            held.inMemory += one.inMemory
+            held.copied += one.copied
+            held.compressed += one.compressed
+            if !one.readsFilePages { held.readsFilePages = false }
         }
-        return (inMemory, mapped)
+        return held
     }
 
     private let base: UnsafeMutableRawPointer
     private let length: Int
+    /// True when the file is mapped shared, so the GPU reads its own pages.
+    let sharesPages: Bool
     /// Where each tensor that can be used in place starts in the mapping, and how long it is.
     private let places: [String: (offset: Int, bytes: Int)]
 
     /// Maps the file as it is. Tensors that start on a page boundary are used in place; in a file
     /// ``WeightMapping/prepare(_:)`` has rearranged, that is every large one.
-    private init(source: URL) throws {
+    ///
+    /// - Parameter shared: false maps privately without trying the shared way.
+    init(source: URL, shared: Bool = WeightMapping.sharesPages) throws {
         let descriptor = Darwin.open(source.path, O_RDONLY)
         guard descriptor >= 0 else { throw AlignedWeights.Failure.unreadable }
         defer { close(descriptor) }
@@ -95,14 +127,60 @@ final class PagedWeights: @unchecked Sendable {
             places[entry.name] = (header.dataStart + entry.begin, entry.bytes)
         }
         var status = stat()
-        guard fstat(descriptor, &status) == 0, status.st_size > 0, !places.isEmpty else { throw AlignedWeights.Failure.unreadable }
-        let total = Int(status.st_size)
-        guard let base = mmap(nil, total, PROT_READ, MAP_PRIVATE, descriptor, 0), base != MAP_FAILED else {
+        guard fstat(descriptor, &status) == 0, status.st_size > 0, let first = places.values.map(\.offset).min() else {
             throw AlignedWeights.Failure.unreadable
         }
-        self.base = base
+        let total = Int(status.st_size)
+
+        // Shared when the GPU reads it that way, which one page of the first tensor shows.
+        var mapped: UnsafeMutableRawPointer?
+        if shared, let tried = mmap(nil, total, PROT_READ, MAP_SHARED, descriptor, 0), tried != MAP_FAILED {
+            if Self.gpuReads(tried + first, length: page) { mapped = tried } else { munmap(tried, total) }
+        }
+        sharesPages = mapped != nil
+        if mapped == nil, let tried = mmap(nil, total, PROT_READ, MAP_PRIVATE, descriptor, 0), tried != MAP_FAILED { mapped = tried }
+        guard let mapped else { throw AlignedWeights.Failure.unreadable }
+        base = mapped
         self.places = places
         length = total
+    }
+
+    /// True when the GPU reads this stretch of a mapping where it lies and gets the file's bytes.
+    /// Where it cannot, MLX would quietly copy every tensor into memory of its own.
+    static func gpuReads(_ pointer: UnsafeMutableRawPointer, length: Int) -> Bool {
+        #if canImport(Metal)
+        guard let device = MTLCreateSystemDefaultDevice(),
+            let source = device.makeBuffer(
+                bytesNoCopy: pointer, length: length, options: [.storageModeShared, .hazardTrackingModeUntracked], deallocator: nil),
+            let target = device.makeBuffer(length: length, options: .storageModeShared),
+            let commands = device.makeCommandQueue()?.makeCommandBuffer(), let blit = commands.makeBlitCommandEncoder()
+        else { return false }
+        blit.copy(from: source, sourceOffset: 0, to: target, destinationOffset: 0, size: length)
+        blit.endEncoding()
+        commands.commit()
+        commands.waitUntilCompleted()
+        return commands.error == nil && memcmp(target.contents(), pointer, length) == 0
+        #else
+        return false
+        #endif
+    }
+
+    /// How this file's pages are held, by asking the system about each.
+    var held: WeightMapping.Held {
+        let page = Int(getpagesize())
+        var held = WeightMapping.Held(mapped: length, readsFilePages: sharesPages)
+        var pages = [CChar](repeating: 0, count: (length + page - 1) / page)
+        guard mincore(base, length, &pages) == 0 else { return held }
+        for flags in pages {
+            let flags = Int32(UInt8(bitPattern: flags))
+            if flags & MINCORE_INCORE != 0 {
+                held.inMemory += page
+                if flags & (MINCORE_COPIED | MINCORE_ANONYMOUS) != 0 { held.copied += page }
+            } else if flags & MINCORE_PAGED_OUT != 0 {
+                held.compressed += page
+            }
+        }
+        return held
     }
 
     /// The tensor as a view of the mapped file, or nil when it cannot be used in place.
@@ -110,4 +188,7 @@ final class PagedWeights: @unchecked Sendable {
         guard let place = places[name], place.bytes == loaded.nbytes else { return nil }
         return MLXArray(rawPointer: base + place.offset, loaded.shape, dtype: loaded.dtype) {}
     }
+
+    /// The whole mapping, for tests.
+    var bytes: UnsafeMutableRawBufferPointer { UnsafeMutableRawBufferPointer(start: base, count: length) }
 }
