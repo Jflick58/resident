@@ -39,6 +39,11 @@ struct PagedWeightsTests {
         data.append(large)
         try data.write(to: url)
         try AlignedWeights.align(url)
+        // On storage, as a model's weights are long before they are mapped: pages still waiting to
+        // be written cannot be dropped.
+        let handle = try FileHandle(forUpdating: url)
+        try handle.synchronize()
+        try handle.close()
         return (url, large)
     }
 
@@ -119,6 +124,37 @@ struct PagedWeightsTests {
         WeightMapping.hold()
         PagedWeights.settlePinning()
         #expect(weights.held.pinned == 0)
+    }
+
+    @Test(.enabled(if: hasGPU)) func `what was read while loading is dropped, and what is used after comes back and is pinned`() throws {
+        guard #available(macOS 15, iOS 18, *) else { return }
+        let (url, large) = try weightsFile()
+        let weights = try PagedWeights(source: url)
+        let bytes = weights.bytes
+        // Read once without the GPU, as loading reads what it only looks at. (On a Mac the GPU keeps
+        // what it has read in place for as long as its buffer lives, so that is left out here.)
+        var sum = 0
+        for index in stride(from: 0, to: bytes.count, by: 4096) { sum &+= Int(bytes[index]) }
+        #expect(weights.held.inMemory > 0)
+
+        weights.forgetLoading()
+        #expect(weights.held.inMemory == 0 && weights.held.pinned == 0)
+
+        // The file is still all there, read again from storage, and what the GPU goes through is pinned.
+        let start = try offset(of: "layer.weight", in: url)
+        #expect(Data(bytes[start ..< (start + large.count)]) == large)
+        #expect(PagedWeights.gpuReads(try #require(bytes.baseAddress), length: bytes.count))
+        weights.pin(holding: true)
+        #expect(weights.held.pinned > 0 && weights.held.copied == 0)
+
+        // Forgetting again unpins, whatever the GPU still holds.
+        weights.forgetLoading()
+        #expect(weights.held.pinned == 0)
+        weights.unpin()
+    }
+
+    @Test func `pinning is on unless switched off`() {
+        #expect(WeightMapping.sharesPages && WeightMapping.holds)
     }
 
     @Test func `a mapping can be made private, and says so`() throws {

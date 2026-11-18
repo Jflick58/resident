@@ -110,7 +110,13 @@ public actor MLXEngine {
             from: directory, using: #huggingFaceTokenizerLoader(), progress: handlers)
         container = loaded
         loadedDirectory = directory
-        Self.note(String(format: "loaded %@ in %.1fs", directory.lastPathComponent, Date().timeIntervalSince(started)))
+        // What loading read is not what the model goes through at every pass, and what is in memory is what gets pinned.
+        let readWhileLoading = WeightMapping.held.inMemory
+        WeightMapping.forgetLoading()
+        Self.note(
+            String(
+                format: "loaded %@ in %.1fs, having read %d MB of its weights", directory.lastPathComponent,
+                Date().timeIntervalSince(started), readWhileLoading >> 20))
     }
 
     /// True when the model's weights take more than half of the device's memory.

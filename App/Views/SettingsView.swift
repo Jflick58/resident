@@ -6,7 +6,8 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @AppStorage("mapWeights") private var mapsWeights = false
-    @AppStorage("weightKeeping") private var weightKeeping = "shared"
+    /// Under a new name since pinning became the choice to start from: what was picked while the three were being tried does not carry over.
+    @AppStorage("weightsKept") private var weightKeeping = "held"
 
     var body: some View {
         NavigationStack {
@@ -88,8 +89,8 @@ struct SettingsView: View {
                         .onChange(of: mapsWeights) { ModelFit.weightsAreMapped = mapsWeights }
                     if mapsWeights {
                         Picker("Keep Weights", selection: $weightKeeping) {
-                            Text("Shared").tag("shared")
                             Text("Shared and Pinned").tag("held")
+                            Text("Shared").tag("shared")
                             Text("Copied").tag("copied")
                         }
                         // The model is loaded again with the new choice the next time it is used.
@@ -98,7 +99,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Experimental")
                 } footer: {
-                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model rearranges its weights file, which takes a few minutes for a large one. Takes effect the next time a model is loaded.\n\nKeep Weights is how they stay in memory. Shared: the graphics processor works on the file's own pages, which the system can take back and read again. Shared and Pinned: the same, held in place while a reply is being written. Copied: it works on its own copies, which the system can only squeeze; a model that fills this device's memory is closed when it does.")
+                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model rearranges its weights file, which takes a few minutes for a large one. Takes effect the next time a model is loaded.\n\nKeep Weights is how they stay in memory. Shared and Pinned: the graphics processor works on the file's own pages, held in place while a reply is being written and given up after. Shared: the same, not held; a model that fills this device's memory can then spend a reply reading its weights back. Copied: it works on its own copies, which the system can only squeeze; such a model is closed when it does.")
                 }
             }
             .navigationTitle("Settings")

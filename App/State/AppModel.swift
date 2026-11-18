@@ -246,8 +246,8 @@ final class AppModel {
     /// file, and nil otherwise. Asks the system about every page of the file, so not for the main thread.
     nonisolated static func weightsInMemory() -> (inMemory: Int, mapped: Int)? { MLXEngine.mappedWeights }
 
-    /// EXPERIMENT. How the next mapped model's weights are kept: "shared" (the file's own pages),
-    /// "held" (shared, and pinned while a turn runs), or "copied" (the GPU's own copies, as at first).
+    /// EXPERIMENT. How the next mapped model's weights are kept: "held" (the file's own pages, pinned
+    /// while a turn runs), "shared" (the same, not pinned), or "copied" (the GPU's own copies, as at first).
     nonisolated static func setWeightKeeping(_ name: String) {
         MLXEngine.setSharesWeightPages(name == "shared" || name == "held")
         MLXEngine.setHoldsWeights(name == "held")
@@ -432,7 +432,7 @@ final class AppModel {
                 // memory: capped at 64 MB, Bonsai 9B on a Mac peaked at 419 MB charged, not 1.1 GB, at the same speed.
                 if UserDefaults.standard.bool(forKey: "mapWeights") { MLXEngine.setCacheLimit(megabytes: 64) }
                 // EXPERIMENT: how the mapped weights are kept in memory. A launch argument of the same name wins over the setting.
-                Self.setWeightKeeping(UserDefaults.standard.string(forKey: "weightKeeping") ?? "shared")
+                Self.setWeightKeeping(UserDefaults.standard.string(forKey: "weightsKept") ?? "held")
                 try await MLXEngine.shared.load(directory: directory) { fraction in
                     Task { @MainActor in
                         if case .loading = self.loadState {

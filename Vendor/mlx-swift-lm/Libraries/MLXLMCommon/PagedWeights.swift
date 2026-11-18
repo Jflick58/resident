@@ -29,8 +29,9 @@ import Metal
 /// times, the second starting after 1.6 seconds, with every page still in memory and none copied.
 /// The mapping is read only either way, and a write through it changes nothing.
 ///
-/// What has been read can also be pinned while the model is at work (`holds`). On that phone
-/// it made no reply faster and left the rest of the phone less to live on, so it is off.
+/// Shared pages are the cheapest thing a system short of memory can take, and the GPU keeps
+/// them in place only while a pass is using them. So what the model has read is also pinned
+/// while it is at work (`holds`): see `hold()`.
 public enum WeightMapping {
     /// Off unless something turns it on before a model is loaded.
     nonisolated(unsafe) public static var isOn = false
@@ -38,20 +39,20 @@ public enum WeightMapping {
     static let smallest = 64 * 1024
     /// Whether the next file is mapped shared. `HARNESS_MAP=copied` starts with it off, to compare the two.
     nonisolated(unsafe) public static var sharesPages = ProcessInfo.processInfo.environment["HARNESS_MAP"] != "copied"
-    /// Whether `hold()` does anything. `HARNESS_MAP=held` starts with it on.
-    nonisolated(unsafe) public static var holds = ProcessInfo.processInfo.environment["HARNESS_MAP"] == "held"
+    /// Whether `hold()` does anything. `HARNESS_MAP=shared` or `copied` starts with it off.
+    nonisolated(unsafe) public static var holds = !["shared", "copied"].contains(ProcessInfo.processInfo.environment["HARNESS_MAP"] ?? "")
 
     /// Keeps in memory the weights that have been read, and whatever is read from here on, until `release()`.
     ///
-    /// The GPU has the pages it is using kept in place only while it is using them, and MLX asks
-    /// for no more than that. Pinned, what the model has read stays put from the start of a turn
-    /// to its end (a Metal residency set over the same pages) and is given up between turns.
-    ///
-    /// Measured on a 12 GB phone with a 27B, it bought nothing. Unpinned, the shared pages were all
-    /// still in memory after the user had typed the next message. Pinned, the same reply was no
-    /// faster, and the rest of the phone read 9 GB back from storage while it was written, for want
-    /// of the memory: what is pinned includes what was read while loading, half a gigabyte the
-    /// model does not use again.
+    /// The GPU has the pages it is using kept in place only while a pass is using them, and MLX
+    /// asks for no more than that. Between passes they are ordinary pages of a file, the first
+    /// thing a system short of memory takes. On a 12 GB phone a 27B's second reply, unpinned,
+    /// had not started after 70 seconds: the system kept about 6.1 GB of the 6.8 GB the model
+    /// goes through at every pass, and the rest was read back from storage each time, 66 GB of
+    /// reading in all. Pinned (a Metal residency set over the same pages), what the model has
+    /// read stays put from the start of a turn to its end, and the system makes room out of what
+    /// is not being used. Between turns it is let go, so the rest of the phone can have it, and
+    /// what was taken is read back when the next turn starts.
     public static func hold() {
         guard holds, isOn else { return }
         PagedWeights.holdAll()
@@ -59,6 +60,12 @@ public enum WeightMapping {
 
     /// Lets go of what `hold()` pinned.
     public static func release() { PagedWeights.releaseAll() }
+
+    /// Drops from memory what was read while a model was loaded. Loading reads tensors the model
+    /// does not go through again (0.9 GB of a 27B's, half of which it never needs after), and
+    /// what is in memory is what gets pinned. What the model does need comes back when it is
+    /// first used. Shared mappings only: a private one would lose its copies for nothing.
+    public static func forgetLoading() { PagedWeights.forgetLoadingAll() }
 
     /// How the mapped weights are held right now, in bytes.
     public struct Held: Sendable {
@@ -176,6 +183,10 @@ final class PagedWeights: @unchecked Sendable {
             follower = nil
             for weights in all { weights.unpin() }
         }
+    }
+
+    static func forgetLoadingAll() {
+        pinning.sync { for weights in all { weights.forgetLoading() } }
     }
 
     /// Waits until every hold and release asked for so far has been done. For tests.
@@ -321,6 +332,30 @@ final class PagedWeights: @unchecked Sendable {
             pins.isHolding = true
         }
         #endif
+    }
+
+    /// Unpins everything and asks the system to drop the file's pages from memory. Pages in use stay.
+    func forgetLoading() {
+        guard sharesPages else { return }
+        #if canImport(Metal)
+        if #available(macOS 15, iOS 18, *) {
+            pinLock.lock()
+            if let pins, let set = pins.set as? any MTLResidencySet {
+                // The buffers go with their pool: while one is alive its pages may still be held.
+                autoreleasepool {
+                    set.endResidency()
+                    set.removeAllAllocations()
+                    set.commit()
+                    pins.buffers = []
+                    pins.bytes = 0
+                    pins.covered = [Bool](repeating: false, count: pins.covered.count)
+                    if pins.isHolding { set.requestResidency() }
+                }
+            }
+            pinLock.unlock()
+        }
+        #endif
+        msync(base, length, MS_INVALIDATE)
     }
 
     func unpin() {
