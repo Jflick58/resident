@@ -286,6 +286,17 @@ struct StubFetcher: HTTPFetching {
         #expect(SamplingSettings(generationConfig: ["do_sample": false, "temperature": 0.1]) == .standard)
     }
 
+    @Test func aModelThatFillsTheDevicesMemoryThinksOnlyWhenAsked() {
+        #expect(ThinkingLevel.standard(agent: .low, modelFillsMemory: false) == .low)
+        #expect(ThinkingLevel.standard(agent: .low, modelFillsMemory: true) == .off)
+        #expect(ThinkingLevel.standard(agent: .off, modelFillsMemory: false) == .off)
+        // Picking the standard level keeps nothing, so the chat follows its agent and model from then on.
+        #expect(ThinkingLevel.off.kept(standard: .off) == nil)
+        // Picking the agent's own level for such a model is a choice, and is kept.
+        #expect(ThinkingLevel.low.kept(standard: .off) == .low)
+        #expect(ThinkingLevel.low.kept(standard: .low) == nil)
+    }
+
     @Test func agentTemperatureWinsOverTheModels() throws {
         var agent = HarnessPreset.assistant
         let model = SamplingSettings(temperature: 0.1, topP: 0.9, repetitionPenalty: 1.1)
