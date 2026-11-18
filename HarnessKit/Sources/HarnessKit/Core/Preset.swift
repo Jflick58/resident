@@ -20,7 +20,8 @@ public struct HarnessPreset: Codable, Hashable, Sendable, Identifiable {
     public var temperature: Double?
     public var isBuiltIn: Bool
     /// The shape this was saved in. Before 2, every preset stored a temperature and 0.6 meant "no preference".
-    public var version = 2
+    /// Before 3 there were no file tools: an agent saved then gets them if it has any tools at all.
+    public var version = 3
 
     public init(
         id: UUID = UUID(), name: String, symbol: String, summary: String, systemPrompt: String,
@@ -59,6 +60,7 @@ public struct HarnessPreset: Codable, Hashable, Sendable, Identifiable {
         let stored = try container.decodeIfPresent(Double.self, forKey: .temperature)
         temperature = saved < 2 && stored == 0.6 ? nil : stored
         isBuiltIn = try container.decode(Bool.self, forKey: .isBuiltIn)
+        if saved < 3, !tools.isEmpty, !connectors.contains(.files) { connectors.append(.files) }
     }
 
     /// Generation options for this agent on a model with the given settings.
@@ -109,7 +111,7 @@ extension HarnessPreset {
             Answer directly and concisely. Use Markdown when it helps.
             When you pass on what a tool returned, give what the user asked about in plain words and leave out internal ids and field names.
             """,
-        tools: [.webSearch, .fetchPage, .runJavaScript, .saveMemory, .skills], connectors: [.calendar, .reminders],
+        tools: [.webSearch, .fetchPage, .runJavaScript, .saveMemory, .skills], connectors: [.calendar, .reminders, .files],
         thinking: .low, isBuiltIn: true)
 
     /// Coding help with a sandbox to check work.
@@ -122,7 +124,7 @@ extension HarnessPreset {
             Check your logic by running it before stating a result.
             If the request is ambiguous, state your assumption and proceed.
             """,
-        tools: [.runJavaScript, .webSearch, .fetchPage], thinking: .medium,
+        tools: [.runJavaScript, .webSearch, .fetchPage], connectors: [.files], thinking: .medium,
         maxOutputTokens: 4096, temperature: 0.3, isBuiltIn: true)
 
     /// Plain chat: nothing leaves the device and the full context goes to the conversation.

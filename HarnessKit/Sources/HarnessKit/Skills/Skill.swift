@@ -84,6 +84,8 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
         UUID(uuidString: "B0000000-0000-4000-8000-000000000004")!: [
             "7. Give the user the pull request's link. Do not merge it.\nIf a step fails, read the error and try that step again before going on.",
             "8. Give the user the pull request's link. Do not merge it.\nIf a step fails, read the error and try that step again before going on.",
+            // While the file tools were named repo_ and came only with GitHub.
+            "Do not change files with the github_ tools: they need the whole file written back.\nIf a step fails, read the error and try that step again before going on.",
         ],
     ]
 
@@ -137,16 +139,16 @@ public struct Skill: Codable, Hashable, Sendable, Identifiable {
             id: UUID(uuidString: "B0000000-0000-4000-8000-000000000004")!, name: "open-pull-request",
             summary: "Changing code or a file in a GitHub repository and opening a pull request for it",
             instructions: """
-                Needs the repo tools, which come with the GitHub connector. If you have neither, say to add GitHub under Settings > Connectors, and stop.
+                Every tool named here can be called once you have read this: do not open a connector for them. If a call says there is no tool named `repo_clone`, say to add GitHub under Settings > Connectors and to switch Files on for this agent, and stop.
                 1. You need the repository as owner/name. If the user gave none and the chat does not say which, ask, and stop.
-                2. Get a copy with `repo_clone`. It returns the repository's files.
-                3. Find the file to change. If the user named it, go on. Otherwise search for a word from the change with `repo_search`, or look in a folder with `repo_list_files`.
-                4. Read the file with `repo_read_file`.
+                2. Get a copy with `repo_clone`. It returns the repository's files, in a folder named after it.
+                3. Find the file to change. If the user named it, go on. Otherwise search for a word from the change with `search_files`, or look in a folder with `list_files`.
+                4. Read the file with `read_file`.
                 5. If the user did not say exactly what to change, and reading the file does not show it, ask, and stop.
-                6. Change the file with `repo_edit_file`: `find` is the text to replace, copied exactly from the file, and `replace` is the new text. For a new file, use `repo_write_file`.
+                6. Change the file with `edit_file`: `find` is the text to replace, copied exactly from the file, and `replace` is the new text. For a new file, use `write_file` with a path that starts with the repository's folder.
                 7. Open the pull request with `repo_open_pull_request`: the title says what changed. It makes the branch and the commit itself.
                 8. Give the user the pull request's link. Do not merge it.
-                Do not change files with the github_ tools: they need the whole file written back.
+                Use only the tools named here: what you change stays on this device until `repo_open_pull_request` sends it.
                 If a step fails, read the error and try that step again before going on.
                 """, isBuiltIn: true),
     ]

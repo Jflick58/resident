@@ -53,6 +53,8 @@ public struct PersonalDataError: LocalizedError, Sendable {
 public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
     case calendar
     case reminders
+    /// A folder of files on this device, the one the Files app shows under the app's name: `FileTool` and `Workspace`.
+    case files
 
     public var id: String { rawValue }
 
@@ -60,6 +62,7 @@ public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .calendar: return "Calendar"
         case .reminders: return "Reminders"
+        case .files: return "Files"
         }
     }
 
@@ -67,6 +70,7 @@ public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .calendar: return "See your schedule and add events"
         case .reminders: return "See, add and complete reminders"
+        case .files: return "Search and edit files in the Resident folder of the Files app"
         }
     }
 
@@ -74,6 +78,7 @@ public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .calendar: return "calendar"
         case .reminders: return "checklist"
+        case .files: return "folder"
         }
     }
 
@@ -90,11 +95,14 @@ public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    /// The tools that read and change the user's calendar or reminders. The file tools
+    /// work on a folder, not on this source, and are made by `FileTool.group`.
     public func tools(source: any PersonalDataSource) -> [any Tool] {
         switch self {
         case .calendar: return [CalendarListTool(source: source), CalendarCreateTool(source: source)]
         case .reminders:
             return [RemindersListTool(source: source), RemindersAddTool(source: source), RemindersCompleteTool(source: source)]
+        case .files: return []
         }
     }
 }

@@ -1,80 +1,99 @@
 import Foundation
 
-/// A copy of one repository on this device, for a model to work on the way a
-/// coding agent works on a folder: list it, search it, read a file, edit it.
+/// A folder of files on this device, for a model to work on the way a coding
+/// agent works on a folder: list it, search it, read a file, edit it, write one.
 ///
-/// Small models tuned for code have seen that loop endlessly. They have not
-/// seen GitHub's API. Given GitHub's own tools, a coder model on a phone spent
-/// every step it had looking for one file: its search ran over all of GitHub
-/// because the repository belongs inside the query text, an optional `fields`
-/// argument refused five guesses, and it never listed a folder. Here the
-/// branch, the commit and the upload are the harness's business. The model
-/// changes files and says what the pull request is called.
+/// Small models tuned for code have seen that loop endlessly, so the tools are
+/// the few a coding agent has, and nothing here knows where a file came from.
+/// What belongs to one service sits at the two ends, outside this type:
+/// `RepositoryCopy` puts a GitHub repository in a folder of this one and opens
+/// a pull request with what was changed there.
 ///
-/// One repository is kept at a time. Cloning another replaces it.
+/// Paths are from the top of the folder. Something put here whole, such as a
+/// cloned repository, is one folder in it: the project folder. Its files may
+/// also be named from inside it, because the user says `web/styles.css` where
+/// the tools say `rocket/web/styles.css`. One project folder is kept at a time.
 public actor Workspace {
-    struct State: Codable {
-        var owner: String
-        var repo: String
-        var version: RepositoryVersion
-        /// Paths changed since the download or the last pull request.
-        var changed: [String] = []
-        var changedAt: Date?
+    public struct Project: Codable, Sendable {
+        public var folder: String
+        /// Said after a file in it is changed: what comes next.
+        public var afterChange: String
     }
 
-    /// Changes older than this are dropped when the repository is cloned again:
-    /// they belong to a chat that was given up.
-    static let keepChangesFor: TimeInterval = 30 * 60
+    struct State: Codable {
+        /// Paths the tools changed, and when.
+        var changed: [String: Date] = [:]
+        var project: Project?
+    }
+
     static let readLines = 200
     static let readCharacters = 4500
     static let searchMatches = 30
     static let searchMatchesPerFile = 4
     static let listEntries = 150
-    /// Folders of other people's code, searched after the repository's own.
+    /// Folders of other people's code, searched after the rest.
     static let vendored = ["vendor/", "node_modules/", "third_party/", "pods/", ".build/", "deriveddata/", "dist/"]
+    private static let outside = "That path is outside the files folder."
 
-    private let root: URL
-    private let host: any RepositoryHost
-    private var state: State?
+    /// Where what is remembered about the files is kept, and what is on its way to them.
+    public nonisolated let directory: URL
+    /// The folder the tools work on.
+    private let files: URL
+    private var state: State
 
-    public init(directory: URL, host: any RepositoryHost) {
-        root = directory
-        self.host = host
-        state = (try? Data(contentsOf: directory.appendingPathComponent("state.json"))).flatMap { try? JSONDecoder().decode(State.self, from: $0) }
+    /// A workspace that keeps its files in a folder of its own, beside what it remembers about them.
+    public init(directory: URL) {
+        self.init(files: directory.appendingPathComponent("files", isDirectory: true), records: directory)
     }
 
-    private var files: URL { root.appendingPathComponent("files", isDirectory: true) }
+    /// A workspace over a folder that is somewhere else: one the user can see, such as the app's
+    /// Documents folder, which the Files app shows under the app's name. Nothing but the files
+    /// goes in it. Files a workspace kept beside its records before are moved there.
+    public init(files: URL, records directory: URL) {
+        self.directory = directory
+        self.files = files
+        let before = directory.appendingPathComponent("files", isDirectory: true)
+        // An earlier version kept one cloned repository at the top of the folder, with its record in
+        // state.json. That copy is dropped: the repository is downloaded again when it is next needed.
+        let earlier = directory.appendingPathComponent("state.json")
+        if FileManager.default.fileExists(atPath: earlier.path) {
+            try? FileManager.default.removeItem(at: before)
+            try? FileManager.default.removeItem(at: earlier)
+        }
+        if files.standardizedFileURL != before.standardizedFileURL,
+            let kept = try? FileManager.default.contentsOfDirectory(at: before, includingPropertiesForKeys: nil)
+        {
+            try? FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+            // Whatever is already there under the same name stays, and the one from before stays where it was.
+            for item in kept { try? FileManager.default.moveItem(at: item, to: files.appendingPathComponent(item.lastPathComponent)) }
+            if (try? FileManager.default.contentsOfDirectory(atPath: before.path))?.isEmpty == true {
+                try? FileManager.default.removeItem(at: before)
+            }
+        }
+        state = (try? Data(contentsOf: directory.appendingPathComponent("folder.json"))).flatMap { try? JSONDecoder().decode(State.self, from: $0) }
+            ?? State()
+    }
 
     private func save() {
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        try? JSONEncoder().encode(state).write(to: root.appendingPathComponent("state.json"))
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? JSONEncoder().encode(state).write(to: directory.appendingPathComponent("folder.json"))
     }
 
-    /// Forgets the repository and deletes its files.
+    /// Forgets everything and deletes the files. The folder itself stays: it may be one the system made.
     public func reset() {
-        try? FileManager.default.removeItem(at: root)
-        state = nil
+        for item in (try? FileManager.default.contentsOfDirectory(at: files, includingPropertiesForKeys: nil)) ?? [] {
+            try? FileManager.default.removeItem(at: item)
+        }
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("folder.json"))
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("incoming"))
+        state = State()
     }
 
-    private static let none = "No repository is cloned yet. Call repo_clone with the repository first, as owner/name."
+    public var project: Project? { state.project }
 
     // MARK: Paths
 
-    /// `owner/name` from that, or from a GitHub address.
-    static func repository(in text: String) -> (owner: String, repo: String)? {
-        var text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        for prefix in ["https://", "http://", "www.", "github.com/", "git@github.com:"] where text.lowercased().hasPrefix(prefix) {
-            text = String(text.dropFirst(prefix.count))
-        }
-        if text.hasSuffix(".git") { text = String(text.dropLast(4)) }
-        let parts = text.split(separator: "/").map(String.init)
-        guard parts.count >= 2, parts[0].allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == "." }),
-            parts[1].allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == "." })
-        else { return nil }
-        return (parts[0], parts[1])
-    }
-
-    /// A path as the model gave it, made relative to the repository. Nil when it points outside.
+    /// A path as the model gave it, made relative to the folder. Nil when it points outside.
     static func clean(_ path: String) -> String? {
         var parts: [Substring] = []
         for part in path.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "/") where part != "." {
@@ -82,6 +101,46 @@ public actor Workspace {
             parts.append(part)
         }
         return parts.joined(separator: "/")
+    }
+
+    private func url(_ path: String) -> URL { path.isEmpty ? files : files.appendingPathComponent(path) }
+
+    private func exists(_ path: String) -> Bool { FileManager.default.fileExists(atPath: url(path).path) }
+
+    private func isFolder(_ path: String) -> Bool {
+        var folder: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url(path).path, isDirectory: &folder) && folder.boolValue
+    }
+
+    /// The tools call this place the files folder, and a model takes that for its name:
+    /// `files/notes.md` for `notes.md`. Read that way while nothing here is called `files`.
+    private func withoutFolderName(_ path: String) -> String? {
+        guard !exists("files") else { return nil }
+        if path == "files" { return "" }
+        return path.hasPrefix("files/") ? String(path.dropFirst(6)) : nil
+    }
+
+    /// Where a path leads: as given when something is there, otherwise inside the project folder when something is there.
+    private func find(_ path: String) -> String? {
+        if path.isEmpty || exists(path) { return path }
+        if let project = state.project?.folder, exists(project + "/" + path) { return project + "/" + path }
+        return withoutFolderName(path).flatMap { find($0) }
+    }
+
+    /// Where a new file goes: as given, unless the folder it names is only found inside the project folder.
+    /// A new name at the top stays at the top, so the project folder never takes in a file meant for elsewhere.
+    private func place(for path: String) -> String {
+        if let existing = find(path) { return existing }
+        if let inside = withoutFolderName(path), !inside.isEmpty { return place(for: inside) }
+        guard let project = state.project?.folder else { return path }
+        var parent = path.split(separator: "/").dropLast()
+        while !parent.isEmpty {
+            let folder = parent.joined(separator: "/")
+            if exists(folder) { return path }
+            if exists(project + "/" + folder) { return project + "/" + path }
+            parent = parent.dropLast()
+        }
+        return path
     }
 
     /// Every file's path, in order.
@@ -92,91 +151,96 @@ public actor Workspace {
         for case let url as URL in walker {
             guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
             let path = url.resolvingSymlinksInPath().path
-            if path.hasPrefix(base + "/"), url.lastPathComponent != ".DS_Store" { paths.append(String(path.dropFirst(base.count + 1))) }
+            guard path.hasPrefix(base + "/"), url.lastPathComponent != ".DS_Store" else { continue }
+            let relative = String(path.dropFirst(base.count + 1))
+            // What the Files app has deleted waits in a folder of its own at the top, and is not the user's any more.
+            if relative.hasPrefix(".Trash/") { continue }
+            paths.append(relative)
         }
         return paths.sorted()
     }
 
+    public var isEmpty: Bool { allPaths().isEmpty }
+
     /// A file's text, or nil when it is missing or is not text.
     private func text(at path: String) -> String? {
-        guard let data = try? Data(contentsOf: files.appendingPathComponent(path)), !data.prefix(8192).contains(0) else { return nil }
+        guard let data = try? Data(contentsOf: url(path)), !data.prefix(8192).contains(0) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
-    /// Paths that end the way a path the model guessed does, for "did you mean".
-    private func suggestions(for path: String) -> String {
+    /// A folder of this many files or fewer is named whole when something is not found in it.
+    static let fewFiles = 12
+
+    /// What to say when nothing is at a path, in words a model can stop on. Told only to list or
+    /// search for it, a model asked for a file that was not there went on looking for 26 steps,
+    /// through folders it had already seen. So it is told what is there: the paths that end the
+    /// way its guess does, or every file when they are few, or that no name comes close.
+    ///
+    /// `source` is how files are got into the folder, said when there are none at all:
+    /// a model that skips the clone is told to clone.
+    private func missing(_ what: String, _ path: String, source: String?) -> ToolResult {
+        let all = allPaths()
+        guard !all.isEmpty else {
+            return .error("The files folder is empty, so there is no \(what) \(path)." + (state.project == nil ? source.map { " " + $0 } ?? "" : ""))
+        }
         let name = (path.split(separator: "/").last.map(String.init) ?? path).lowercased()
         let stem = name.split(separator: ".").first.map(String.init) ?? name
-        let all = allPaths()
         var near = all.filter { $0.lowercased().hasSuffix("/" + name) || $0.lowercased() == name }
         if near.isEmpty, stem.count > 2 { near = all.filter { ($0.split(separator: "/").last ?? "").lowercased().contains(stem) } }
-        guard !near.isEmpty else { return " Use repo_list_files or repo_search to find it." }
-        return " Did you mean: " + near.prefix(6).joined(separator: ", ") + "?"
+        var text = "There is no \(what) \(path)."
+        if !near.isEmpty {
+            text += " Did you mean: " + near.prefix(6).joined(separator: ", ") + "?"
+        } else if all.count <= Self.fewFiles {
+            text += " The files folder holds only: " + all.joined(separator: ", ") + "."
+        } else {
+            text += " No file in the folder has a name like that. To find one by what is in it, use \(FileTool.name(.search))."
+        }
+        return .error(text)
     }
 
     // MARK: What the tools do
 
-    public func clone(_ text: String) async -> ToolResult {
-        guard let (owner, repo) = Self.repository(in: text) else {
-            return .error("Give the repository as owner/name, for example octocat/hello-world.")
-        }
-        if let state, state.owner.lowercased() == owner.lowercased(), state.repo.lowercased() == repo.lowercased(), !state.changed.isEmpty,
-            let at = state.changedAt, Date().timeIntervalSince(at) < Self.keepChangesFor
-        {
-            return ToolResult(
-                "\(state.owner)/\(state.repo) is already cloned, with your changes to \(state.changed.joined(separator: ", ")) kept.\n" + listing(""))
-        }
-        let fresh = root.appendingPathComponent("incoming", isDirectory: true)
-        try? FileManager.default.removeItem(at: fresh)
-        do {
-            try FileManager.default.createDirectory(at: fresh, withIntermediateDirectories: true)
-            let version = try await host.download(owner: owner, repo: repo, into: fresh)
-            try? FileManager.default.removeItem(at: files)
-            try FileManager.default.moveItem(at: fresh, to: files)
-            state = State(owner: owner, repo: repo, version: version)
-            save()
-        } catch {
-            try? FileManager.default.removeItem(at: fresh)
-            return .error("Could not clone \(owner)/\(repo): \(error.localizedDescription)")
-        }
-        return ToolResult("Cloned \(owner)/\(repo), branch \(state?.version.branch ?? "main"), \(allPaths().count) files.\n" + listing(""))
-    }
-
     /// What is in a folder: everything under it when that is short, or one level with counts.
-    private func listing(_ folder: String) -> String {
+    public func listing(_ folder: String) -> String {
         let all = allPaths()
+        var folder = folder
         let inside = folder.isEmpty ? all : all.filter { $0.hasPrefix(folder + "/") }
         guard !inside.isEmpty else { return "" }
-        let label = folder.isEmpty ? "Files" : "Files in \(folder)/"
-        if inside.count <= 60 { return "\(label):\n" + inside.joined(separator: "\n") }
+        if inside.count <= 60 { return "\(folder.isEmpty ? "Files" : "Files in \(folder)/"):\n" + inside.joined(separator: "\n") }
         var folders: [String: Int] = [:]
         var here: [String] = []
-        for path in inside {
-            let rest = folder.isEmpty ? Substring(path) : path.dropFirst(folder.count + 1)
-            if let slash = rest.firstIndex(of: "/") { folders[String(rest[..<slash]), default: 0] += 1 } else { here.append(String(rest)) }
+        while true {
+            folders = [:]
+            here = []
+            for path in inside {
+                let rest = folder.isEmpty ? Substring(path) : path.dropFirst(folder.count + 1)
+                if let slash = rest.firstIndex(of: "/") { folders[String(rest[..<slash]), default: 0] += 1 } else { here.append(String(rest)) }
+            }
+            // A folder that holds nothing but one folder is passed through: its one line would say nothing.
+            guard here.isEmpty, folders.count == 1, let only = folders.keys.first else { break }
+            folder = folder.isEmpty ? only : folder + "/" + only
         }
         let prefix = folder.isEmpty ? "" : folder + "/"
         var lines = folders.keys.sorted().map { "\(prefix)\($0)/  (\(folders[$0]!) files)" } + here.map { prefix + $0 }
         if lines.count > Self.listEntries { lines = Array(lines.prefix(Self.listEntries)) + ["and \(lines.count - Self.listEntries) more"] }
-        return "\(label) (\(inside.count) in all; list a folder to see inside it):\n" + lines.joined(separator: "\n")
+        return "\(folder.isEmpty ? "Files" : "Files in \(folder)/") (\(inside.count) in all; list a folder to see inside it):\n" + lines.joined(separator: "\n")
     }
 
-    public func list(_ path: String) -> ToolResult {
-        guard state != nil else { return .error(Self.none) }
-        guard let folder = Self.clean(path) else { return .error("That path is outside the repository.") }
+    public func list(_ path: String, source: String? = nil) -> ToolResult {
+        guard let given = Self.clean(path) else { return .error(Self.outside) }
+        guard let folder = find(given) else { return missing("folder", given, source: source) }
+        if !folder.isEmpty, !isFolder(folder) { return ToolResult("\(folder) is a file. Read it with \(FileTool.name(.read)).") }
         let text = listing(folder)
-        if text.isEmpty {
-            if self.text(at: folder) != nil { return ToolResult("\(folder) is a file. Read it with repo_read_file.") }
-            return .error("There is no folder \(folder)." + suggestions(for: folder))
-        }
-        return ToolResult(text)
+        guard text.isEmpty else { return ToolResult(text) }
+        guard folder.isEmpty else { return ToolResult("\(folder)/ is empty.") }
+        return ToolResult("The files folder is empty." + (state.project == nil ? source.map { " " + $0 } ?? "" : ""))
     }
 
-    public func search(_ query: String, in path: String) -> ToolResult {
-        guard state != nil else { return .error(Self.none) }
+    public func search(_ query: String, in path: String, source: String? = nil) -> ToolResult {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return .error("Give the text to search for.") }
-        guard let folder = Self.clean(path) else { return .error("That path is outside the repository.") }
+        guard let given = Self.clean(path) else { return .error(Self.outside) }
+        guard let folder = find(given) else { return missing("file or folder", given, source: source) }
         // A pattern when it is one, plain text when it is not ("foo(" is no pattern).
         let pattern = (try? NSRegularExpression(pattern: query, options: [.caseInsensitive]))
             ?? (try? NSRegularExpression(pattern: NSRegularExpression.escapedPattern(for: query), options: [.caseInsensitive]))
@@ -185,7 +249,10 @@ public actor Workspace {
             pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil
         }
         var paths = allPaths().filter { folder.isEmpty || $0 == folder || $0.hasPrefix(folder + "/") }
-        guard !paths.isEmpty else { return .error("There is nothing at \(folder)." + suggestions(for: folder)) }
+        guard !paths.isEmpty else {
+            guard folder.isEmpty else { return .error("\(folder)/ is empty, so there is nothing to search.") }
+            return .error("The files folder is empty, so there is nothing to search." + (state.project == nil ? source.map { " " + $0 } ?? "" : ""))
+        }
         func isVendored(_ path: String) -> Bool { Self.vendored.contains { (path.lowercased() + "/").contains($0) || path.lowercased().hasPrefix($0) } }
         paths = paths.filter { !isVendored($0) } + paths.filter(isVendored)
         // One file searched on its own shows every match, up to the limit.
@@ -201,9 +268,7 @@ public actor Workspace {
                 inFile += 1
                 if lines.count < Self.searchMatches { lines.append("\(path)  (the file's name matches)") }
             }
-            if let size = try? files.appendingPathComponent(path).resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000,
-                let text = text(at: path)
-            {
+            if let size = try? url(path).resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000, let text = text(at: path) {
                 for (number, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() where matches(String(line)) {
                     total += 1
                     inFile += 1
@@ -215,7 +280,13 @@ public actor Workspace {
             if inFile > 0 { filesWith += 1 }
         }
         guard total > 0 else {
-            return ToolResult("Nothing in \(folder.isEmpty ? "the repository" : folder) matches \"\(query)\". Try one shorter word, or list the files with repo_list_files.")
+            // Searched whole, a folder of a few files has been looked through: saying so lets the model stop.
+            let all = folder.isEmpty && paths.count <= Self.fewFiles
+            return ToolResult(
+                "Nothing in \(folder.isEmpty ? "the files" : folder) matches \"\(query)\"."
+                    + (all
+                        ? " That was every file: " + paths.joined(separator: ", ") + "."
+                        : " Try one shorter word, or list the files with \(FileTool.name(.list))."))
         }
         var result = lines.joined(separator: "\n")
         if total > lines.count {
@@ -224,16 +295,10 @@ public actor Workspace {
         return ToolResult(result)
     }
 
-    public func read(_ path: String, from startLine: Int) -> ToolResult {
-        guard state != nil else { return .error(Self.none) }
-        guard let path = Self.clean(path), !path.isEmpty else { return .error("Give the path of a file in the repository.") }
-        guard FileManager.default.fileExists(atPath: files.appendingPathComponent(path).path) else {
-            return .error("There is no file \(path)." + suggestions(for: path))
-        }
-        var isFolder: ObjCBool = false
-        if FileManager.default.fileExists(atPath: files.appendingPathComponent(path).path, isDirectory: &isFolder), isFolder.boolValue {
-            return ToolResult("\(path) is a folder.\n" + listing(path))
-        }
+    public func read(_ path: String, from startLine: Int, source: String? = nil) -> ToolResult {
+        guard let given = Self.clean(path), !given.isEmpty else { return .error("Give the path of a file.") }
+        guard let path = find(given) else { return missing("file", given, source: source) }
+        if isFolder(path) { return ToolResult("\(path) is a folder.\n" + listing(path)) }
         guard let text = text(at: path) else { return .error("\(path) is not a text file.") }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         let first = min(max(startLine, 1), max(lines.count, 1))
@@ -249,29 +314,35 @@ public actor Workspace {
         if first > 1 || last < lines.count {
             result += "\n[Lines \(first) to \(last) of \(lines.count) in \(path)."
                 + (last < lines.count
-                    ? " To read on, call repo_read_file again with start_line \(last + 1). To find one thing in this file, call repo_search with this path."
+                    ? " To read on, call \(FileTool.name(.read)) again with start_line \(last + 1). To find one thing in this file, call \(FileTool.name(.search)) with this path."
                     : " That is the end of the file.") + "]"
         }
         return ToolResult(result)
     }
 
     private func noteChange(_ path: String) {
-        if state?.changed.contains(path) == false { state?.changed.append(path) }
-        state?.changedAt = Date()
+        state.changed[path] = Date()
         save()
     }
 
-    public func edit(_ path: String, find: String, replace: String) -> ToolResult {
-        guard state != nil else { return .error(Self.none) }
-        guard let path = Self.clean(path), !path.isEmpty else { return .error("Give the path of a file in the repository.") }
-        guard FileManager.default.fileExists(atPath: files.appendingPathComponent(path).path) else {
-            return .error("There is no file \(path)." + suggestions(for: path) + " To make a new file, use repo_write_file.")
+    /// What follows a change to this path, when it is in the project folder.
+    private func next(after path: String) -> String? {
+        guard let project = state.project, path.hasPrefix(project.folder + "/") else { return nil }
+        return project.afterChange
+    }
+
+    public func edit(_ path: String, find: String, replace: String, source: String? = nil) -> ToolResult {
+        guard let given = Self.clean(path), !given.isEmpty else { return .error("Give the path of a file.") }
+        guard let path = self.find(given), !isFolder(path) else {
+            var result = missing("file", given, source: source)
+            result.text += " To make a new file, use \(FileTool.name(.write))."
+            return result
         }
         guard let text = text(at: path) else { return .error("\(path) is not a text file.") }
         switch TextEdit.replace(find, with: replace, in: text, path: path) {
         case .failed(let message): return .error(message)
         case .changed(let changed):
-            do { try Data(changed.utf8).write(to: files.appendingPathComponent(path)) } catch { return .error("Could not save \(path).") }
+            do { try Data(changed.utf8).write(to: url(path)) } catch { return .error("Could not save \(path).") }
             noteChange(path)
             // The changed lines, so the model can see the edit landed where it meant.
             let before = text.split(separator: "\n", omittingEmptySubsequences: false)
@@ -283,49 +354,87 @@ public actor Workspace {
             let now = after[start..<max(start, after.count - end)].prefix(12)
             var result = "Changed \(path). The rest of the file is as it was."
             if !now.isEmpty { result += " From line \(start + 1) it now reads:\n" + now.joined(separator: "\n") }
-            return ToolResult(result + "\nWhen every change is made, call repo_open_pull_request.")
+            return ToolResult(result + (next(after: path).map { "\n" + $0 } ?? ""))
         }
     }
 
     public func write(_ path: String, content: String) -> ToolResult {
-        guard state != nil else { return .error(Self.none) }
-        guard let path = Self.clean(path), !path.isEmpty else { return .error("Give the path of the file to write.") }
-        let target = files.appendingPathComponent(path)
+        guard let given = Self.clean(path), !given.isEmpty else { return .error("Give the path of the file to write.") }
+        let path = place(for: given)
+        guard !isFolder(path) else { return .error("\(path) is a folder. Give the path of a file in it.") }
+        let isNew = !exists(path)
         // Writing a whole file back from memory is how a small model loses half of it.
         if let existing = text(at: path), existing.count > 1500, content.count < existing.count * 9 / 10 {
             return .error(
-                "\(path) exists and what you gave is much shorter, so nothing was changed. To change part of a file, use repo_edit_file with the text to find and what replaces it.")
+                "\(path) exists and what you gave is much shorter, so nothing was changed. To change part of a file, use \(FileTool.name(.edit)) with the text to find and what replaces it.")
         }
         do {
-            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(content.utf8).write(to: target)
+            try FileManager.default.createDirectory(at: url(path).deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(content.utf8).write(to: url(path))
         } catch { return .error("Could not save \(path).") }
         noteChange(path)
-        return ToolResult("Wrote \(path) (\(content.split(separator: "\n", omittingEmptySubsequences: false).count) lines). When every change is made, call repo_open_pull_request.")
+        var result = "Wrote \(path) (\(content.split(separator: "\n", omittingEmptySubsequences: false).count) lines)."
+        if let next = next(after: path) {
+            result += " " + next
+        } else if isNew, let project = state.project {
+            // A new file for the project, named without its folder, would otherwise be left out of what is done with the project.
+            result += " It is outside \(project.folder)/. A file that belongs to \(project.folder) has a path that starts with \(project.folder)/."
+        }
+        return ToolResult(result)
     }
 
-    public func openPullRequest(title: String, body: String) async -> ToolResult {
-        guard let current = state else { return .error(Self.none) }
-        guard !current.changed.isEmpty else {
-            return .error("No file has been changed yet, so there is nothing to put in a pull request. Change a file with repo_edit_file first.")
+    // MARK: For what puts files here
+
+    /// Takes in a folder made elsewhere, such as a downloaded repository, as the project folder,
+    /// and returns the name it has here. The project folder before it makes way.
+    public func adopt(_ incoming: URL, named name: String, afterChange: String) throws -> String {
+        if let earlier = state.project?.folder {
+            try? FileManager.default.removeItem(at: url(earlier))
+            forget(under: earlier)
+            state.project = nil
         }
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return .error("Give a title that says what changed.") }
-        let changes = current.changed.compactMap { path in text(at: path).map { (path: path, text: $0) } }
-        let slug = Skill.slug(title).split(separator: "-").prefix(6).joined(separator: "-")
-        let draft = PullRequestDraft(
-            owner: current.owner, repo: current.repo, base: current.version.branch, commit: current.version.commit,
-            branch: slug.isEmpty ? "change" : String(slug.prefix(48)), title: title, body: body, files: changes)
-        do {
-            let opened = try await host.openPullRequest(draft)
-            state?.version.commit = opened.commit
-            state?.changed = []
-            state?.changedAt = nil
-            save()
-            return ToolResult(
-                "Opened pull request #\(opened.number): \(opened.url)\nIt changes \(changes.map(\.path).joined(separator: ", ")) on a new branch, \(opened.branch). It is not merged. Give the user the link.")
-        } catch {
-            return .error("The pull request was not opened: \(error.localizedDescription) Your changes are kept.")
+        try FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+        // Never over files that are not a project's: a folder of that name the model made keeps it.
+        let wanted = Self.clean(name).flatMap { $0.isEmpty || $0.contains("/") ? nil : $0 } ?? "project"
+        var folder = wanted
+        var number = 2
+        while exists(folder) {
+            folder = "\(wanted)-\(number)"
+            number += 1
         }
+        try FileManager.default.moveItem(at: incoming, to: url(folder))
+        // A copy of something that can be downloaded again has no place in a backup of the device.
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var placed = url(folder)
+        try? placed.setResourceValues(values)
+        state.project = Project(folder: folder, afterChange: afterChange)
+        save()
+        return folder
+    }
+
+    /// The files under a folder that the tools changed, by path, each with when it last was.
+    public func changes(under folder: String) -> [(path: String, at: Date)] {
+        state.changed.filter { $0.key.hasPrefix(folder + "/") }.sorted { $0.key < $1.key }.map { (path: $0.key, at: $0.value) }
+    }
+
+    private func forget(under folder: String) {
+        state.changed = state.changed.filter { !$0.key.hasPrefix(folder + "/") }
+    }
+
+    /// Notes that the changes under a folder have gone where they were meant to.
+    public func forgetChanges(under folder: String) {
+        forget(under: folder)
+        save()
+    }
+
+    /// The text of each of these files that is one.
+    public func texts(of paths: [String]) -> [(path: String, text: String)] {
+        paths.compactMap { path in text(at: path).map { (path: path, text: $0) } }
+    }
+
+    /// How many files a folder holds.
+    public func count(under folder: String) -> Int {
+        allPaths().filter { $0.hasPrefix(folder + "/") }.count
     }
 }

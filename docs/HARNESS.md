@@ -37,6 +37,35 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   device's own calendar and reminders through EventKit, ask for access the
   first time a tool needs it, and take dates the way small models write them
   ("tomorrow 5pm", "friday", `2026-11-15 17:00`).
+- **Files** (`HarnessKit/Code`): a third connector on the device, with the
+  five tools a coding agent has and the names it gives them: `list_files`,
+  `search_files`, `read_file`, `edit_file`, `write_file`. They work on one
+  folder (`Workspace`) and know nothing of where a file came from. The folder
+  is the app's Documents folder, which the Files app shows as Resident under
+  On My iPhone: what the user puts there the tools can work on, and what a
+  model writes the user can take out. Nothing but files goes in it, and a
+  cloned repository there is left out of the device's backups.
+  Small models tuned for code have seen that loop endlessly, so an edit
+  is the text to find and the text that replaces it, never the whole file
+  written back; a long file is read a part at a time; a search prints
+  `path:line: text`; a path that is nearly right gets "did you mean".
+- **GitHub at the two ends** (`RepositoryCopy.swift`, `RepositoryHost.swift`):
+  with the GitHub connector signed in, Files gains two tools and no more.
+  `repo_clone` downloads a repository into a folder of its own, named
+  after it, beside whatever else is in the files folder, and
+  `repo_open_pull_request` sends back the files changed there: the branch, the
+  commit and the upload are the harness's business, and the model only says
+  what the pull request is called. Everything between is the file tools. A
+  file of the repository may be named with its folder (`rocket/web/styles.css`,
+  as the tools print it) or from inside it (`web/styles.css`, as the user says
+  it). One repository is kept at a time. While these two are there, GitHub's
+  connector comes without its own tools for changing code (make a branch, write
+  a file back whole, create a pull request): they cannot see what was changed
+  on the device, and with both ways in front of it a model left for them after
+  its edit in 6 pull request tasks of 23. A call to one of their names, or to
+  one a model makes up (`github_open_pull_request`), is answered with the tool
+  that does the job. Given GitHub's own tools alone, Bonsai 9B finished 7 of
+  13 pull request tasks; this way LFM3 1.7B finishes 23 of 23.
 - **MCP connectors with sign-in** (`HarnessKit/MCP`, `ConnectorsModel.swift`):
   Settings > Connectors adds any MCP server reachable over the web (Streamable
   HTTP), from a short list of suggestions or by address. If the server wants a
@@ -79,8 +108,8 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   the built-in Calendar connector with no setup.
 - **Skills** (`Skill.swift`, `SkillsView.swift`): instructions for one kind of
   task. The prompt carries one line per skill (name and when to use it); the
-  `use_skill` tool loads the steps only when a task matches. Three ship with
-  the app (write-email, plan-day, summarize); Settings > Skills edits them,
+  `use_skill` tool loads the steps only when a task matches. Four ship with
+  the app (write-email, plan-day, summarize, open-pull-request); Settings > Skills edits them,
   adds new ones, and imports a `SKILL.md`.
 - **Photos and documents** (`Attachments.swift`, `DocumentReader.swift`): the
   + button attaches photos (library or camera) and files. PDFs are read page

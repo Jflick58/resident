@@ -46,15 +46,49 @@ public struct ToolGroup: Sendable {
     /// Steps a turn gets on top of the usual ones while this connector's tools are declared.
     /// Nil is the amount every connector gets, `Agent.connectorSteps`.
     public var extraSteps: Int?
+    /// Names that are not tools but that a model calls, each with the tool of this connector that
+    /// does the job and a sentence that says so. The model is told that sentence in place of a
+    /// list of names that come close, which can point the wrong way.
+    public var redirects: [String: Redirect] = [:]
 
-    /// These connectors, each knowing the skills that name its tools.
-    public static func linking(_ groups: [ToolGroup], to skills: [Skill]) -> [ToolGroup] {
-        groups.map { group in
+    public struct Redirect: Sendable {
+        public var tool: String
+        /// What to tell the model, naming the tool: "Use x, which …".
+        public var say: String
+        public init(tool: String, say: String) {
+            self.tool = tool
+            self.say = say
+        }
+    }
+
+    /// These connectors, each knowing the skills that name its tools: by the prefix its tools
+    /// share, or by the name of one of them. A skill whose steps call for one of the `absent`
+    /// tools, which this chat does not have, is left out: it cannot be followed, and offered
+    /// with the tools that are there it would stop a model that only wanted those.
+    public static func linking(_ groups: [ToolGroup], to skills: [Skill], absent: [String] = []) -> [ToolGroup] {
+        let usable = skills.filter { skill in skill.isEnabled && !absent.contains { names($0, in: skill.instructions) } }
+        return groups.map { group in
             var group = group
-            group.skillHints = skills.filter { $0.isEnabled && $0.instructions.contains(group.name + "_") }
-                .map { "\($0.name): \($0.summary)" }
+            let own = group.tools.map(\.spec.name)
+            group.skillHints = usable.filter { skill in
+                skill.instructions.contains(group.name + "_") || own.contains { names($0, in: skill.instructions) }
+            }.map { "\($0.name): \($0.summary)" }
             return group
         }
+    }
+
+    /// True when the text names this tool: the whole name, not a longer one that holds it
+    /// (`edit_file` is not named by `github_edit_file`).
+    static func names(_ tool: String, in text: String) -> Bool {
+        func isPart(_ character: Character) -> Bool { character.isLetter || character.isNumber || character == "_" }
+        var from = text.startIndex
+        while let found = text.range(of: tool, range: from..<text.endIndex) {
+            let before = found.lowerBound > text.startIndex ? text[text.index(before: found.lowerBound)] : nil
+            let after = found.upperBound < text.endIndex ? text[found.upperBound] : nil
+            if !(before.map(isPart) ?? false), !(after.map(isPart) ?? false) { return true }
+            from = found.upperBound
+        }
+        return false
     }
 
     /// What to say about those skills, or nothing.
@@ -362,6 +396,17 @@ struct ToolShelf {
         return loaded != before
     }
 
+    /// Answers a call to a name some connector knows to be a wrong name for one of its tools:
+    /// declares that tool and returns what to say, or nil when no connector knows the name.
+    mutating func redirect(for name: String) -> String? {
+        for group in groups {
+            guard let redirect = group.redirects[name.lowercased()], toolsByName[redirect.tool] != nil else { continue }
+            add([redirect.tool])
+            return redirect.say
+        }
+        return nil
+    }
+
     /// Answers a call to a connector tool that does not exist: declares the connector's
     /// tools whose names come closest and returns them, or nil when no connector owns the name.
     ///
@@ -371,12 +416,39 @@ struct ToolShelf {
     /// `github_create_or_update_file`.
     mutating func nearest(to name: String) -> (title: String, tools: [String])? {
         let lowered = name.lowercased()
-        guard let group = groups.first(where: { lowered.hasPrefix($0.name + "_") }) else { return nil }
+        guard let group = groups.first(where: { lowered.hasPrefix($0.name + "_") }) else { return nearestByWords(to: lowered) }
         let wanted = lowered.dropFirst(group.name.count + 1).replacingOccurrences(of: "_", with: " ")
-        let picked = affordable(group.pick(wanted, matchingOnly: true).prefix(4).map(\.spec.name))
+        var near = group.pick(wanted, matchingOnly: true).prefix(4).map(\.spec.name)
+        // A small connector comes whole whatever was wanted. Of its tools, the ones that share a word
+        // with the name that was called are the ones meant: `files_read` is `read_file`.
+        if group.tools.count <= ToolGroup.wholeLimit {
+            let words = Set(ToolGroup.terms(wanted))
+            let sharing = group.tools.map(\.spec.name).filter { !words.isDisjoint(with: ToolGroup.terms($0.replacingOccurrences(of: "_", with: " "))) }
+            if !sharing.isEmpty { near = Array(sharing.prefix(4)) }
+        }
+        let picked = affordable(near)
         guard !picked.isEmpty else { return nil }
         add(picked)
         return (group.title, picked)
+    }
+
+    /// The same for a connector whose tools share no prefix, as the file tools do not: the tools
+    /// whose every word is in the name that was called (`file_read` and `repo_read_file` both
+    /// mean `read_file`). One word in common is not enough: `search` may as well be the web's.
+    private mutating func nearestByWords(to name: String) -> (title: String, tools: [String])? {
+        let called = Set(ToolGroup.terms(name.replacingOccurrences(of: "_", with: " ")))
+        var best: (group: ToolGroup, tools: [String])?
+        for group in groups {
+            let fitting = group.tools.map(\.spec.name).filter { tool in
+                let words = Set(ToolGroup.terms(tool.replacingOccurrences(of: "_", with: " ")))
+                return words.count > 1 && words.isSubset(of: called)
+            }
+            if fitting.count > best?.tools.count ?? 0 { best = (group, fitting) }
+        }
+        guard let best else { return nil }
+        let picked = affordable(Array(best.tools.prefix(4)))
+        add(picked)
+        return (best.group.title, picked)
     }
 
     /// Declares connector tools that the text names outright, such as a skill's
@@ -384,7 +456,7 @@ struct ToolShelf {
     /// should not have to search for the tool. True when that declared something new.
     mutating func loadNamed(in text: String, request: String) -> Bool {
         let before = loaded
-        for name in toolsByName.keys.sorted() where !loaded.contains(name) && text.contains(name) {
+        for name in toolsByName.keys.sorted() where !loaded.contains(name) && ToolGroup.names(name, in: text) {
             _ = use(name, request: request)
         }
         return loaded != before

@@ -23,9 +23,14 @@ cases = defaultdict(list)
 WRITES = [
     "calendar_create", "calendar_delete", "reminders_add", "reminders_complete", "reminders_delete", "contacts_add",
     "notes_create", "notes_append", "github_add_issue_comment", "github_issue_write", "github_create_branch",
-    "github_create_or_update_file", "github_edit_file", "github_push_files", "github_create_pull_request", "github_merge_pull_request", "repo_edit_file", "repo_write_file", "repo_open_pull_request", "mail_draft", "linear_save_issue",
+    "github_create_or_update_file", "github_edit_file", "github_push_files", "github_create_pull_request", "github_merge_pull_request", "edit_file", "write_file", "repo_open_pull_request", "mail_draft", "linear_save_issue",
     "linear_save_comment", "home_lights", "home_thermostat", "timer_start", "timer_alarm", "music_play",
 ]
+# Files in the folder the file tools work on, for the cases that are about the user's files.
+DEVICE = {
+    "packing-list.txt": "Passport, charger, adapter, sunscreen\n",
+    "Documents/taxes-2025.md": "# Taxes 2025\n\nFiled on 14 April. Refund expected: 312.\n",
+}
 # How an honest "I found nothing" reads.
 NOT_FOUND = ["couldn't", "could not", "can't", "cannot", "unable", "no ", "not ", "don't", "didn't", "doesn't", "isn't", "none", "404"]
 
@@ -147,7 +152,8 @@ add(L, "gh-review", ["Which pull request on acme/rocket still needs a review?"],
 add(L, "gh-issue", ["What's the latest comment on issue 12 in acme/rocket?", "Read issue #12 on acme/rocket and tell me the most recent comment."], readonly=True, tools=["github_issue_read"], answer=["v2.3"])
 add(L, "gh-issue31", ["What does the latest comment on issue 31 in acme/rocket say?"], readonly=True, tools=["github_issue_read"], answer=["off-by-one"])
 add(L, "gh-code", ["Where is read_fuel_level defined in acme/rocket?", "Search the acme/rocket code for read_fuel_level. Which file is it in?"], readonly=True, anyTool=["github_search_code", "github_get_file_contents"], answer=["gauge.py"])
-add(L, "gh-file", ["Show me what's in src/gauge.py in acme/rocket.", "Read the file src/gauge.py from the acme/rocket repo."], readonly=True, tools=["github_get_file_contents"], answer=["offset"])
+# A file of a repository is read with GitHub's own tool, or from a clone with the file tools.
+add(L, "gh-file", ["Show me what's in src/gauge.py in acme/rocket.", "Read the file src/gauge.py from the acme/rocket repo."], readonly=True, anyTool=["github_get_file_contents", "read_file"], answer=["offset"])
 add(L, "mail-unread", ["Do I have any unread email?", "What's new in my inbox?", "Any new emails I haven't read?"], readonly=True, tools=["mail_unread"], answerAny=["becker", "landlord", "boiler"])
 add(L, "mail-landlord", ["Do I have any unread email from my landlord? What does it say?", "What did my landlord email me about?", "Read me the latest email from Tom Becker."], readonly=True, tools=["mail_read"], answer=["boiler"])
 add(L, "mail-when", ["My landlord emailed about the boiler. What day is the engineer coming?"], readonly=True, tools=["mail_read"], answer=["tuesday"])
@@ -165,8 +171,8 @@ add(L, "travel", ["How long will it take to drive from home to the airport right
 add(L, "pharmacy", ["Find a pharmacy near me.", "Where's the nearest pharmacy?"], readonly=True, tools=["maps_search"], answer=["greenway"])
 add(L, "pharmacy-hours", ["How late is the nearest pharmacy open?"], readonly=True, tools=["maps_search"], answerAny=["20:00", "8 pm", "8pm", "8:00"])
 add(L, "directions", ["Give me driving directions from home to the airport.", "How do I drive to the airport from home? Step by step."], readonly=True, tools=["maps_directions"], answer=["a40"])
-add(L, "files", ["What files do I have on this device?", "List my files."], readonly=True, tools=["files_list"], answer=["taxes"])
-add(L, "packing", ["What's in my packing list file?", "Read my packing-list.txt file.", "Open my packing list file and tell me what's on it."], readonly=True, tools=["files_read"], answer=["sunscreen"])
+add(L, "files", ["What files do I have on this device?", "List my files."], files=DEVICE, readonly=True, tools=["list_files"], answer=["taxes"])
+add(L, "packing", ["What's in my packing list file?", "Read my packing-list.txt file.", "Open my packing list file and tell me what's on it."], files=DEVICE, readonly=True, tools=["read_file"], answer=["sunscreen"])
 add(L, "playing", ["What song is playing right now?", "Is any music playing?"], readonly=True, tools=["music_now_playing"])
 add(L, "timers", ["Are any timers running?", "Do I have a timer going?"], readonly=True, tools=["timer_list"])
 
@@ -211,7 +217,7 @@ add(X, "steps-diff", ["How many more steps did I take yesterday than I have so f
 add(X, "oldest-issue", ["Find the oldest open issue in acme/rocket and tell me its latest comment.", "On acme/rocket, open the oldest open issue and read me the newest comment on it."], tools=["github_list_issues", "github_issue_read"], answer=["v2.3"])
 add(X, "gym", ["Find a free hour tomorrow afternoon and book 'Gym' in it.", "Look at when I'm free tomorrow afternoon and put a one-hour gym session there."], anyTool=["calendar_find_free", "calendar_list"], tools=["calendar_create"], args=["gym"])
 add(X, "priya", ["What's Priya's phone number, and what time am I meeting her tomorrow?", "I'm seeing Priya tomorrow. When exactly, and what's her number in case I'm late?"], tools=["contacts_search", "calendar_list"], answer=["555-0177"], answerAny=["13:00", "1:00", "1 pm", "1pm"])
-add(X, "trip-note", ["Copy my packing list file into a new note called Trip.", "Read packing-list.txt and save its contents as a note titled Trip."], tools=["files_read", "notes_create"], args=["sunscreen"])
+add(X, "trip-note", ["Copy my packing list file into a new note called Trip.", "Read packing-list.txt and save its contents as a note titled Trip."], files=DEVICE, tools=["read_file", "notes_create"], args=["sunscreen"])
 add(X, "pharmacy-reminder", ["Find the nearest pharmacy and remind me to go there tomorrow at 9am.", "Look up a pharmacy near me and add a reminder for 9 tomorrow morning to visit it."], tools=["maps_search", "reminders_add"], args=["09:00"], argsAny=["greenway", "pharmacy"])
 add(X, "wifi-mail", ["Draft an email to priya@example.com with my home wifi password from my notes.", "Priya is visiting. Email priya@example.com the wifi password; it's in my notes."], tools=["notes_read", "mail_draft"], args=["tangerine-42", "priya@example.com"])
 add(X, "morning", ["Give me a morning briefing: today's calendar, my unread email, and the weather in Lisbon.", "Brief me: what's on today, any unread mail, and Lisbon's weather."], tools=["calendar_list", "mail_unread", "weather_current"], answer=["accountant", "19"])
@@ -260,11 +266,19 @@ add(F, "linear-comment", [["What is ENG-412 about in Linear?", "Add a comment th
 add(F, "wifi-then-add", [["What's my wifi password? It's in my notes.", "Add a line to that note: 'Changed 16 November'."]], tools=["notes_read", "notes_append"], args=["note_4"])
 add(F, "draft-after", [["What did my landlord email me about?", "Draft a reply to tom@beckerlets.example saying Tuesday works."]], tools=["mail_read", "mail_draft"], args=["tom@beckerlets.example", "tuesday"])
 
+# Files of the user's own, in the folder the file tools work on.
+FOLDER = {
+    "todo.md": "- [ ] Renew passport\n- [ ] Book dentist\n- [ ] Pay council tax\n",
+    "notes/trip.md": "# Lisbon trip\n\nFlight TP1351 leaves at 07:40 on 3 March.\nHotel: Casa do Bairro, two nights.\n",
+    "home/codes.md": "Garage door code: 4471\nBike lock: 9-2-6\n",
+}
+
 # ---------------------------------------------------------------- pullrequest
 # Change a file in a repository and open a pull request: find, read, branch, save, open.
 P = "pullrequest"
-# A pull request may go through the code tools (clone, edit, open) or through GitHub's own.
-# Either way the changed file is in the record whole: `args` checks the change and that the rest survived.
+# A pull request may go through the file tools with GitHub's two beside them (clone, edit, open) or
+# through GitHub's own. Either way the changed file is in the record whole: `args` checks the change
+# and that the rest survived.
 PR = dict(anyTool=["repo_open_pull_request", "github_create_pull_request"], forbid=["github_merge_pull_request"], answerAny=["pull/42", "#42", "42"])
 add(P, "orange", ["Open a pull request on acme/rocket that changes the page background in web/styles.css from white to orange.", "In acme/rocket, web/styles.css sets a white background. Make it orange and open a PR."], args=["orange", "font-family: helvetica"], **PR)
 add(P, "orange-find", ["The website in acme/rocket has a white background. Change it to orange and open a pull request.", "Open a PR on acme/rocket to make the site's background colour orange."], args=["orange", "font-family: helvetica"], **PR)
@@ -277,9 +291,28 @@ add(P, "telemetry", ["The telemetry export in acme/rocket drops the last row. Fi
 add(P, "heading", ["Change the heading on the acme/rocket web page from Rocket to Rocket Control and open a pull request.", "The acme/rocket site's main heading should say Rocket Control. Open a PR."], args=["<h1>rocket control</h1>", "<!doctype html>"], **PR)
 add(P, "text-colour", ["Open a PR on acme/rocket that makes the page's text colour black (#000000)."], args=["#000000", "background: #ffffff", "font-family: helvetica"], **PR)
 add(P, "new-file", ["Add a file docs/NOTES.md to acme/rocket that says 'Launch notes go here.' and open a pull request."], args=["launch notes go here"], **PR)
-add(P, "read-only", ["What colour does web/styles.css in acme/rocket set for the page background?"], readonly=True, anyTool=["github_get_file_contents", "repo_read_file", "repo_search", "github_search_code"], answer=["#ffffff"])
-add(P, "read-only-find", ["Which file in acme/rocket defines read_fuel_level, and what number is OFFSET set to?"], readonly=True, anyTool=["github_get_file_contents", "repo_read_file", "repo_search", "github_search_code"], answer=["gauge.py", "12"])
-add(P, "no-repo", ["Open a pull request that changes the background to orange."], forbid=["github_create_pull_request", "github_create_branch", "repo_open_pull_request", "repo_edit_file"])
+add(P, "read-only", ["What colour does web/styles.css in acme/rocket set for the page background?"], readonly=True, anyTool=["github_get_file_contents", "read_file", "search_files", "github_search_code"], answer=["#ffffff"])
+add(P, "read-only-find", ["Which file in acme/rocket defines read_fuel_level, and what number is OFFSET set to?"], readonly=True, anyTool=["github_get_file_contents", "read_file", "search_files", "github_search_code"], answer=["gauge.py", "12"])
+add(P, "no-repo", ["Open a pull request that changes the background to orange."], forbid=["github_create_pull_request", "github_create_branch", "repo_open_pull_request", "edit_file"])
+# The folder already holds files of the user's own, so the repository's are met beside them.
+add(P, "orange-beside", ["Open a pull request on acme/rocket that changes the page background in web/styles.css from white to orange."], files=FOLDER, args=["orange", "font-family: helvetica"], **PR)
+add(P, "typo-beside", ["Fix the typo in the title of the README in acme/rocket and open a pull request."], files=FOLDER, args=["# rocket", "python -m rocket"], **PR)
+# A new file at the top of the repository: its path has to say it is the repository's.
+add(P, "new-file-top", ["Add a file CONTRIBUTING.md at the top of acme/rocket that says 'Open an issue before a pull request.' and open a pull request."], args=["open an issue before a pull request"], **PR)
+
+# ---------------------------------------------------------------- files
+# Files in the app's own folder, with no repository in sight: write, list, find, read, change.
+FL = "files"
+NO_GITHUB = ["repo_clone", "repo_open_pull_request", "github_create_or_update_file", "github_push_files", "github_create_branch", "github_create_pull_request"]
+add(FL, "write", ["Save a file called shopping.md with three items: milk, eggs and bread.", "Write a file named shopping.md that lists milk, eggs and bread."], tools=["write_file"], args=["shopping.md", "milk", "eggs", "bread"], forbid=NO_GITHUB)
+add(FL, "write-folder", ["Add a file notes/ideas.md to my files that says 'Try the small model on the watch.'"], files=FOLDER, tools=["write_file"], args=["notes/ideas.md", "small model on the watch"], forbid=NO_GITHUB)
+add(FL, "list", ["What files do I have in my files folder?", "List my files."], files=FOLDER, readonly=True, tools=["list_files"], answer=["todo.md", "trip.md", "codes.md"])
+add(FL, "read", ["Read notes/trip.md in my files and tell me when the flight leaves.", "My files have notes/trip.md. What time is the flight in it?"], files=FOLDER, readonly=True, anyTool=["read_file", "search_files"], answer=["07:40"])
+add(FL, "find", ["One of my files has the garage door code. What is it?", "Search my files for the garage door code."], files=FOLDER, readonly=True, anyTool=["search_files", "read_file"], answer=["4471"])
+add(FL, "edit", ["In my files, todo.md has a line 'Book dentist'. Change it to 'Book dentist for Friday'."], files=FOLDER, anyTool=["edit_file", "write_file"], args=["book dentist for friday"], forbid=NO_GITHUB)
+add(FL, "edit-2", ["Edit todo.md in my files: 'Pay council tax' should say 'Pay council tax by the 30th'."], files=FOLDER, anyTool=["edit_file", "write_file"], args=["pay council tax by the 30th"], forbid=NO_GITHUB)
+add(FL, "write-then-edit", [["Save a file called plan.md that says: Monday gym, Tuesday rest.", "In that file, change Tuesday rest to Tuesday swim."]], tools=["write_file"], anyTool=["edit_file", "write_file"], args=["tuesday swim"], forbid=NO_GITHUB)
+add(FL, "missing", ["Read budget.md from my files and tell me the total."], files=FOLDER, readonly=True, anyTool=["read_file", "list_files", "search_files"], answerAny=NOT_FOUND)
 
 # ---------------------------------------------------------------- skills
 S = "skills"

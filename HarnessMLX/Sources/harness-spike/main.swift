@@ -156,7 +156,8 @@ let suiteHost = RecordingHost(
     base: FixedRepositoryHost(owner: "acme", repo: "rocket", files: Dictionary(uniqueKeysWithValues: GitHubTool.files.map { ($0.path, $0.text) })),
     recorder: recorder)
 let suiteWorkspace = Workspace(
-    directory: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-workspace-\(UUID().uuidString)"), host: suiteHost)
+    directory: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-workspace-\(UUID().uuidString)"))
+let suiteRepository = RepositoryCopy(workspace: suiteWorkspace, host: suiteHost)
 let memory = MemoryStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-memory-\(UUID().uuidString).md"))
 let coreTools: [any Tool] = [WebSearchTool(), FetchPageTool(), JavaScriptTool(), SaveMemoryTool(store: memory)]
 let recordedCore: [any Tool] = coreTools.map { RecordedTool(base: $0, recorder: recorder) }
@@ -523,16 +524,21 @@ case "linear", "linear-all":
     systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", connectors: groups)
 case "suite":
     // The world the eval cases run in: the app's built-in tools with the web faked,
-    // skills, the 13 stand-in connectors and Linear, all opened on demand.
+    // skills, the stand-in connectors, GitHub, Linear and the file tools, all opened on demand.
     let web = WebFixtures.load()
     let suiteCore: [any Tool] = [web.searchTool(), web.fetchTool(), JavaScriptTool(), SaveMemoryTool(store: memory), UseSkillTool(skills: suiteSkills)]
     agentTools = suiteCore.map { RecordedTool(base: $0, recorder: recorder) }
-    // GitHub and Linear are their real tool definitions; the toy GitHub of the older setups stays out.
-    groups = ToolGroup.linking(connectorSummaries.filter { $0.group != "github" }.map { group, summary in
+    // GitHub and Linear are their real tool definitions, and the file tools are the app's own, on a
+    // real folder: the toy GitHub and the toy files of the older setups stay out.
+    groups = ToolGroup.linking(connectorSummaries.filter { $0.group != "github" && $0.group != "files" }.map { group, summary in
         ToolGroup(name: group, title: group, summary: summary, tools: connectors.filter { $0.group == group })
     } + [
-        ToolGroup(name: "github", title: "GitHub", summary: "Repositories, issues and pull requests", tools: FileEditTool.adding(to: loadGitHubTools(recorder: recorder), title: "GitHub")),
-        RepoTool.group(workspace: suiteWorkspace) { name, arguments in recorder.record(name, arguments) },
+        // As in the app with Files on: GitHub without its own tools for changing code, which the file tools do.
+        ToolGroup(
+            name: "github", title: "GitHub", summary: "Repositories, issues and pull requests",
+            tools: FileEditTool.adding(to: loadGitHubTools(recorder: recorder), title: "GitHub")
+                .filter { !RepositoryTool.replaces($0.spec.name, connector: "github") }),
+        FileTool.group(workspace: suiteWorkspace, repository: suiteRepository) { name, arguments in recorder.record(name, arguments) },
         ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance),
     ], to: suiteSkills)
     systemText = PromptBuilder.systemPrompt(preset: preset, memory: "", skills: suiteSkills, connectors: groups)
@@ -624,7 +630,10 @@ if let suitePath {
         memory.setFacts([])
         GitHubState.shared.reset()
         await suiteWorkspace.reset()
+        await suiteRepository.reset()
         suiteHost.reset()
+        // The files the case says are in the folder before the chat starts.
+        for (path, text) in (item.files ?? [:]).sorted(by: { $0.key < $1.key }) { _ = await suiteWorkspace.write(path, content: text) }
         var messages: [Message] = [
             .system(PromptBuilder.systemPrompt(preset: preset, memory: item.memory ?? "", skills: suiteSkills, connectors: groups))
         ]

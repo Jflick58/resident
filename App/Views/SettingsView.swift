@@ -274,7 +274,7 @@ struct PresetEditor: View {
             } header: {
                 Text("Connectors")
             } footer: {
-                Text("The model sees each connector as one line and opens a few of its tools when a request needs them. Calendar and Reminders stay on this device. Add more in Settings > Connectors.")
+                Text("The model sees each connector as one line and opens a few of its tools when a request needs them. Calendar, Reminders and Files stay on this device. With GitHub on as well, Files can clone a repository and open a pull request. Add more in Settings > Connectors.")
             }
 
             Section {

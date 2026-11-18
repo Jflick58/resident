@@ -76,6 +76,7 @@ The full detail, part by part with the file to read for each, is in [docs/HARNES
 - **Run models on the device.** A curated list with a fit check for your phone, or any MLX model from a Hugging Face link.
 - **Use your services.** Add any MCP server by address, or pick from the suggested list: GitHub, Linear, Notion, Atlassian, Sentry, Hugging Face and DeepWiki. Sign-in happens in the system browser, and tokens stay in the Keychain.
 - **Work with your phone.** Calendar and Reminders, read and written on the device.
+- **Work on files.** The tools a coding agent has (list, search, read, edit, write) on the app's folder in the Files app: put files in, take out what the model wrote. With GitHub connected, the model can clone a repository into it, change the code and open a pull request.
 - **Search and read the web.** Search and page reading run on the phone, with no account or key.
 - **Run code.** A JavaScript sandbox with no network and no file access.
 - **Read what you attach.** Photos, PDFs and documents, with text recognition for scans.
