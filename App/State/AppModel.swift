@@ -238,8 +238,21 @@ final class AppModel {
     /// file, and nil otherwise. Asks the system about every page of the file, so not for the main thread.
     nonisolated static func weightsInMemory() -> (inMemory: Int, mapped: Int)? { MLXEngine.mappedWeights }
 
-    /// EXPERIMENT. Maps the next model's weights shared, for measuring that against the usual way.
-    nonisolated static func setSharesWeightPages(_ on: Bool) { MLXEngine.setSharesWeightPages(on) }
+    /// EXPERIMENT. How the next mapped model's weights are kept: "copied" (the GPU's own copies, as
+    /// until now), "shared" (the file's own pages), or "held" (shared, and pinned while a turn runs).
+    nonisolated static func setWeightKeeping(_ name: String) {
+        MLXEngine.setSharesWeightPages(name == "shared" || name == "held")
+        MLXEngine.setHoldsWeights(name == "held")
+    }
+
+    /// Lets go of the loaded model, so that the next message loads it afresh with the settings as they are now.
+    func reloadModel() {
+        Task { await MLXEngine.shared.unload() }
+    }
+
+    /// A chat's turn has begun or ended. The model is at work from one to the other.
+    func turnBegan() { MLXEngine.workBegan() }
+    func turnEnded() { MLXEngine.workEnded() }
 
     // MARK: Chats
 
@@ -410,6 +423,8 @@ final class AppModel {
                 // With weights mapped, the memory MLX keeps for reuse is what crowds them out of
                 // memory: capped at 64 MB, Bonsai 9B on a Mac peaked at 419 MB charged, not 1.1 GB, at the same speed.
                 if UserDefaults.standard.bool(forKey: "mapWeights") { MLXEngine.setCacheLimit(megabytes: 64) }
+                // EXPERIMENT: how the mapped weights are kept in memory. A launch argument of the same name wins over the setting.
+                Self.setWeightKeeping(UserDefaults.standard.string(forKey: "weightKeeping") ?? "copied")
                 try await MLXEngine.shared.load(directory: directory) { fraction in
                     Task { @MainActor in
                         if case .loading = self.loadState {

@@ -528,6 +528,9 @@ public actor MLXEngine {
         let transcript = request.messages.filter { $0.role != .system }
         let alone = request.options.standsAlone == true
         if !alone { adoptPendingAssistant(from: transcript.map(Mark.init), roles: transcript.map(\.role)) }
+        // The model is at work for as long as this request runs, whoever asked.
+        Self.workBegan()
+        defer { Self.workEnded() }
         do {
             try await generate(request, contextTokens: contextTokens, continuation: continuation)
             continuation.finish()
@@ -773,7 +776,8 @@ extension MLXEngine {
             + (cacheBytes.map { "cache \(megabytes($0))  " } ?? "")
             + "MLX in use \(megabytes(held.active)) kept \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
             + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped)) "
-            + "(\(weights.readsFilePages ? "shared" : "private"): copies \(megabytes(weights.copied)), squeezed \(megabytes(weights.compressed)))  "
+            + "(\(weights.readsFilePages ? "shared" : "private"), \(WeightMapping.holds ? "pinned \(megabytes(weights.pinned))" : "not pinned"): "
+            + "copies \(megabytes(weights.copied)), squeezed \(megabytes(weights.compressed)))  "
             + "phone: free \(megabytes(system.free)) apps \(megabytes(system.written)) files \(megabytes(system.files)) "
             + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))"
             + (readBack.map { "  read back \(megabytes($0)) during the reply" } ?? "") + "\n"
@@ -798,6 +802,28 @@ extension MLXEngine {
 
     /// EXPERIMENT. Maps the next model's weights shared, so the GPU reads the file's own pages. See `WeightMapping`.
     public nonisolated static func setSharesWeightPages(_ on: Bool) { WeightMapping.sharesPages = on }
+
+    /// EXPERIMENT. Pins what a mapped model has read for as long as it is at work. See `WeightMapping.hold()`.
+    public nonisolated static func setHoldsWeights(_ on: Bool) { WeightMapping.holds = on }
+
+    /// How many are at work with the model: requests being answered, and turns that span several of them.
+    private static let atWork = OSAllocatedUnfairLock(initialState: 0)
+
+    /// Says the model is about to be at work: a turn has begun, or a request. Its weights are held in
+    /// memory from the first of these until the last has ended. A turn says so as well as its
+    /// requests, so the weights are not let go while a tool runs between two of them.
+    public nonisolated static func workBegan() {
+        atWork.withLock { $0 += 1 }
+        WeightMapping.hold()
+    }
+
+    public nonisolated static func workEnded() {
+        let left = atWork.withLock { count -> Int in
+            count = max(0, count - 1)
+            return count
+        }
+        if left == 0 { WeightMapping.release() }
+    }
 
     /// What MLX holds: in use, kept for reuse, and the most it has held, in bytes.
     public nonisolated static var memoryInUse: (active: Int, cache: Int, peak: Int) {

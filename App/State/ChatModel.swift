@@ -193,6 +193,8 @@ final class ChatModel {
 
     private func run() {
         isRunning = true
+        // Until `finish`: the model's weights are not let go while a tool runs between two of its replies.
+        app.turnBegan()
         lastToolSummary = nil
         userStopped = false
         conversation.turnInProgress = true
@@ -418,6 +420,7 @@ final class ChatModel {
 
     private func finish() {
         isRunning = false
+        app.turnEnded()
         if turnCompleted, !userStopped, errorMessage == nil, stopReason == nil {
             let lastUser = conversation.messages.lastIndex { $0.role == .user } ?? 0
             let usedMemory = conversation.messages[lastUser...].contains {

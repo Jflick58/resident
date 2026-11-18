@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @AppStorage("mapWeights") private var mapsWeights = false
+    @AppStorage("weightKeeping") private var weightKeeping = "copied"
 
     var body: some View {
         NavigationStack {
@@ -85,10 +86,19 @@ struct SettingsView: View {
                 Section {
                     Toggle("Map Model Weights", isOn: $mapsWeights)
                         .onChange(of: mapsWeights) { ModelFit.weightsAreMapped = mapsWeights }
+                    if mapsWeights {
+                        Picker("Keep Weights", selection: $weightKeeping) {
+                            Text("Copied").tag("copied")
+                            Text("Shared").tag("shared")
+                            Text("Shared and Pinned").tag("held")
+                        }
+                        // The model is loaded again with the new choice the next time it is used.
+                        .onChange(of: weightKeeping) { app.reloadModel() }
+                    }
                 } header: {
                     Text("Experimental")
                 } footer: {
-                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model rearranges its weights file, which takes a few minutes for a large one. Takes effect the next time a model is loaded.")
+                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model rearranges its weights file, which takes a few minutes for a large one. Takes effect the next time a model is loaded.\n\nKeep Weights is how they stay in memory. Copied: the graphics processor works on its own copies, which the system can only squeeze. Shared: it works on the file's own pages, which the system can take back and read again. Shared and Pinned: the same, held in place while a reply is being written.")
                 }
             }
             .navigationTitle("Settings")

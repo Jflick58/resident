@@ -37,8 +37,27 @@ public enum WeightMapping {
     nonisolated(unsafe) public static var isOn = false
     /// Tensors smaller than this are loaded the usual way: a page each would waste more than it saves.
     static let smallest = 64 * 1024
-    /// Whether the next file is mapped shared. `HARNESS_MAP=shared` starts with it on.
-    nonisolated(unsafe) public static var sharesPages = ProcessInfo.processInfo.environment["HARNESS_MAP"] == "shared"
+    /// Whether the next file is mapped shared. `HARNESS_MAP=shared` or `held` starts with it on.
+    nonisolated(unsafe) public static var sharesPages = ["shared", "held"].contains(ProcessInfo.processInfo.environment["HARNESS_MAP"] ?? "")
+    /// Whether `hold()` does anything. `HARNESS_MAP=held` starts with it on.
+    nonisolated(unsafe) public static var holds = ProcessInfo.processInfo.environment["HARNESS_MAP"] == "held"
+
+    /// Keeps in memory the weights that have been read, and whatever is read from here on, until `release()`.
+    ///
+    /// Nothing else does. The GPU has the pages it is using kept in place, but only while it is
+    /// using them: on a 12 GB phone, in the half minute its user took to type a second message,
+    /// the system took 3.5 GB of a 27B's weights back, and the reply that then needed them all
+    /// again ended with the app being closed. So the app says when the model is at work. While
+    /// it is, what the model has read is pinned (a Metal residency set over the same pages). When
+    /// it is not, the pages are given up, and with a shared mapping the system can have them for
+    /// nothing: they are the file's, and are read back when the next reply starts.
+    public static func hold() {
+        guard holds, isOn else { return }
+        PagedWeights.holdAll()
+    }
+
+    /// Lets go of what `hold()` pinned.
+    public static func release() { PagedWeights.releaseAll() }
 
     /// How the mapped weights are held right now, in bytes.
     public struct Held: Sendable {
@@ -52,6 +71,8 @@ public enum WeightMapping {
         public var compressed = 0
         /// False when a file had to be mapped privately, so the GPU works on copies.
         public var readsFilePages = true
+        /// Pinned in memory by `hold()` right now.
+        public var pinned = 0
     }
 
     public static var held: Held { PagedWeights.held }
@@ -86,14 +107,25 @@ final class PagedWeights: @unchecked Sendable {
     nonisolated(unsafe) private static var open: [String: PagedWeights] = [:]
 
     /// The mapping for a weights file, made on first use and kept for the life of the process.
+    ///
+    /// When the file is wanted mapped the other way (shared, or private) a new mapping is made. The
+    /// old one is left mapped and unused: something may still hold a view into it, and what it
+    /// costs is address space, since the system takes back pages nothing touches.
     static func shared(for url: URL) throws -> PagedWeights {
         lock.lock()
         defer { lock.unlock() }
-        if let existing = open[url.path] { return existing }
+        if let existing = open[url.path] {
+            if existing.sharesPages == WeightMapping.sharesPages { return existing }
+            existing.unpin()
+            retired.append(existing)
+        }
         let made = try PagedWeights(source: url)
         open[url.path] = made
         return made
     }
+
+    /// Mappings replaced by one made the other way, kept so their memory stays mapped.
+    nonisolated(unsafe) private static var retired: [PagedWeights] = []
 
     static var held: WeightMapping.Held {
         lock.lock()
@@ -106,15 +138,50 @@ final class PagedWeights: @unchecked Sendable {
             held.inMemory += one.inMemory
             held.copied += one.copied
             held.compressed += one.compressed
+            held.pinned += one.pinned
             if !one.readsFilePages { held.readsFilePages = false }
         }
         return held
+    }
+
+    /// Follows the weights as they are read while they are held: once a second, what has come into memory is pinned too.
+    nonisolated(unsafe) private static var follower: DispatchSourceTimer?
+
+    static func holdAll() {
+        lock.lock()
+        let all = Array(open.values)
+        if follower == nil {
+            let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+            timer.schedule(deadline: .now() + 1, repeating: 1)
+            timer.setEventHandler {
+                lock.lock()
+                let all = Array(open.values)
+                lock.unlock()
+                for weights in all { weights.pin(holding: true) }
+            }
+            timer.resume()
+            follower = timer
+        }
+        lock.unlock()
+        for weights in all { weights.pin(holding: true) }
+    }
+
+    static func releaseAll() {
+        lock.lock()
+        follower?.cancel()
+        follower = nil
+        let all = Array(open.values)
+        lock.unlock()
+        for weights in all { weights.unpin() }
     }
 
     private let base: UnsafeMutableRawPointer
     private let length: Int
     /// True when the file is mapped shared, so the GPU reads its own pages.
     let sharesPages: Bool
+    /// What `pin` keeps in memory: buffers over stretches of the mapping, in a residency set, and which pages they cover.
+    private let pinLock = NSLock()
+    private var pins: Pins?
     /// Where each tensor that can be used in place starts in the mapping, and how long it is.
     private let places: [String: (offset: Int, bytes: Int)]
 
@@ -171,10 +238,103 @@ final class PagedWeights: @unchecked Sendable {
         #endif
     }
 
+    /// The stretches of a mapping pinned in memory. A residency set keeps its buffers' pages where they
+    /// are for as long as residency is asked for, and they are the pages the model's own buffers use.
+    private final class Pins {
+        #if canImport(Metal)
+        let device: any MTLDevice
+        /// An `MTLResidencySet`, kept untyped so the class exists on systems before it did.
+        let set: AnyObject
+        var buffers: [any MTLBuffer] = []
+        #endif
+        var covered: [Bool]
+        var bytes = 0
+        var isHolding = false
+
+        #if canImport(Metal)
+        init(device: any MTLDevice, set: AnyObject, pages: Int) {
+            self.device = device
+            self.set = set
+            covered = [Bool](repeating: false, count: pages)
+        }
+        #endif
+    }
+
+    /// The longest stretch one buffer covers. Residency is decided a buffer at a time.
+    static let pinStretch = 256 << 20
+    /// Stretches of pages in memory shorter than this are not worth a buffer of their own.
+    static let smallestPin = 1 << 20
+
+    /// Pins the pages that are in memory now and are not pinned yet, and asks for all that is pinned to stay.
+    func pin(holding: Bool) {
+        #if canImport(Metal)
+        guard #available(macOS 15, iOS 18, *) else { return }
+        pinLock.lock()
+        defer { pinLock.unlock() }
+        let page = Int(getpagesize())
+        let count = (length + page - 1) / page
+        if pins == nil {
+            guard let device = MTLCreateSystemDefaultDevice(),
+                let set = try? device.makeResidencySet(descriptor: MTLResidencySetDescriptor())
+            else { return }
+            pins = Pins(device: device, set: set, pages: count)
+        }
+        guard let pins, let set = pins.set as? any MTLResidencySet else { return }
+        var flags = [CChar](repeating: 0, count: count)
+        guard mincore(base, length, &flags) == 0 else { return }
+        var added = false
+        var index = 0
+        while index < count {
+            guard flags[index] & CChar(MINCORE_INCORE) != 0, !pins.covered[index] else {
+                index += 1
+                continue
+            }
+            // A stretch of pages in memory that nothing covers yet, up to the most one buffer takes.
+            var end = index
+            while end < count, end - index < Self.pinStretch / page, flags[end] & CChar(MINCORE_INCORE) != 0, !pins.covered[end] { end += 1 }
+            let bytes = min((end - index) * page, length - index * page)
+            // A whole number of pages only: the end of the file, when it is not one, is left out.
+            let whole = bytes / page * page
+            if whole >= Self.smallestPin,
+                let buffer = pins.device.makeBuffer(
+                    bytesNoCopy: base + index * page, length: whole, options: [.storageModeShared, .hazardTrackingModeUntracked],
+                    deallocator: nil)
+            {
+                set.addAllocation(buffer)
+                pins.buffers.append(buffer)
+                pins.bytes += whole
+                for covered in index ..< index + whole / page { pins.covered[covered] = true }
+                added = true
+            }
+            index = end
+        }
+        if added { set.commit() }
+        // Asked again each time: the system can let residency go while the GPU is idle, standing request or not.
+        if holding {
+            set.requestResidency()
+            pins.isHolding = true
+        }
+        #endif
+    }
+
+    func unpin() {
+        #if canImport(Metal)
+        guard #available(macOS 15, iOS 18, *) else { return }
+        pinLock.lock()
+        defer { pinLock.unlock() }
+        guard let pins, pins.isHolding, let set = pins.set as? any MTLResidencySet else { return }
+        set.endResidency()
+        pins.isHolding = false
+        #endif
+    }
+
     /// How this file's pages are held, by asking the system about each.
     var held: WeightMapping.Held {
         let page = Int(getpagesize())
         var held = WeightMapping.Held(mapped: length, readsFilePages: sharesPages)
+        pinLock.lock()
+        if let pins, pins.isHolding { held.pinned = pins.bytes }
+        pinLock.unlock()
         var pages = [CChar](repeating: 0, count: (length + page - 1) / page)
         guard mincore(base, length, &pages) == 0 else { return held }
         for flags in pages {

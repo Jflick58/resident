@@ -73,6 +73,31 @@ struct PagedWeightsTests {
         #expect(Data(bytes[start ..< (start + large.count)]) == large)
     }
 
+    @Test(.enabled(if: hasGPU)) func `what has been read can be pinned, let go and pinned again`() throws {
+        guard #available(macOS 15, iOS 18, *) else { return }
+        let (url, _) = try weightsFile()
+        let weights = try PagedWeights(source: url, shared: true)
+        #expect(weights.held.pinned == 0)
+
+        // The GPU goes over the weights, as a model does in its first reply.
+        let bytes = weights.bytes
+        #expect(PagedWeights.gpuReads(try #require(bytes.baseAddress), length: bytes.count))
+        weights.pin(holding: true)
+        let pinned = weights.held.pinned
+        #expect(pinned >= 4 * 1024 * 1024 && pinned <= bytes.count)
+        // Pinning adds no copies: the pages pinned are the file's own.
+        #expect(weights.held.copied == 0)
+        // Asked again, it pins nothing twice.
+        weights.pin(holding: true)
+        #expect(weights.held.pinned == pinned)
+
+        weights.unpin()
+        #expect(weights.held.pinned == 0)
+        weights.pin(holding: true)
+        #expect(weights.held.pinned == pinned)
+        weights.unpin()
+    }
+
     @Test func `a mapping is private unless asked to be shared, and says so`() throws {
         let (url, large) = try weightsFile(large: 256 * 1024)
         #expect(!WeightMapping.sharesPages)
