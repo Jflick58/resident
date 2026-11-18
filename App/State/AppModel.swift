@@ -234,6 +234,13 @@ final class AppModel {
         store.save(skills)
     }
 
+    /// How much of the loaded model is in memory, in bytes, when its weights are used from a mapped
+    /// file, and nil otherwise. Asks the system about every page of the file, so not for the main thread.
+    nonisolated static func weightsInMemory() -> (inMemory: Int, mapped: Int)? { MLXEngine.mappedWeights }
+
+    /// EXPERIMENT. Maps the next model's weights shared, for measuring that against the usual way.
+    nonisolated static func setSharesWeightPages(_ on: Bool) { MLXEngine.setSharesWeightPages(on) }
+
     // MARK: Chats
 
     func chatModel(for id: UUID) -> ChatModel? {

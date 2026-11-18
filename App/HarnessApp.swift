@@ -166,9 +166,31 @@ struct RootView: View {
             if defaults.bool(forKey: "continueTurn"), let currentID, let chat = app.chatModel(for: currentID) {
                 chat.continueTurn()
             }
+            // -demoModel <part of its name>: answer with that installed model.
+            if let wanted = defaults.string(forKey: "demoModel")?.lowercased(),
+                let model = app.library.installed.first(where: { $0.name.lowercased().contains(wanted) || $0.repo.lowercased().contains(wanted) })
+            {
+                app.select(.local(model.repo))
+            }
+            // -weightMap shared|private: how a mapped model's weights are mapped, to measure one way against the other.
+            if let map = defaults.string(forKey: "weightMap") { AppModel.setSharesWeightPages(map == "shared") }
             if let prompt = defaults.string(forKey: "demoPrompt"), let currentID,
                 let chat = app.chatModel(for: currentID), chat.conversation.isEmpty
             {
+                // -demoFollowUps "second|third": sent one at a time, each when the reply before it has ended.
+                let followUps = defaults.string(forKey: "demoFollowUps")?.components(separatedBy: "|") ?? []
+                defer {
+                    if !followUps.isEmpty {
+                        Task {
+                            for text in followUps {
+                                // The first message may still be on its way in, when a file is read for it.
+                                while chat.conversation.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
+                                await chat.waitForTurn()
+                                chat.send(text)
+                            }
+                        }
+                    }
+                }
                 // -demoThinking off|low|medium|high: how hard to think in that chat.
                 if let level = defaults.string(forKey: "demoThinking").flatMap(ThinkingLevel.init(rawValue:)) { chat.setThinking(level) }
                 // -attachFile <path>: send the prompt with a file attached, as picking it would.

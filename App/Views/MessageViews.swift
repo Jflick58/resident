@@ -422,12 +422,66 @@ struct LiveMessageView: View {
             if !chat.liveText.isEmpty {
                 MarkdownView(text: chat.liveText)
             } else if chat.liveReasoning.isEmpty, chat.runningCalls.isEmpty {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(.vertical, 4)
+                WaitingView(chat: chat)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// What is shown until the first piece of a reply arrives.
+///
+/// A model whose weights are used from a mapped file reads them from storage as it first needs
+/// them, so the first reply after it loads waits on gigabytes of reading: 13 seconds for a 27B on
+/// a phone, behind a spinner that said nothing. That reading has a size, so it is shown as
+/// progress. The rest of the wait is the model reading the prompt, which is said in words.
+struct WaitingView: View {
+    let chat: ChatModel
+    /// The model's weights while they are still coming into memory.
+    @State private var reading: (inMemory: Int, mapped: Int)?
+
+    var body: some View {
+        Group {
+            if let reading {
+                ProgressView(value: Double(reading.inMemory), total: Double(max(reading.mapped, 1))) {
+                    Text("Reading the model into memory")
+                } currentValueLabel: {
+                    Text("\(Self.gigabytes(reading.inMemory)) of \(Self.gigabytes(reading.mapped)) GB")
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(chat.waitingFor).font(.subheadline).foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.vertical, 4)
+        .task { await watch() }
+    }
+
+    static func gigabytes(_ bytes: Int) -> String { String(format: "%.1f", Double(bytes) / 1_073_741_824) }
+
+    /// Follows the weights into memory twice a second. They count as still being read while the
+    /// amount grows, or, on the first look, while most of the file is yet to come.
+    private func watch() async {
+        var last: Int?
+        var stalled = 0
+        while !Task.isCancelled {
+            let now = await Task.detached(priority: .utility) { AppModel.weightsInMemory() }.value
+            if let now {
+                let growing = last.map { now.inMemory - $0 > 16 << 20 } ?? (now.inMemory * 2 < now.mapped)
+                // A pause of one look is not the end of it: the bar would come and go.
+                stalled = growing ? 0 : stalled + 1
+                reading = growing || (reading != nil && stalled < 2) ? now : nil
+                last = now.inMemory
+            } else {
+                reading = nil
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
     }
 }
 

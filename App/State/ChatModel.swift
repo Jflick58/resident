@@ -24,6 +24,10 @@ final class ChatModel {
         if !liveText.isEmpty { return "Writing the reply" }
         return lastToolSummary ?? "Thinking"
     }
+    /// What the model is doing before the first piece of a reply arrives: reading what was just added to the chat.
+    var waitingFor: String {
+        conversation.liveMessages.last?.role == .tool ? "Reading the result" : "Reading your message"
+    }
     var errorMessage: String?
 
     private unowned let app: AppModel

@@ -53,7 +53,7 @@ struct PagedWeightsTests {
 
     @Test(.enabled(if: hasGPU)) func `the GPU reads the file's own pages, not copies of them`() throws {
         let (url, large) = try weightsFile()
-        let weights = try PagedWeights(source: url)
+        let weights = try PagedWeights(source: url, shared: true)
         #expect(weights.sharesPages)
 
         // The GPU goes over the whole mapping, as a model goes over its weights.
@@ -73,9 +73,10 @@ struct PagedWeightsTests {
         #expect(Data(bytes[start ..< (start + large.count)]) == large)
     }
 
-    @Test func `a mapping can be made private, and says so`() throws {
+    @Test func `a mapping is private unless asked to be shared, and says so`() throws {
         let (url, large) = try weightsFile(large: 256 * 1024)
-        let weights = try PagedWeights(source: url, shared: false)
+        #expect(!WeightMapping.sharesPages)
+        let weights = try PagedWeights(source: url)
         #expect(!weights.sharesPages)
         #expect(!weights.held.readsFilePages)
         let start = try offset(of: "layer.weight", in: url)

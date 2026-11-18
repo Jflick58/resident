@@ -19,20 +19,26 @@ import Metal
 /// a page (``AlignedWeights``). It stays one file, a few megabytes longer, and loads
 /// the ordinary way as well.
 ///
-/// The file is mapped shared, not private. Through a private mapping the system hands the
-/// GPU its own copy of every page it touches. The copies are not charged to the app either,
-/// but they are no longer pages of the file: the system cannot drop them, only compress
-/// them, and packed weights do not compress. A model that fills a phone's memory then leaves
-/// the system nothing it can give back, and when it needs memory the whole phone stalls.
-/// Through a shared mapping the GPU reads the file's own pages, and the first use of a page
-/// costs no copy. The mapping is read only, and a write through it changes nothing.
+/// The file can be mapped two ways, and which is better on a phone is not settled.
+///
+/// Private, the way it is by default: the system hands the GPU its own copy of every page it
+/// touches. The copies are not charged to the app either, but they are no longer pages of the
+/// file: the system cannot drop them, only compress them, and packed weights do not compress.
+/// A model that fills a phone's memory then leaves the system nothing it can give back. On a
+/// 12 GB phone a 27B started at 11.5 tokens a second and fell to 0.6 over five steps, with
+/// 7.4 GB of copies in the compressor by the end.
+///
+/// Shared (`sharesPages`): the GPU reads the file's own pages, with no copy. On a Mac it is
+/// the same speed with nothing copied. On the phone the one trial of it was reported slower
+/// from the first reply, before anything had been measured there, so it is off until it has
+/// been. The mapping is read only either way, and a write through it changes nothing.
 public enum WeightMapping {
     /// Off unless something turns it on before a model is loaded.
     nonisolated(unsafe) public static var isOn = false
     /// Tensors smaller than this are loaded the usual way: a page each would waste more than it saves.
     static let smallest = 64 * 1024
-    /// `HARNESS_MAP=private` maps the old way, to compare the two.
-    static let sharesPages = ProcessInfo.processInfo.environment["HARNESS_MAP"] != "private"
+    /// Whether the next file is mapped shared. `HARNESS_MAP=shared` starts with it on.
+    nonisolated(unsafe) public static var sharesPages = ProcessInfo.processInfo.environment["HARNESS_MAP"] == "shared"
 
     /// How the mapped weights are held right now, in bytes.
     public struct Held: Sendable {
