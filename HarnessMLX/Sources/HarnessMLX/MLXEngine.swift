@@ -105,10 +105,12 @@ public actor MLXEngine {
         default: HadamardQuantizedLinear.sharesScales = Self.mapsWeights && Self.fillsMemory(directory)
         }
         let handlers = LoadProgressHandlers(weights: { value in progress?(value.fractionCompleted) })
+        let started = Date()
         let loaded = try await loadModelContainer(
             from: directory, using: #huggingFaceTokenizerLoader(), progress: handlers)
         container = loaded
         loadedDirectory = directory
+        Self.note(String(format: "loaded %@ in %.1fs", directory.lastPathComponent, Date().timeIntervalSince(started)))
     }
 
     /// True when the model's weights take more than half of the device's memory.
@@ -310,6 +312,28 @@ public actor MLXEngine {
         // When each piece of the reply came, to tell a reply that slows as it goes from one that is slow throughout.
         var pieces: [Date] = []
         let readBefore = SystemMemory.now().pageIns
+        // A reply that is given up on leaves no line of its own, and the slow ones are the ones given
+        // up on. So the wait for the first piece is noted as it goes, and so is a reply that stops early.
+        let waiting = Task.detached {
+            var seconds = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled else { break }
+                seconds += 10
+                MLXEngine.note("waited \(seconds)s for the first piece", readBack: SystemMemory.now().pageIns - readBefore)
+            }
+        }
+        var finished = false
+        defer {
+            waiting.cancel()
+            if !finished {
+                MLXEngine.note(
+                    String(
+                        format: "stopped after %.1fs, %d pieces, first piece %@", Date().timeIntervalSince(started), pieces.count,
+                        firstToken.map { String(format: "after %.1fs", $0.timeIntervalSince(started)) } ?? "never"),
+                    readBack: SystemMemory.now().pageIns - readBefore)
+            }
+        }
 
         _ = MLXFailure.install
         _ = MLXFailure.take()
@@ -320,11 +344,17 @@ public actor MLXEngine {
             if let failure = MLXFailure.take() { throw ModelStoppedError(failure) }
             switch event {
             case .chunk(let text):
-                if firstToken == nil { firstToken = Date() }
+                if firstToken == nil {
+                    firstToken = Date()
+                    waiting.cancel()
+                }
                 pieces.append(Date())
                 continuation.yield(.text(text))
             case .reasoning(let text):
-                if firstToken == nil { firstToken = Date() }
+                if firstToken == nil {
+                    firstToken = Date()
+                    waiting.cancel()
+                }
                 pieces.append(Date())
                 continuation.yield(.reasoning(text))
             case .toolCall(let call):
@@ -342,6 +372,7 @@ public actor MLXEngine {
                 }
                 continuation.yield(.toolCall(Self.recover(rejection)))
             case .info(let info):
+                finished = true
                 let wait = firstToken.map { $0.timeIntervalSince(started) } ?? -1
                 outcome.stats = GenerationStats(
                     promptTokens: info.promptTokenCount, outputTokens: info.generationTokenCount,
@@ -369,12 +400,14 @@ public actor MLXEngine {
                 }
                 if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
                     let held = MLXEngine.memoryInUse
+                    let weights = WeightMapping.held
                     FileHandle.standardError.write(
                         String(
-                            format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most\n",
+                            format: "STEP read %d tokens in %.2fs, first token after %.2fs, wrote %d at %.1f tok/s, cache %d MB (%d layers compressed, %d waiting, %d left as they are), MLX %d MB now, %d MB at most, weights %d MB in memory (%@: copies %d MB)\n",
                             info.promptTokenCount, info.promptTime, wait, info.generationTokenCount, info.tokensPerSecond,
                             (cache?.memoryBytes ?? 0) >> 20, cache?.compressedLayerCount ?? 0, cache?.pendingLayerCount ?? 0,
-                            cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20
+                            cache?.skippedLayerCount ?? 0, held.active >> 20, held.peak >> 20, weights.inMemory >> 20,
+                            weights.readsFilePages ? "shared" : "private", weights.copied >> 20
                         ).data(using: .utf8)!)
                 }
                 switch info.stopReason {
@@ -495,6 +528,9 @@ public actor MLXEngine {
         let transcript = request.messages.filter { $0.role != .system }
         let alone = request.options.standsAlone == true
         if !alone { adoptPendingAssistant(from: transcript.map(Mark.init), roles: transcript.map(\.role)) }
+        // The model is at work for as long as this request runs, whoever asked.
+        Self.workBegan()
+        defer { Self.workEnded() }
         do {
             try await generate(request, contextTokens: contextTokens, continuation: continuation)
             continuation.finish()
@@ -709,6 +745,17 @@ extension MLXEngine {
         tokensPerSecond: Double, promptTokens: Int, promptTime: Double, outputTokens: Int, firstToken: Double, cacheBytes: Int,
         early: Double, late: Double, readBack: Int
     ) {
+        note(
+            String(
+                format: "%.1f tok/s (%.1f at the start, %.1f at the end)  wrote %d  prompt %d in %.1fs  first token %.1fs",
+                tokensPerSecond, early, late, outputTokens, promptTokens, promptTime, firstToken),
+            cacheBytes: cacheBytes, readBack: readBack)
+    }
+
+    /// Adds one line to `memory-log.txt` while weights are mapped: the time, what happened, and the
+    /// state of memory then. Lines are written when a model has loaded, every ten seconds a reply
+    /// keeps the user waiting for its first piece, when a reply ends, and when one is stopped early.
+    nonisolated static func note(_ what: String, cacheBytes: Int? = nil, readBack: Int? = nil) {
         guard WeightMapping.isOn else { return }
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
@@ -717,22 +764,23 @@ extension MLXEngine {
         }
         func megabytes(_ bytes: Int) -> String { "\(bytes >> 20) MB" }
         let held = memoryInUse
-        let weights = WeightMapping.resident
+        let weights = WeightMapping.held
         #if os(iOS)
             let available = megabytes(os_proc_available_memory())
         #else
             let available = "n/a"
         #endif
         let system = SystemMemory.now()
-        let line = String(
-            format: "%@  %.1f tok/s (%.1f at the start, %.1f at the end)  wrote %d  prompt %d in %.1fs  first token %.1fs  heat %d  ",
-            ISO8601DateFormatter().string(from: Date()), tokensPerSecond, early, late, outputTokens, promptTokens, promptTime, firstToken,
-            ProcessInfo.processInfo.thermalState.rawValue)
-            + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  cache \(megabytes(cacheBytes))  "
+        let line = "\(ISO8601DateFormatter().string(from: Date()))  \(what)  heat \(ProcessInfo.processInfo.thermalState.rawValue)  "
+            + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  "
+            + (cacheBytes.map { "cache \(megabytes($0))  " } ?? "")
             + "MLX in use \(megabytes(held.active)) kept \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
-            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))  "
+            + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped)) "
+            + "(\(weights.readsFilePages ? "shared" : "private"), \(WeightMapping.holds ? "pinned \(megabytes(weights.pinned))" : "not pinned"): "
+            + "copies \(megabytes(weights.copied)), squeezed \(megabytes(weights.compressed)))  "
             + "phone: free \(megabytes(system.free)) apps \(megabytes(system.written)) files \(megabytes(system.files)) "
-            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readBack)) during the reply\n"
+            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))"
+            + (readBack.map { "  read back \(megabytes($0)) during the reply" } ?? "") + "\n"
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: url) {
@@ -742,6 +790,47 @@ extension MLXEngine {
         } else {
             try? Data(line.utf8).write(to: url)
         }
+    }
+
+    /// How much of a mapped model is in memory, in bytes, and nil when no weights are mapped. A
+    /// model's first reply waits on this: its weights are read from storage as they are first used.
+    public nonisolated static var mappedWeights: (inMemory: Int, mapped: Int)? {
+        guard WeightMapping.isOn else { return nil }
+        let held = WeightMapping.held
+        return held.mapped > 0 ? (held.inMemory, held.mapped) : nil
+    }
+
+    /// EXPERIMENT. Maps the next model's weights shared, so the GPU reads the file's own pages. See `WeightMapping`.
+    public nonisolated static func setSharesWeightPages(_ on: Bool) { WeightMapping.sharesPages = on }
+
+    /// EXPERIMENT. Pins what a mapped model has read for as long as it is at work. See `WeightMapping.hold()`.
+    public nonisolated static func setHoldsWeights(_ on: Bool) { WeightMapping.holds = on }
+
+    /// How many are at work with the model: requests being answered, and turns that span several of
+    /// them. And when the last of them ended, to say how long the model then sat idle.
+    private static let atWork = OSAllocatedUnfairLock(initialState: (count: 0, idleSince: Date?.none))
+
+    /// Says the model is about to be at work: a turn has begun, or a request. Its weights are held in
+    /// memory from the first of these until the last has ended. A turn says so as well as its
+    /// requests, so the weights are not let go while a tool runs between two of them.
+    public nonisolated static func workBegan() {
+        let idle = atWork.withLock { state -> TimeInterval? in
+            state.count += 1
+            defer { state.idleSince = nil }
+            return state.count == 1 ? state.idleSince.map { Date().timeIntervalSince($0) } : nil
+        }
+        // What became of the weights while nobody was using them is what decides how the next reply starts.
+        if let idle, idle >= 5 { note(String(format: "back to work after %.0fs idle", idle)) }
+        WeightMapping.hold()
+    }
+
+    public nonisolated static func workEnded() {
+        let left = atWork.withLock { state -> Int in
+            state.count = max(0, state.count - 1)
+            if state.count == 0 { state.idleSince = Date() }
+            return state.count
+        }
+        if left == 0 { WeightMapping.release() }
     }
 
     /// What MLX holds: in use, kept for reuse, and the most it has held, in bytes.

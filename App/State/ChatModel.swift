@@ -24,6 +24,10 @@ final class ChatModel {
         if !liveText.isEmpty { return "Writing the reply" }
         return lastToolSummary ?? "Thinking"
     }
+    /// What the model is doing before the first piece of a reply arrives: reading what was just added to the chat.
+    var waitingFor: String {
+        conversation.liveMessages.last?.role == .tool ? "Reading the result" : "Reading your message"
+    }
     var errorMessage: String?
 
     private unowned let app: AppModel
@@ -189,6 +193,8 @@ final class ChatModel {
 
     private func run() {
         isRunning = true
+        // Until `finish`: the model's weights are not let go while a tool runs between two of its replies.
+        app.turnBegan()
         lastToolSummary = nil
         userStopped = false
         conversation.turnInProgress = true
@@ -414,6 +420,7 @@ final class ChatModel {
 
     private func finish() {
         isRunning = false
+        app.turnEnded()
         if turnCompleted, !userStopped, errorMessage == nil, stopReason == nil {
             let lastUser = conversation.messages.lastIndex { $0.role == .user } ?? 0
             let usedMemory = conversation.messages[lastUser...].contains {

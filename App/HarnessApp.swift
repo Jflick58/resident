@@ -166,9 +166,44 @@ struct RootView: View {
             if defaults.bool(forKey: "continueTurn"), let currentID, let chat = app.chatModel(for: currentID) {
                 chat.continueTurn()
             }
+            // -demoModel <part of its name>: answer with that installed model.
+            if let wanted = defaults.string(forKey: "demoModel")?.lowercased(),
+                let model = app.library.installed.first(where: { $0.name.lowercased().contains(wanted) || $0.repo.lowercased().contains(wanted) })
+            {
+                app.select(.local(model.repo))
+            }
+            // -weightKeeping copied|shared|held: how a mapped model's weights are kept, to measure one way
+            // against another. It is the setting under Experimental, which a launch argument overrides.
             if let prompt = defaults.string(forKey: "demoPrompt"), let currentID,
                 let chat = app.chatModel(for: currentID), chat.conversation.isEmpty
             {
+                // -demoFollowUps "second|third": sent one at a time, each when the reply before it has ended.
+                // -demoPause <seconds>: how long to leave between a reply and the next message, as a person typing does.
+                // -demoPressure <megabytes>: memory taken and filled during that pause, as the keyboard and
+                // whatever else wakes up while a person types take it. What the model does when the
+                // phone wants its memory back is what these are for.
+                let followUps = defaults.string(forKey: "demoFollowUps")?.components(separatedBy: "|") ?? []
+                let pause = defaults.double(forKey: "demoPause")
+                let pressure = defaults.integer(forKey: "demoPressure")
+                defer {
+                    if !followUps.isEmpty {
+                        Task {
+                            for text in followUps {
+                                // The first message may still be on its way in, when a file is read for it.
+                                while chat.conversation.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
+                                await chat.waitForTurn()
+                                if pause > 0 {
+                                    // Nobody is touching the screen, and the device must not lock in the middle of this.
+                                    UIApplication.shared.isIdleTimerDisabled = true
+                                    let taken = await Task.detached { MemoryPressure(megabytes: pressure) }.value
+                                    try? await Task.sleep(for: .seconds(pause))
+                                    taken.release()
+                                }
+                                chat.send(text)
+                            }
+                        }
+                    }
+                }
                 // -demoThinking off|low|medium|high: how hard to think in that chat.
                 if let level = defaults.string(forKey: "demoThinking").flatMap(ThinkingLevel.init(rawValue:)) { chat.setThinking(level) }
                 // -attachFile <path>: send the prompt with a file attached, as picking it would.
@@ -187,6 +222,28 @@ struct RootView: View {
                     chat.send(prompt)
                 }
             }
+        }
+    }
+#endif
+
+#if DEBUG
+    /// Memory taken and written to, for the launch argument that stands in for the rest of the phone
+    /// wanting memory. Filled with noise, so it cannot be squeezed small.
+    final class MemoryPressure: @unchecked Sendable {
+        private var blocks: [UnsafeMutableRawPointer] = []
+        private static let block = 16 << 20
+
+        init(megabytes: Int) {
+            for _ in 0 ..< max(0, megabytes) / 16 {
+                guard let memory = malloc(Self.block) else { break }
+                arc4random_buf(memory, Self.block)
+                blocks.append(memory)
+            }
+        }
+
+        func release() {
+            blocks.forEach { free($0) }
+            blocks = []
         }
     }
 #endif

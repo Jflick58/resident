@@ -234,6 +234,26 @@ final class AppModel {
         store.save(skills)
     }
 
+    /// How much of the loaded model is in memory, in bytes, when its weights are used from a mapped
+    /// file, and nil otherwise. Asks the system about every page of the file, so not for the main thread.
+    nonisolated static func weightsInMemory() -> (inMemory: Int, mapped: Int)? { MLXEngine.mappedWeights }
+
+    /// EXPERIMENT. How the next mapped model's weights are kept: "shared" (the file's own pages),
+    /// "held" (shared, and pinned while a turn runs), or "copied" (the GPU's own copies, as at first).
+    nonisolated static func setWeightKeeping(_ name: String) {
+        MLXEngine.setSharesWeightPages(name == "shared" || name == "held")
+        MLXEngine.setHoldsWeights(name == "held")
+    }
+
+    /// Lets go of the loaded model, so that the next message loads it afresh with the settings as they are now.
+    func reloadModel() {
+        Task { await MLXEngine.shared.unload() }
+    }
+
+    /// A chat's turn has begun or ended. The model is at work from one to the other.
+    func turnBegan() { MLXEngine.workBegan() }
+    func turnEnded() { MLXEngine.workEnded() }
+
     // MARK: Chats
 
     func chatModel(for id: UUID) -> ChatModel? {
@@ -403,6 +423,8 @@ final class AppModel {
                 // With weights mapped, the memory MLX keeps for reuse is what crowds them out of
                 // memory: capped at 64 MB, Bonsai 9B on a Mac peaked at 419 MB charged, not 1.1 GB, at the same speed.
                 if UserDefaults.standard.bool(forKey: "mapWeights") { MLXEngine.setCacheLimit(megabytes: 64) }
+                // EXPERIMENT: how the mapped weights are kept in memory. A launch argument of the same name wins over the setting.
+                Self.setWeightKeeping(UserDefaults.standard.string(forKey: "weightKeeping") ?? "shared")
                 try await MLXEngine.shared.load(directory: directory) { fraction in
                     Task { @MainActor in
                         if case .loading = self.loadState {

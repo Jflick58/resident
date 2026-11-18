@@ -421,6 +421,9 @@ if let chatTurns {
         plainPreset.tools = []
         agent.plainInstructions = PromptBuilder.systemPrompt(preset: plainPreset, memory: "", canRemember: false)
         print("--- \(turn)")
+        // As the app does: the model is at work from the start of a turn to its end.
+        MLXEngine.workBegan()
+        defer { MLXEngine.workEnded() }
         for try await event in agent.run(messages: messages) {
             switch event {
             case .assistantMessage(let message):
