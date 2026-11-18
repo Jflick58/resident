@@ -40,8 +40,12 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
 - **Files** (`HarnessKit/Code`): a third connector on the device, with the
   five tools a coding agent has and the names it gives them: `list_files`,
   `search_files`, `read_file`, `edit_file`, `write_file`. They work on one
-  folder kept by the app (`Workspace`) and know nothing of where a file came
-  from. Small models tuned for code have seen that loop endlessly, so an edit
+  folder (`Workspace`) and know nothing of where a file came from. The folder
+  is the app's Documents folder, which the Files app shows as Resident under
+  On My iPhone: what the user puts there the tools can work on, and what a
+  model writes the user can take out. Nothing but files goes in it, and a
+  cloned repository there is left out of the device's backups.
+  Small models tuned for code have seen that loop endlessly, so an edit
   is the text to find and the text that replaces it, never the whole file
   written back; a long file is read a part at a time; a search prints
   `path:line: text`; a path that is nearly right gets "did you mean".

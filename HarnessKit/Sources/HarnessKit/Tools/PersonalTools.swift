@@ -53,7 +53,7 @@ public struct PersonalDataError: LocalizedError, Sendable {
 public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
     case calendar
     case reminders
-    /// A folder of files on this device: `FileTool` and `Workspace`.
+    /// A folder of files on this device, the one the Files app shows under the app's name: `FileTool` and `Workspace`.
     case files
 
     public var id: String { rawValue }
@@ -70,7 +70,7 @@ public enum Connector: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .calendar: return "See your schedule and add events"
         case .reminders: return "See, add and complete reminders"
-        case .files: return "Keep, search and edit files in a folder on this device"
+        case .files: return "Search and edit files in the Resident folder of the Files app"
         }
     }
 

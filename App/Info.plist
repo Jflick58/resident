@@ -11,6 +11,11 @@
 	<!-- The app uses only the encryption built into iOS (HTTPS, the Keychain), which is exempt from export paperwork. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- The Documents folder is the one the file tools work on. These two show it in the Files app, under the app's name. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<!-- Client IDs for services where an app cannot register itself. Set in Config/Local.xcconfig; empty when not. -->
 	<key>GitHubClientID</key>
 	<string>$(GITHUB_CLIENT_ID)</string>

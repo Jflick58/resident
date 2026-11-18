@@ -151,6 +151,41 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("state.json").path))
     }
 
+    @Test func theFilesCanBeAFolderTheUserSees() async throws {
+        // As in the app: the files in one place (Documents, which the Files app shows), the records in another.
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("workspace-\(UUID().uuidString)")
+        let (seen, records) = (base.appendingPathComponent("Documents"), base.appendingPathComponent("Support/workspace"))
+        // What the user put there, and what the Files app keeps of what they deleted.
+        try FileManager.default.createDirectory(at: seen.appendingPathComponent(".Trash"), withIntermediateDirectories: true)
+        try Data("Mine\n".utf8).write(to: seen.appendingPathComponent("letter.txt"))
+        try Data("Gone\n".utf8).write(to: seen.appendingPathComponent(".Trash/old.txt"))
+        // What an earlier version kept beside its records.
+        try FileManager.default.createDirectory(at: records.appendingPathComponent("files/notes"), withIntermediateDirectories: true)
+        try Data("- milk\n".utf8).write(to: records.appendingPathComponent("files/notes/todo.md"))
+
+        let workspace = Workspace(files: seen, records: records)
+        #expect(await workspace.list("").text == "Files:\nletter.txt\nnotes/todo.md")
+        #expect(!FileManager.default.fileExists(atPath: records.appendingPathComponent("files").path))
+        #expect(await workspace.read("letter.txt", from: 1).text == "Mine\n")
+        _ = await workspace.write("reply.txt", content: "Thanks\n")
+        #expect(FileManager.default.fileExists(atPath: seen.appendingPathComponent("reply.txt").path))
+        // Nothing but files goes where the user sees them.
+        #expect(Set(try FileManager.default.contentsOfDirectory(atPath: seen.path)) == [".Trash", "letter.txt", "notes", "reply.txt"])
+
+        // A repository is one more folder there, and is left out of the device's backups.
+        let host = FixedRepositoryHost(owner: "acme", repo: "rocket", files: ["README.md": "# Rocket\n"])
+        _ = await RepositoryCopy(workspace: workspace, host: host).clone("acme/rocket")
+        let clone = seen.appendingPathComponent("rocket")
+        #expect(FileManager.default.fileExists(atPath: clone.appendingPathComponent("README.md").path))
+        #expect(try clone.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+        #expect(FileManager.default.fileExists(atPath: records.appendingPathComponent("repository.json").path))
+
+        // Opened again, it is all still there.
+        let again = Workspace(files: seen, records: records)
+        #expect(await again.project?.folder == "rocket")
+        #expect(await again.read("README.md", from: 1).text == "# Rocket\n")
+    }
+
     // MARK: A repository in the folder
 
     @Test func cloneListsTheFiles() async {

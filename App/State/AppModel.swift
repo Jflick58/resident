@@ -60,7 +60,12 @@ final class AppModel {
     init() {
         memory = MemoryStore(url: store.memoryURL)
         connectors = ConnectorsModel(store: store)
-        files = Workspace(directory: store.root.appendingPathComponent("workspace", isDirectory: true))
+        // The files are the app's Documents folder, which the Files app shows as Resident under On My
+        // iPhone: what the user puts there the file tools can work on, and what a model writes the
+        // user can take out. What the tools remember about them is kept with the app's own data.
+        files = Workspace(
+            files: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0],
+            records: store.root.appendingPathComponent("workspace", isDirectory: true))
         conversations = store.loadConversations()
         library = store.loadLibrary()
         pending = store.loadPendingInstalls()

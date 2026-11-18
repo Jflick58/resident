@@ -35,33 +35,57 @@ public actor Workspace {
     static let vendored = ["vendor/", "node_modules/", "third_party/", "pods/", ".build/", "deriveddata/", "dist/"]
     private static let outside = "That path is outside the files folder."
 
-    /// Where everything is kept: the files in `files`, and what is remembered about them beside it.
+    /// Where what is remembered about the files is kept, and what is on its way to them.
     public nonisolated let directory: URL
+    /// The folder the tools work on.
+    private let files: URL
     private var state: State
 
+    /// A workspace that keeps its files in a folder of its own, beside what it remembers about them.
     public init(directory: URL) {
+        self.init(files: directory.appendingPathComponent("files", isDirectory: true), records: directory)
+    }
+
+    /// A workspace over a folder that is somewhere else: one the user can see, such as the app's
+    /// Documents folder, which the Files app shows under the app's name. Nothing but the files
+    /// goes in it. Files a workspace kept beside its records before are moved there.
+    public init(files: URL, records directory: URL) {
         self.directory = directory
+        self.files = files
+        let before = directory.appendingPathComponent("files", isDirectory: true)
         // An earlier version kept one cloned repository at the top of the folder, with its record in
         // state.json. That copy is dropped: the repository is downloaded again when it is next needed.
         let earlier = directory.appendingPathComponent("state.json")
         if FileManager.default.fileExists(atPath: earlier.path) {
-            try? FileManager.default.removeItem(at: directory.appendingPathComponent("files"))
+            try? FileManager.default.removeItem(at: before)
             try? FileManager.default.removeItem(at: earlier)
+        }
+        if files.standardizedFileURL != before.standardizedFileURL,
+            let kept = try? FileManager.default.contentsOfDirectory(at: before, includingPropertiesForKeys: nil)
+        {
+            try? FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+            // Whatever is already there under the same name stays, and the one from before stays where it was.
+            for item in kept { try? FileManager.default.moveItem(at: item, to: files.appendingPathComponent(item.lastPathComponent)) }
+            if (try? FileManager.default.contentsOfDirectory(atPath: before.path))?.isEmpty == true {
+                try? FileManager.default.removeItem(at: before)
+            }
         }
         state = (try? Data(contentsOf: directory.appendingPathComponent("folder.json"))).flatMap { try? JSONDecoder().decode(State.self, from: $0) }
             ?? State()
     }
-
-    private var files: URL { directory.appendingPathComponent("files", isDirectory: true) }
 
     private func save() {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? JSONEncoder().encode(state).write(to: directory.appendingPathComponent("folder.json"))
     }
 
-    /// Forgets everything and deletes the files.
+    /// Forgets everything and deletes the files. The folder itself stays: it may be one the system made.
     public func reset() {
-        try? FileManager.default.removeItem(at: directory)
+        for item in (try? FileManager.default.contentsOfDirectory(at: files, includingPropertiesForKeys: nil)) ?? [] {
+            try? FileManager.default.removeItem(at: item)
+        }
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("folder.json"))
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("incoming"))
         state = State()
     }
 
@@ -127,7 +151,11 @@ public actor Workspace {
         for case let url as URL in walker {
             guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true else { continue }
             let path = url.resolvingSymlinksInPath().path
-            if path.hasPrefix(base + "/"), url.lastPathComponent != ".DS_Store" { paths.append(String(path.dropFirst(base.count + 1))) }
+            guard path.hasPrefix(base + "/"), url.lastPathComponent != ".DS_Store" else { continue }
+            let relative = String(path.dropFirst(base.count + 1))
+            // What the Files app has deleted waits in a folder of its own at the top, and is not the user's any more.
+            if relative.hasPrefix(".Trash/") { continue }
+            paths.append(relative)
         }
         return paths.sorted()
     }
@@ -375,6 +403,11 @@ public actor Workspace {
             number += 1
         }
         try FileManager.default.moveItem(at: incoming, to: url(folder))
+        // A copy of something that can be downloaded again has no place in a backup of the device.
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var placed = url(folder)
+        try? placed.setResourceValues(values)
         state.project = Project(folder: folder, afterChange: afterChange)
         save()
         return folder
