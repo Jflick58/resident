@@ -307,6 +307,9 @@ public actor MLXEngine {
         var outcome = Outcome()
         let started = Date()
         var firstToken: Date?
+        // When each piece of the reply came, to tell a reply that slows as it goes from one that is slow throughout.
+        var pieces: [Date] = []
+        let readBefore = SystemMemory.now().pageIns
 
         _ = MLXFailure.install
         _ = MLXFailure.take()
@@ -318,9 +321,11 @@ public actor MLXEngine {
             switch event {
             case .chunk(let text):
                 if firstToken == nil { firstToken = Date() }
+                pieces.append(Date())
                 continuation.yield(.text(text))
             case .reasoning(let text):
                 if firstToken == nil { firstToken = Date() }
+                pieces.append(Date())
                 continuation.yield(.reasoning(text))
             case .toolCall(let call):
                 outcome.sawToolCall = true
@@ -342,9 +347,17 @@ public actor MLXEngine {
                     promptTokens: info.promptTokenCount, outputTokens: info.generationTokenCount,
                     tokensPerSecond: info.tokensPerSecond, timeToFirstToken: firstToken.map { $0.timeIntervalSince(started) })
                 let cache = try? await activeSession.cacheStatus()
+                // Pieces a second over the first and the last fifty pieces, when there are enough to tell them apart.
+                func rate(_ times: ArraySlice<Date>) -> Double {
+                    guard let first = times.first, let last = times.last, times.count > 1, last > first else { return 0 }
+                    return Double(times.count - 1) / last.timeIntervalSince(first)
+                }
+                let span = min(50, pieces.count / 2)
                 MLXEngine.noteMemory(
                     tokensPerSecond: info.tokensPerSecond, promptTokens: info.promptTokenCount, promptTime: info.promptTime,
-                    outputTokens: info.generationTokenCount, firstToken: wait, cacheBytes: cache?.memoryBytes ?? 0)
+                    outputTokens: info.generationTokenCount, firstToken: wait, cacheBytes: cache?.memoryBytes ?? 0,
+                    early: rate(pieces.prefix(span)), late: rate(pieces.suffix(span)),
+                    readBack: SystemMemory.now().pageIns - readBefore)
                 if ProcessInfo.processInfo.environment["HARNESS_SHARE_SCALES"] == "check", HadamardQuantizedLinear.differenceCount > 0 {
                     FileHandle.standardError.write(
                         String(
@@ -689,10 +702,12 @@ extension MLXEngine {
 
     /// Adds a line to `memory-log.txt` after each reply while weights are mapped: how fast it went,
     /// what the app is charged, what the system will still give it, what MLX holds, how much of the
-    /// mapped model is in memory, and what the whole phone's memory is doing. Numbers only, nothing
-    /// of the chat.
+    /// mapped model is in memory, and what the whole phone's memory is doing. Also how fast the
+    /// reply was at its start and at its end, how hot the device is (0 to 3), and how much was read
+    /// back from storage while it was written. Numbers only, nothing of the chat.
     nonisolated static func noteMemory(
-        tokensPerSecond: Double, promptTokens: Int, promptTime: Double, outputTokens: Int, firstToken: Double, cacheBytes: Int
+        tokensPerSecond: Double, promptTokens: Int, promptTime: Double, outputTokens: Int, firstToken: Double, cacheBytes: Int,
+        early: Double, late: Double, readBack: Int
     ) {
         guard WeightMapping.isOn else { return }
         var info = task_vm_info_data_t()
@@ -709,18 +724,15 @@ extension MLXEngine {
             let available = "n/a"
         #endif
         let system = SystemMemory.now()
-        let readIn = system.pageIns - lastPageIns.withLock { last in
-            defer { last = system.pageIns }
-            return last ?? system.pageIns
-        }
         let line = String(
-            format: "%@  %.1f tok/s  wrote %d  prompt %d in %.1fs  first token %.1fs  ", ISO8601DateFormatter().string(from: Date()),
-            tokensPerSecond, outputTokens, promptTokens, promptTime, firstToken)
+            format: "%@  %.1f tok/s (%.1f at the start, %.1f at the end)  wrote %d  prompt %d in %.1fs  first token %.1fs  heat %d  ",
+            ISO8601DateFormatter().string(from: Date()), tokensPerSecond, early, late, outputTokens, promptTokens, promptTime, firstToken,
+            ProcessInfo.processInfo.thermalState.rawValue)
             + "charged \(megabytes(Int(info.phys_footprint)))  available \(available)  cache \(megabytes(cacheBytes))  "
             + "MLX in use \(megabytes(held.active)) kept \(megabytes(held.cache)) peak \(megabytes(held.peak))  "
             + "weights in memory \(megabytes(weights.inMemory)) of \(megabytes(weights.mapped))  "
             + "phone: free \(megabytes(system.free)) apps \(megabytes(system.written)) files \(megabytes(system.files)) "
-            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readIn)) since last\n"
+            + "wired \(megabytes(system.wired)) squeezed \(megabytes(system.compressed))  read back \(megabytes(readBack)) during the reply\n"
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Harness/memory-log.txt")
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let handle = try? FileHandle(forWritingTo: url) {
@@ -731,9 +743,6 @@ extension MLXEngine {
             try? Data(line.utf8).write(to: url)
         }
     }
-
-    /// The count of bytes read back from storage at the last line of the log, to show what each reply added.
-    private static let lastPageIns = OSAllocatedUnfairLock<Int?>(initialState: nil)
 
     /// What MLX holds: in use, kept for reuse, and the most it has held, in bytes.
     public nonisolated static var memoryInUse: (active: Int, cache: Int, peak: Int) {
