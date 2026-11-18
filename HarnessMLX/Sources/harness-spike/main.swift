@@ -244,8 +244,9 @@ if useApple {
     print("Capabilities: vision=\(report.capabilities.vision) tools=\(report.capabilities.tools) thinking=\(report.capabilities.thinking)  download=\(ModelFit.format(report.downloadBytes))")
     if !report.canInstall { print("Fit check says no; continuing anyway for the spike.") }
 
-    let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("harness-spike/models")
+    // HARNESS_MODELS_DIR: another folder of models, for trying what changes a model's files.
+    let root = ProcessInfo.processInfo.environment["HARNESS_MODELS_DIR"].map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("harness-spike/models")
     let directory = root.appendingPathComponent(ModelDownloader.folderName(for: repo))
     if !ModelDownloader.isComplete(info, in: directory) {
         print("Downloading to \(directory.path)")

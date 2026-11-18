@@ -171,6 +171,21 @@ final class ModelLoadProgressReporter: @unchecked Sendable {
         }
     }
 
+    /// Resident: record work on a file that is not a read of it, in bytes so far, and publish the
+    /// aggregate. Rearranging a weights file before its first mapped load is such work: it takes
+    /// far longer than the load that follows, which reads almost nothing.
+    func note(bytes: Int64, reader: UUID) {
+        lock.withLock {
+            guard !finished else { return }
+            completedByReader[.worker(reader)] = bytes
+            let completed = min(
+                completedByReader.values.reduce(0, +), max(totalUnitCount - 1, 0))
+            let step = max(totalUnitCount / Self.updateCount, 1)
+            guard !didPublish || completed >= lastPublished + step else { return }
+            publish(completed)
+        }
+    }
+
     /// Publish completion.
     ///
     /// Call this once the model has loaded. Some checkpoint tensors may not be read.

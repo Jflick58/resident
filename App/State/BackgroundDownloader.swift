@@ -195,9 +195,7 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
     }
 
     static func isPresent(_ file: PendingInstall.File, in directory: URL) -> Bool {
-        let path = directory.appendingPathComponent(file.path).path
-        guard let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64 else { return false }
-        return file.size == 0 ? size > 0 : size == file.size
+        ModelDownloader.isWhole(directory.appendingPathComponent(file.path), size: file.size)
     }
 
     static func parse(_ description: String?) -> (repo: String, path: String)? {

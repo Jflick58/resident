@@ -88,7 +88,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Experimental")
                 } footer: {
-                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model makes a second copy of its weights. Takes effect the next time a model is loaded.")
+                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model rearranges its weights file, which takes a few minutes for a large one. Takes effect the next time a model is loaded.")
                 }
             }
             .navigationTitle("Settings")

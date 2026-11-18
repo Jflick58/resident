@@ -1,7 +1,7 @@
 import Foundation
 import MLX
 
-/// EXPERIMENT (Resident): weights used straight from a file mapped into memory.
+/// Resident: weights used straight from a file mapped into memory.
 ///
 /// iOS limits an app by the memory it has written to. `loadArrays` reads every weight
 /// into memory MLX allocated, which counts in full, so a model has to be smaller than
@@ -10,9 +10,10 @@ import MLX
 /// what counts is the working memory of generation, not the size of the model.
 ///
 /// The GPU takes outside memory only in whole pages that start on a page boundary, and
-/// a safetensors file packs its tensors end to end. So each weights file gets a copy
-/// beside it, `<name>.paged`, with every tensor moved to the start of a page. It is
-/// written once, a few megabytes at a time, and mapped from then on.
+/// a safetensors file packs its tensors end to end. So before its first mapped load a
+/// weights file is rearranged, in place, with every large tensor moved to the start of
+/// a page (``AlignedWeights``). It stays one file, a few megabytes longer, and loads
+/// the ordinary way as well.
 public enum WeightMapping {
     /// Off unless something turns it on before a model is loaded.
     nonisolated(unsafe) public static var isOn = false
@@ -21,6 +22,30 @@ public enum WeightMapping {
 
     /// How much of the mapped weights is in memory right now, and how much is mapped, in bytes.
     public static var resident: (inMemory: Int, mapped: Int) { PagedWeights.resident }
+
+    /// Puts a weights file right before it is read, whichever way it is about to be loaded.
+    ///
+    /// - A rearrangement that was cut short (the app was closed part-way) is finished: until
+    ///   it is, the file is not whole, and nothing can load it.
+    /// - With mapping on, a file not yet rearranged is rearranged.
+    /// - The second copy an earlier version kept beside the file (`<name>.paged`) is removed.
+    ///
+    /// Throws only when the file is part-way through and cannot be finished. A file that
+    /// cannot be rearranged at all is left as it was and loads the ordinary way.
+    ///
+    /// - Parameter progress: called as a rearrangement goes, with the bytes moved so far. An
+    ///   8 GB file takes minutes, and without this a load shows nothing until it is over.
+    public static func prepare(_ url: URL, progress: ((Int) -> Void)? = nil) throws {
+        for leftover in ["paged", "paged-partial"] {
+            try? FileManager.default.removeItem(at: url.appendingPathExtension(leftover))
+        }
+        guard isOn || AlignedWeights.isPartWay(url) else { return }
+        do {
+            try AlignedWeights.align(url, progress: progress)
+        } catch {
+            if AlignedWeights.isPartWay(url) { throw error }
+        }
+    }
 }
 
 final class PagedWeights: @unchecked Sendable {
@@ -54,75 +79,33 @@ final class PagedWeights: @unchecked Sendable {
 
     private let base: UnsafeMutableRawPointer
     private let length: Int
-    /// Where each tensor starts in the mapping, and how long it is.
+    /// Where each tensor that can be used in place starts in the mapping, and how long it is.
     private let places: [String: (offset: Int, bytes: Int)]
 
+    /// Maps the file as it is. Tensors that start on a page boundary are used in place; in a file
+    /// ``WeightMapping/prepare(_:)`` has rearranged, that is every large one.
     private init(source: URL) throws {
-        struct Malformed: Error {}
-        let page = Int(getpagesize())
-        let reader = try FileHandle(forReadingFrom: source)
-        defer { try? reader.close() }
-        guard let lengthData = try reader.read(upToCount: 8), lengthData.count == 8 else { throw Malformed() }
-        let headerLength = Int(lengthData.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }.littleEndian)
-        guard headerLength > 0, let headerData = try reader.read(upToCount: headerLength), headerData.count == headerLength,
-            let header = try JSONSerialization.jsonObject(with: headerData) as? [String: Any]
-        else { throw Malformed() }
-        let dataStart = 8 + headerLength
-
-        var spans: [(name: String, begin: Int, bytes: Int)] = []
-        for (name, value) in header where name != "__metadata__" {
-            guard let entry = value as? [String: Any], let offsets = entry["data_offsets"] as? [Any], offsets.count == 2,
-                let begin = (offsets[0] as? NSNumber)?.intValue, let end = (offsets[1] as? NSNumber)?.intValue, end >= begin
-            else { throw Malformed() }
-            if end - begin >= WeightMapping.smallest { spans.append((name, dataStart + begin, end - begin)) }
-        }
-        spans.sort { $0.begin < $1.begin }
-
-        var places: [String: (offset: Int, bytes: Int)] = [:]
-        var total = 0
-        for span in spans {
-            places[span.name] = (total, span.bytes)
-            total += (span.bytes + page - 1) / page * page
-        }
-        self.places = places
-
-        let paged = source.appendingPathExtension("paged")
-        let size = (try? FileManager.default.attributesOfItem(atPath: paged.path)[.size] as? NSNumber)?.intValue
-        if size != total {
-            // Written under another name and moved into place, so a copy that was cut short is never used.
-            let partial = source.appendingPathExtension("paged-partial")
-            FileManager.default.createFile(atPath: partial.path, contents: nil)
-            let writer = try FileHandle(forWritingTo: partial)
-            let chunk = 8 * 1024 * 1024
-            for span in spans {
-                try reader.seek(toOffset: UInt64(span.begin))
-                var left = span.bytes
-                while left > 0 {
-                    // Each chunk is freed before the next is read. Without the pool they pile up
-                    // until the loop ends, and the copy of a large model uses as much memory as the model.
-                    left -= try autoreleasepool {
-                        guard let data = try reader.read(upToCount: min(chunk, left)), !data.isEmpty else { throw Malformed() }
-                        try writer.write(contentsOf: data)
-                        return data.count
-                    }
-                }
-                let padding = (page - span.bytes % page) % page
-                if padding > 0 { try writer.write(contentsOf: Data(count: padding)) }
-            }
-            try writer.close()
-            try? FileManager.default.removeItem(at: paged)
-            try FileManager.default.moveItem(at: partial, to: paged)
-        }
-
-        let descriptor = Darwin.open(paged.path, O_RDONLY)
-        guard descriptor >= 0 else { throw Malformed() }
+        let descriptor = Darwin.open(source.path, O_RDONLY)
+        guard descriptor >= 0 else { throw AlignedWeights.Failure.unreadable }
         defer { close(descriptor) }
-        guard total > 0, let base = mmap(nil, total, PROT_READ, MAP_PRIVATE, descriptor, 0), base != MAP_FAILED else { throw Malformed() }
+        let header = try AlignedWeights.readHeader(descriptor)
+        let page = max(AlignedWeights.page, Int(getpagesize()))
+        var places: [String: (offset: Int, bytes: Int)] = [:]
+        for entry in header.entries where entry.bytes >= WeightMapping.smallest && (header.dataStart + entry.begin) % page == 0 {
+            places[entry.name] = (header.dataStart + entry.begin, entry.bytes)
+        }
+        var status = stat()
+        guard fstat(descriptor, &status) == 0, status.st_size > 0, !places.isEmpty else { throw AlignedWeights.Failure.unreadable }
+        let total = Int(status.st_size)
+        guard let base = mmap(nil, total, PROT_READ, MAP_PRIVATE, descriptor, 0), base != MAP_FAILED else {
+            throw AlignedWeights.Failure.unreadable
+        }
         self.base = base
+        self.places = places
         length = total
     }
 
-    /// The tensor as a view of the mapped file, or nil when it is not in the mapping.
+    /// The tensor as a view of the mapped file, or nil when it cannot be used in place.
     func array(named name: String, like loaded: MLXArray) -> MLXArray? {
         guard let place = places[name], place.bytes == loaded.nbytes else { return nil }
         return MLXArray(rawPointer: base + place.offset, loaded.shape, dtype: loaded.dtype) {}
