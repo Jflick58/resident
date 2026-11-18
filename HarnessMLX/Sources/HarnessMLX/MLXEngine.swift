@@ -316,6 +316,7 @@ public actor MLXEngine {
         // When each piece of the reply came, to tell a reply that slows as it goes from one that is slow throughout.
         var pieces: [Date] = []
         let readBefore = SystemMemory.now().pageIns
+        Self.promptRead.withLock { $0 = (0, 0) }
         // A reply that is given up on leaves no line of its own, and the slow ones are the ones given
         // up on. So the wait for the first piece is noted as it goes, and so is a reply that stops early.
         let waiting = Task.detached {
@@ -329,6 +330,7 @@ public actor MLXEngine {
         }
         var finished = false
         defer {
+            Self.promptRead.withLock { $0 = (0, 0) }
             waiting.cancel()
             if !finished {
                 MLXEngine.note(
@@ -572,6 +574,13 @@ public actor MLXEngine {
         // room: on a 12 GB phone a 27B reading a tool's result went 1.25 GB over, and the system
         // made the room by taking it from everything else.
         if let step = Self.prefillStep ?? (loadedFillsMemory ? Self.tightPrefillStep : nil) { parameters.prefill.stepSize = step }
+        // A prompt read in several passes says how far it has got after each, for whoever shows the wait.
+        parameters.prefill.progress = { read, total in
+            MLXEngine.promptRead.withLock { $0 = (read, total) }
+            if ProcessInfo.processInfo.environment["HARNESS_DEBUG_SESSION"] != nil {
+                FileHandle.standardError.write("PROMPT read \(read) of \(total)\n".data(using: .utf8)!)
+            }
+        }
 
         // Thinking on or off, expressed the way this model's chat template expects.
         let reasoning = await container.configuration.reasoningConfig
@@ -807,6 +816,16 @@ extension MLXEngine {
         guard WeightMapping.isOn else { return nil }
         let held = WeightMapping.held
         return held.mapped > 0 ? (held.inMemory, held.mapped) : nil
+    }
+
+    /// How far the prompt being read has got, in tokens, while it is read in more than one pass.
+    fileprivate static let promptRead = OSAllocatedUnfairLock(initialState: (read: 0, total: 0))
+
+    /// How much of a long prompt has been read so far, and nil when none is being read or it is read
+    /// in one pass. A tool's result of a thousand tokens takes a 27B on a phone twenty seconds to read.
+    public nonisolated static var promptProgress: (read: Int, total: Int)? {
+        let now = promptRead.withLock { $0 }
+        return now.total > 0 && now.read < now.total ? now : nil
     }
 
     /// EXPERIMENT. Maps the next model's weights shared, so the GPU reads the file's own pages. See `WeightMapping`.

@@ -437,11 +437,15 @@ struct LiveMessageView: View {
 /// A model whose weights are used from a mapped file reads them from storage as it first needs
 /// them, so the first reply after it loads waits on gigabytes of reading: 13 seconds for a 27B on
 /// a phone, behind a spinner that said nothing. That reading has a size, so it is shown as
-/// progress. The rest of the wait is the model reading the prompt, which is said in words.
+/// progress. The rest of the wait is the model reading the prompt. A long one, a tool's result or
+/// a document, is read in several passes and takes a large model many seconds, so it is shown
+/// as progress too; a short one is said in words.
 struct WaitingView: View {
     let chat: ChatModel
     /// The model's weights while they are still coming into memory.
     @State private var reading: (inMemory: Int, mapped: Int)?
+    /// The prompt while it is being read in several passes.
+    @State private var prompt: (read: Int, total: Int)?
 
     var body: some View {
         Group {
@@ -450,6 +454,14 @@ struct WaitingView: View {
                     Text("Reading the model into memory")
                 } currentValueLabel: {
                     Text("\(Self.gigabytes(reading.inMemory)) of \(Self.gigabytes(reading.mapped)) GB")
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            } else if let prompt {
+                ProgressView(value: Double(prompt.read), total: Double(max(prompt.total, 1))) {
+                    Text(chat.waitingFor)
+                } currentValueLabel: {
+                    Text("\(100 * prompt.read / max(prompt.total, 1))%")
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -467,12 +479,14 @@ struct WaitingView: View {
 
     static func gigabytes(_ bytes: Int) -> String { String(format: "%.1f", Double(bytes) / 1_073_741_824) }
 
-    /// Follows the weights into memory twice a second. They count as still being read while the
-    /// amount grows, or, on the first look, while most of the file is yet to come.
+    /// Follows the weights into memory, and the prompt as it is read, twice a second. The weights
+    /// count as still being read while the amount grows, or, on the first look, while most of the
+    /// file is yet to come.
     private func watch() async {
         var last: Int?
         var stalled = 0
         while !Task.isCancelled {
+            prompt = AppModel.promptProgress()
             let now = await Task.detached(priority: .utility) { AppModel.weightsInMemory() }.value
             if let now {
                 let growing = last.map { now.inMemory - $0 > 16 << 20 } ?? (now.inMemory * 2 < now.mapped)
