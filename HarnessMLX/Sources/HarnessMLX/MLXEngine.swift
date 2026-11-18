@@ -806,21 +806,29 @@ extension MLXEngine {
     /// EXPERIMENT. Pins what a mapped model has read for as long as it is at work. See `WeightMapping.hold()`.
     public nonisolated static func setHoldsWeights(_ on: Bool) { WeightMapping.holds = on }
 
-    /// How many are at work with the model: requests being answered, and turns that span several of them.
-    private static let atWork = OSAllocatedUnfairLock(initialState: 0)
+    /// How many are at work with the model: requests being answered, and turns that span several of
+    /// them. And when the last of them ended, to say how long the model then sat idle.
+    private static let atWork = OSAllocatedUnfairLock(initialState: (count: 0, idleSince: Date?.none))
 
     /// Says the model is about to be at work: a turn has begun, or a request. Its weights are held in
     /// memory from the first of these until the last has ended. A turn says so as well as its
     /// requests, so the weights are not let go while a tool runs between two of them.
     public nonisolated static func workBegan() {
-        atWork.withLock { $0 += 1 }
+        let idle = atWork.withLock { state -> TimeInterval? in
+            state.count += 1
+            defer { state.idleSince = nil }
+            return state.count == 1 ? state.idleSince.map { Date().timeIntervalSince($0) } : nil
+        }
+        // What became of the weights while nobody was using them is what decides how the next reply starts.
+        if let idle, idle >= 5 { note(String(format: "back to work after %.0fs idle", idle)) }
         WeightMapping.hold()
     }
 
     public nonisolated static func workEnded() {
-        let left = atWork.withLock { count -> Int in
-            count = max(0, count - 1)
-            return count
+        let left = atWork.withLock { state -> Int in
+            state.count = max(0, state.count - 1)
+            if state.count == 0 { state.idleSince = Date() }
+            return state.count
         }
         if left == 0 { WeightMapping.release() }
     }

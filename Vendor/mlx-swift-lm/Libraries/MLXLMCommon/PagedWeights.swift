@@ -19,38 +19,39 @@ import Metal
 /// a page (``AlignedWeights``). It stays one file, a few megabytes longer, and loads
 /// the ordinary way as well.
 ///
-/// The file can be mapped two ways, and which is better on a phone is not settled.
+/// The file is mapped shared: the GPU reads the file's own pages. Mapped private, the way it
+/// first was, the system hands the GPU its own copy of every page it touches. The copies are
+/// not charged to the app either, but they are no longer pages of the file: the system cannot
+/// drop them, only compress them, and packed weights do not compress. On a 12 GB phone a 27B
+/// mapped that way answered once at 11.5 tokens a second, had 3.5 GB of its copies compressed in
+/// the half minute its user took to type a second message, and was closed by the system two
+/// minutes into getting them back. Mapped shared, the same two messages were answered both
+/// times, the second starting after 1.6 seconds, with every page still in memory and none copied.
+/// The mapping is read only either way, and a write through it changes nothing.
 ///
-/// Private, the way it is by default: the system hands the GPU its own copy of every page it
-/// touches. The copies are not charged to the app either, but they are no longer pages of the
-/// file: the system cannot drop them, only compress them, and packed weights do not compress.
-/// A model that fills a phone's memory then leaves the system nothing it can give back. On a
-/// 12 GB phone a 27B started at 11.5 tokens a second and fell to 0.6 over five steps, with
-/// 7.4 GB of copies in the compressor by the end.
-///
-/// Shared (`sharesPages`): the GPU reads the file's own pages, with no copy. On a Mac it is
-/// the same speed with nothing copied. On the phone the one trial of it was reported slower
-/// from the first reply, before anything had been measured there, so it is off until it has
-/// been. The mapping is read only either way, and a write through it changes nothing.
+/// What has been read can also be pinned while the model is at work (`holds`). On that phone
+/// it made no reply faster and left the rest of the phone less to live on, so it is off.
 public enum WeightMapping {
     /// Off unless something turns it on before a model is loaded.
     nonisolated(unsafe) public static var isOn = false
     /// Tensors smaller than this are loaded the usual way: a page each would waste more than it saves.
     static let smallest = 64 * 1024
-    /// Whether the next file is mapped shared. `HARNESS_MAP=shared` or `held` starts with it on.
-    nonisolated(unsafe) public static var sharesPages = ["shared", "held"].contains(ProcessInfo.processInfo.environment["HARNESS_MAP"] ?? "")
+    /// Whether the next file is mapped shared. `HARNESS_MAP=copied` starts with it off, to compare the two.
+    nonisolated(unsafe) public static var sharesPages = ProcessInfo.processInfo.environment["HARNESS_MAP"] != "copied"
     /// Whether `hold()` does anything. `HARNESS_MAP=held` starts with it on.
     nonisolated(unsafe) public static var holds = ProcessInfo.processInfo.environment["HARNESS_MAP"] == "held"
 
     /// Keeps in memory the weights that have been read, and whatever is read from here on, until `release()`.
     ///
-    /// Nothing else does. The GPU has the pages it is using kept in place, but only while it is
-    /// using them: on a 12 GB phone, in the half minute its user took to type a second message,
-    /// the system took 3.5 GB of a 27B's weights back, and the reply that then needed them all
-    /// again ended with the app being closed. So the app says when the model is at work. While
-    /// it is, what the model has read is pinned (a Metal residency set over the same pages). When
-    /// it is not, the pages are given up, and with a shared mapping the system can have them for
-    /// nothing: they are the file's, and are read back when the next reply starts.
+    /// The GPU has the pages it is using kept in place only while it is using them, and MLX asks
+    /// for no more than that. Pinned, what the model has read stays put from the start of a turn
+    /// to its end (a Metal residency set over the same pages) and is given up between turns.
+    ///
+    /// Measured on a 12 GB phone with a 27B, it bought nothing. Unpinned, the shared pages were all
+    /// still in memory after the user had typed the next message. Pinned, the same reply was no
+    /// faster, and the rest of the phone read 9 GB back from storage while it was written, for want
+    /// of the memory: what is pinned includes what was read while loading, half a gigabyte the
+    /// model does not use again.
     public static func hold() {
         guard holds, isOn else { return }
         PagedWeights.holdAll()
