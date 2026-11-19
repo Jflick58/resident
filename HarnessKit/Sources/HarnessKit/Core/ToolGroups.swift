@@ -61,17 +61,22 @@ public struct ToolGroup: Sendable {
         }
     }
 
-    /// These connectors, each knowing the skills that name its tools: by the prefix its tools
-    /// share, or by the name of one of them. A skill whose steps call for one of the `absent`
-    /// tools, which this chat does not have, is left out: it cannot be followed, and offered
-    /// with the tools that are there it would stop a model that only wanted those.
+    /// These connectors, each knowing the skills that are about it: the ones that name its tools,
+    /// by the prefix they share or by the name of one of them, and the ones whose summary names the
+    /// service. The second matters when the skill does the service's job with other tools: opening
+    /// a pull request is GitHub's to a model, which opens GitHub for it, and the steps are the file
+    /// tools'. A skill whose steps call for one of the `absent` tools, which this chat does not
+    /// have, is left out: it cannot be followed, and offered with the tools that are there it would
+    /// stop a model that only wanted those.
     public static func linking(_ groups: [ToolGroup], to skills: [Skill], absent: [String] = []) -> [ToolGroup] {
         let usable = skills.filter { skill in skill.isEnabled && !absent.contains { names($0, in: skill.instructions) } }
         return groups.map { group in
             var group = group
             let own = group.tools.map(\.spec.name)
+            let title = group.title.lowercased()
             group.skillHints = usable.filter { skill in
                 skill.instructions.contains(group.name + "_") || own.contains { names($0, in: skill.instructions) }
+                    || (title.count > 3 && names(title, in: skill.summary.lowercased()))
             }.map { "\($0.name): \($0.summary)" }
             return group
         }
@@ -322,9 +327,14 @@ struct ToolShelf {
             return .error("There is no connector with that name. The connectors are: \(groups.map(\.name).joined(separator: ", ")).")
         }
         let picked = affordable(group.pick(arguments["need"]?.stringValue ?? "", request: request).map(\.spec.name))
+        let isNews = picked.contains { !loaded.contains($0) }
         add(picked)
         let rest = group.tools.map(\.spec.name).filter { !loaded.contains($0) }
-        var text = "\(group.title) tools you can call now: \(picked.joined(separator: ", "))."
+        // Opened for tools it already had, a model takes the list for a result and opens it again:
+        // LFM3, told by a skill to clone a repository, opened the file tools twice before it called one.
+        var text = isNews
+            ? "\(group.title) tools you can call now: \(picked.joined(separator: ", "))."
+            : "You already have these \(group.title) tools: \(picked.joined(separator: ", ")). Opening a connector runs nothing. Call the tool you need by its own name now."
         if !rest.isEmpty {
             text += "\nNot loaded yet: \(rest.prefix(30).joined(separator: ", "))\(rest.count > 30 ? " and more" : "")."
                 + " To get one of these, call \(ToolGroup.openerName) again and name it in need."
@@ -460,6 +470,11 @@ struct ToolShelf {
             _ = use(name, request: request)
         }
         return loaded != before
+    }
+
+    /// The connector tools the text names that are declared now, in their connectors' order.
+    func ready(in text: String) -> [String] {
+        groups.flatMap { $0.tools.map(\.spec.name) }.filter { loaded.contains($0) && ToolGroup.names($0, in: text) }
     }
 
     /// Notes that a tool was called, declaring it if it was not. True when it was newly declared.

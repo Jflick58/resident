@@ -1,11 +1,27 @@
 import HarnessKit
 import SwiftUI
 
+/// The models list as a sheet of its own, opened from a chat's title.
+struct ModelsView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ModelsList()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
 /// Everything about models in one list: what is installed, what is worth
 /// installing on this device, adding any Hugging Face model, and servers.
-struct ModelsView: View {
+/// Shown in a navigation stack: the sheet's own, or the one Settings has.
+struct ModelsList: View {
     @Environment(AppModel.self) private var app
-    @Environment(\.dismiss) private var dismiss
     @State private var editingEndpoint: RemoteEndpoint?
 
     private var recommended: [(model: CatalogModel, report: FitReport)] {
@@ -15,121 +31,114 @@ struct ModelsView: View {
     @State private var tuning: InstalledModel?
 
     var body: some View {
-        NavigationStack {
-            List {
-                if app.hasAppleModel {
-                    Section {
-                        Button {
-                            app.select(.apple)
-                        } label: {
-                            ModelRow(
-                                name: "Apple Intelligence", detail: app.appleModelIssue ?? "Nothing to download",
-                                capabilities: app.appleModelIssue == nil ? .init(vision: false, tools: true, thinking: false) : nil,
-                                isSelected: app.library.selected == .apple)
-                        }
-                        .tint(.primary)
-                        .disabled(app.appleModelIssue != nil)
-                    } header: {
-                        Text("Built In")
-                    } footer: {
-                        Text("The model that comes with this device, run by the system. It answers fast and can work while Resident is not on screen, and takes less text at once than a downloaded model.")
-                    }
-                }
-
-                if !app.library.installed.isEmpty {
-                    Section {
-                        ForEach(app.library.installed) { model in
-                            HStack(spacing: 12) {
-                                Button {
-                                    app.select(.local(model.repo))
-                                } label: {
-                                    ModelRow(
-                                        name: model.name, detail: ModelFit.format(model.sizeBytes),
-                                        capabilities: model.capabilities,
-                                        isSelected: app.library.selected == .local(model.repo))
-                                }
-                                .tint(.primary)
-                                Button {
-                                    tuning = model
-                                } label: {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .frame(width: 36, height: 36)
-                                        .contentShape(Rectangle())
-                                }
-                                .accessibilityLabel("Settings for \(model.name)")
-                            }
-                            // Two buttons in one row: each answers only its own taps.
-                            .buttonStyle(.borderless)
-                            .swipeActions {
-                                Button("Delete", role: .destructive) { app.remove(model) }
-                            }
-                        }
-                    } header: {
-                        Text("On This Device")
-                    } footer: {
-                        Text("Tap a model to use it. The sliders button opens its settings: temperature, top P and repeat penalty.")
-                    }
-                }
-
-                if !recommended.isEmpty {
-                    Section {
-                        ForEach(recommended, id: \.model.id) { item in
-                            CatalogRow(model: item.model, report: item.report)
-                        }
-                    } header: {
-                        Text("Recommended")
-                    } footer: {
-                        Text("Tested models that fit this device. Larger ones are left out.")
-                    }
-                }
-
+        List {
+            if app.hasAppleModel {
                 Section {
-                    NavigationLink {
-                        AddFromHubView()
-                    } label: {
-                        Label("Add from Hugging Face", systemImage: "link")
-                    }
-                } footer: {
-                    Text("Paste a link to any MLX model. It is checked against this device before anything downloads.")
-                }
-
-                Section {
-                    ForEach(app.library.endpoints) { endpoint in
-                        Button {
-                            app.select(.remote(endpoint.id))
-                        } label: {
-                            ModelRow(
-                                name: endpoint.name, detail: endpoint.model, capabilities: nil,
-                                isSelected: app.library.selected == .remote(endpoint.id))
-                        }
-                        .tint(.primary)
-                        .swipeActions {
-                            Button("Delete", role: .destructive) { app.remove(endpoint) }
-                            Button("Edit") { editingEndpoint = endpoint }
-                        }
-                    }
                     Button {
-                        editingEndpoint = RemoteEndpoint(name: "", baseURL: "", model: "")
+                        app.select(.apple)
                     } label: {
-                        Label("Add Server", systemImage: "plus")
+                        ModelRow(
+                            name: "Apple Intelligence", detail: app.appleModelIssue ?? "Nothing to download",
+                            capabilities: app.appleModelIssue == nil ? .init(vision: false, tools: true, thinking: false) : nil,
+                            isSelected: app.library.selected == .apple)
+                    }
+                    .tint(.primary)
+                    .disabled(app.appleModelIssue != nil)
+                } header: {
+                    Text("Built In")
+                } footer: {
+                    Text("The model that comes with this device, run by the system. It answers fast and can work while Resident is not on screen, and takes less text at once than a downloaded model.")
+                }
+            }
+
+            if !app.library.installed.isEmpty {
+                Section {
+                    ForEach(app.library.installed) { model in
+                        HStack(spacing: 12) {
+                            Button {
+                                app.select(.local(model.repo))
+                            } label: {
+                                ModelRow(
+                                    name: model.name, detail: ModelFit.format(model.sizeBytes),
+                                    capabilities: model.capabilities,
+                                    isSelected: app.library.selected == .local(model.repo))
+                            }
+                            .tint(.primary)
+                            Button {
+                                tuning = model
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .frame(width: 36, height: 36)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("Settings for \(model.name)")
+                        }
+                        // Two buttons in one row: each answers only its own taps.
+                        .buttonStyle(.borderless)
+                        .swipeActions {
+                            Button("Delete", role: .destructive) { app.remove(model) }
+                        }
                     }
                 } header: {
-                    Text("Servers")
+                    Text("On This Device")
                 } footer: {
-                    Text("Any OpenAI-compatible server, such as Ollama or LM Studio on your Mac.")
+                    Text("Tap a model to use it. The sliders button opens its settings: temperature, top P and repeat penalty.")
                 }
             }
-            .navigationTitle("Models")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(item: $tuning) { ModelSettingsView(model: $0) }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+
+            if !recommended.isEmpty {
+                Section {
+                    ForEach(recommended, id: \.model.id) { item in
+                        CatalogRow(model: item.model, report: item.report)
+                    }
+                } header: {
+                    Text("Recommended")
+                } footer: {
+                    Text("Tested models that fit this device. Larger ones are left out.")
                 }
             }
-            .sheet(item: $editingEndpoint) { endpoint in
-                ServerEditor(endpoint: endpoint)
+
+            Section {
+                NavigationLink {
+                    AddFromHubView()
+                } label: {
+                    Label("Add from Hugging Face", systemImage: "link")
+                }
+            } footer: {
+                Text("Paste a link to any MLX model. It is checked against this device before anything downloads.")
             }
+
+            Section {
+                ForEach(app.library.endpoints) { endpoint in
+                    Button {
+                        app.select(.remote(endpoint.id))
+                    } label: {
+                        ModelRow(
+                            name: endpoint.name, detail: endpoint.model, capabilities: nil,
+                            isSelected: app.library.selected == .remote(endpoint.id))
+                    }
+                    .tint(.primary)
+                    .swipeActions {
+                        Button("Delete", role: .destructive) { app.remove(endpoint) }
+                        Button("Edit") { editingEndpoint = endpoint }
+                    }
+                }
+                Button {
+                    editingEndpoint = RemoteEndpoint(name: "", baseURL: "", model: "")
+                } label: {
+                    Label("Add Server", systemImage: "plus")
+                }
+            } header: {
+                Text("Servers")
+            } footer: {
+                Text("Any OpenAI-compatible server, such as Ollama or LM Studio on your Mac.")
+            }
+        }
+        .navigationTitle("Models")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $tuning) { ModelSettingsView(model: $0) }
+        .sheet(item: $editingEndpoint) { endpoint in
+            ServerEditor(endpoint: endpoint)
         }
     }
 }
@@ -190,7 +199,9 @@ struct CatalogRow: View {
                 HStack(spacing: 8) {
                     Text(ModelFit.format(model.weightBytes))
                     CapabilityIcons(capabilities: model.capabilities)
-                    if report.verdict == .tight {
+                    if report.fillsMemory {
+                        Text("Slow: fills memory").foregroundStyle(.orange)
+                    } else if report.verdict == .tight {
                         Text("Shorter chats").foregroundStyle(.orange)
                     }
                 }
@@ -384,7 +395,7 @@ struct AddFromHubView: View {
         }
     }
 
-    static func displayName(for repo: String) -> String { ModelCatalog.displayName(for: repo) }
+    static func displayName(for repo: String) -> String { ModelCatalog.displayName(for: repo, on: DeviceProfile.current()) }
 
     private func symbol(for verdict: FitVerdict) -> String {
         switch verdict {

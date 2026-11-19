@@ -30,6 +30,11 @@ public actor Workspace {
     static let readCharacters = 4500
     static let searchMatches = 30
     static let searchMatchesPerFile = 4
+    /// Files and folders named after what is searched for, shown ahead of the lines that hold it.
+    static let searchNames = 8
+    /// A line longer than this was not written by hand: a log, a record, a minified file. Matches in
+    /// such lines are shown after the rest, as the part of the line around the match.
+    static let longLine = 400
     static let listEntries = 150
     /// Folders of other people's code, searched after the rest.
     static let vendored = ["vendor/", "node_modules/", "third_party/", "pods/", ".build/", "deriveddata/", "dist/"]
@@ -40,6 +45,13 @@ public actor Workspace {
     /// The folder the tools work on.
     private let files: URL
     private var state: State
+    /// Looks at the files (a list, a search, a read) since the project was taken in, while nothing in it is changed.
+    private var looks = 0
+    /// The lines searches have shown since it was taken in.
+    private var shown: Set<String> = []
+    /// After this many looks with nothing changed, and every `decideAgain` after, the model is told to decide.
+    static let decideAfter = 8
+    static let decideAgain = 6
 
     /// A workspace that keeps its files in a folder of its own, beside what it remembers about them.
     public init(directory: URL) {
@@ -236,49 +248,108 @@ public actor Workspace {
         return ToolResult("The files folder is empty." + (state.project == nil ? source.map { " " + $0 } ?? "" : ""))
     }
 
+    /// What one pass over some files found.
+    private struct Found {
+        /// Files named after what was looked for, then folders, as lines to show.
+        var names: [String] = []
+        /// Lines that hold it: the ones a person wrote, and the ones too long to be.
+        var written: [String] = []
+        var bulk: [String] = []
+        var total = 0
+        var filesWith = 0
+    }
+
+    /// Looks for `pattern` in the names and the text of `paths`.
+    private func scan(_ paths: [String], for pattern: NSRegularExpression, perFile: Int) -> Found {
+        var found = Found()
+        for path in paths {
+            var inFile = 0
+            let name = path.split(separator: "/").last.map(String.init) ?? path
+            if pattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil {
+                found.total += 1
+                inFile += 1
+                found.names.append("\(path)  (the file's name matches)")
+            }
+            if let size = try? url(path).resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000, let text = text(at: path) {
+                for (number, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                    let line = String(line)
+                    guard let hit = pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) else { continue }
+                    found.total += 1
+                    inFile += 1
+                    guard inFile <= perFile else { continue }
+                    if line.count <= Self.longLine {
+                        if found.written.count < Self.searchMatches {
+                            found.written.append("\(path):\(number + 1): \(line.trimmingCharacters(in: .whitespaces).prefix(160))")
+                        }
+                    } else if found.bulk.count < Self.searchMatches, let range = Range(hit.range, in: line) {
+                        let from = line.index(range.lowerBound, offsetBy: -60, limitedBy: line.startIndex) ?? line.startIndex
+                        let to = line.index(range.upperBound, offsetBy: 100, limitedBy: line.endIndex) ?? line.endIndex
+                        found.bulk.append("\(path):\(number + 1): \(from > line.startIndex ? "…" : "")\(line[from..<to])\(to < line.endIndex ? "…" : "")")
+                    }
+                }
+            }
+            if inFile > 0 { found.filesWith += 1 }
+        }
+        return found
+    }
+
+    /// The folders among `paths` whose own names match `pattern`, each as a line to show.
+    /// A folder that holds everything searched is where the search was made, not something it found.
+    private func folders(in paths: [String], named pattern: NSRegularExpression) -> [(folder: String, line: String)] {
+        var holds: [String: [String]] = [:]
+        for path in paths {
+            let parts = path.split(separator: "/").map(String.init)
+            for depth in parts.indices.dropLast() where pattern.firstMatch(in: parts[depth], range: NSRange(parts[depth].startIndex..., in: parts[depth])) != nil {
+                holds[parts[...depth].joined(separator: "/"), default: []].append(parts[(depth + 1)...].joined(separator: "/"))
+            }
+        }
+        return holds.keys.sorted().filter { holds[$0]!.count < paths.count }.map { folder in
+            let inside = holds[folder]!
+            return (
+                folder,
+                "\(folder)/  (the folder's name matches; " + (inside.count <= 3 ? "it holds \(inside.joined(separator: ", "))" : "\(inside.count) files") + ")"
+            )
+        }
+    }
+
     public func search(_ query: String, in path: String, source: String? = nil) -> ToolResult {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return .error("Give the text to search for.") }
         guard let given = Self.clean(path) else { return .error(Self.outside) }
         guard let folder = find(given) else { return missing("file or folder", given, source: source) }
-        // A pattern when it is one, plain text when it is not ("foo(" is no pattern).
-        let pattern = (try? NSRegularExpression(pattern: query, options: [.caseInsensitive]))
-            ?? (try? NSRegularExpression(pattern: NSRegularExpression.escapedPattern(for: query), options: [.caseInsensitive]))
-        guard let pattern else { return .error("That search could not be read. Search for plain text.") }
-        func matches(_ line: String) -> Bool {
-            pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil
-        }
-        var paths = allPaths().filter { folder.isEmpty || $0 == folder || $0.hasPrefix(folder + "/") }
+        let paths = allPaths().filter { folder.isEmpty || $0 == folder || $0.hasPrefix(folder + "/") }
         guard !paths.isEmpty else {
             guard folder.isEmpty else { return .error("\(folder)/ is empty, so there is nothing to search.") }
             return .error("The files folder is empty, so there is nothing to search." + (state.project == nil ? source.map { " " + $0 } ?? "" : ""))
         }
+        // The text as it is written, and a pattern only when that finds nothing. What a model searches
+        // for is mostly code, and code read as a pattern finds far more than was meant: `.tint` is
+        // also the middle of "ComponentIntegration".
+        guard let plain = try? NSRegularExpression(pattern: NSRegularExpression.escapedPattern(for: query), options: [.caseInsensitive]) else {
+            return .error("That search could not be read. Search for plain text.")
+        }
         func isVendored(_ path: String) -> Bool { Self.vendored.contains { (path.lowercased() + "/").contains($0) || path.lowercased().hasPrefix($0) } }
-        paths = paths.filter { !isVendored($0) } + paths.filter(isVendored)
+        // The project's own files, then other people's code kept with it.
+        let groups = [paths.filter { !isVendored($0) }, paths.filter(isVendored)]
         // One file searched on its own shows every match, up to the limit.
         let perFile = paths.count == 1 ? Self.searchMatches : Self.searchMatchesPerFile
-
-        var lines: [String] = []
-        var total = 0
-        var filesWith = 0
-        for path in paths {
-            var inFile = 0
-            if matches(path.split(separator: "/").last.map(String.init) ?? path) {
-                total += 1
-                inFile += 1
-                if lines.count < Self.searchMatches { lines.append("\(path)  (the file's name matches)") }
+        // The project's files and the others, each with the files, the folders and the lines found.
+        func look(for pattern: NSRegularExpression) -> [Found] {
+            var found = groups.map { scan($0, for: pattern, perFile: perFile) }
+            for (folder, line) in folders(in: paths, named: pattern) {
+                let group = isVendored(folder + "/") ? 1 : 0
+                found[group].names.append(line)
+                found[group].total += 1
             }
-            if let size = try? url(path).resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 1_000_000, let text = text(at: path) {
-                for (number, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() where matches(String(line)) {
-                    total += 1
-                    inFile += 1
-                    if lines.count < Self.searchMatches, inFile <= perFile {
-                        lines.append("\(path):\(number + 1): \(line.trimmingCharacters(in: .whitespaces).prefix(160))")
-                    }
-                }
-            }
-            if inFile > 0 { filesWith += 1 }
+            return found
         }
+        var found = look(for: plain)
+        if found.allSatisfy({ $0.total == 0 }), let pattern = try? NSRegularExpression(pattern: query, options: [.caseInsensitive]),
+            pattern.pattern != plain.pattern
+        {
+            found = look(for: pattern)
+        }
+        let total = found.reduce(0) { $0 + $1.total }
         guard total > 0 else {
             // Searched whole, a folder of a few files has been looked through: saying so lets the model stop.
             let all = folder.isEmpty && paths.count <= Self.fewFiles
@@ -288,10 +359,32 @@ public actor Workspace {
                         ? " That was every file: " + paths.joined(separator: ", ") + "."
                         : " Try one shorter word, or list the files with \(FileTool.name(.list))."))
         }
+        // Names come before the lines. A file or folder called after what is looked for is the
+        // likeliest place for it, and may hold no line that says the word: asked to change an app's
+        // accent colour, a model searched for "accent", was shown the one line of code that uses the
+        // colour, and took 13 more calls to believe that `AccentColor.colorset/Contents.json` was
+        // where it is set. Lines too long to have been written by hand come last of all.
+        var lines: [String] = []
+        var names = 0
+        for group in found {
+            let named = group.names.prefix(Self.searchNames - names)
+            names += named.count
+            lines += named
+            lines += group.written.prefix(max(0, Self.searchMatches - lines.count))
+        }
+        lines += found.flatMap(\.bulk).prefix(max(0, Self.searchMatches - lines.count))
+        lines = Array(lines.prefix(Self.searchMatches))
         var result = lines.joined(separator: "\n")
         if total > lines.count {
-            result += "\n[\(total) matches in \(filesWith) files; these are the first \(lines.count). Give `path` to search one folder or file.]"
+            result += "\n[\(total) matches in \(found.reduce(0) { $0 + $1.filesWith }) files; these are the first \(lines.count). Give `path` to search one folder or file.]"
         }
+        // A search worded another way that finds only what was found before has found the end of it.
+        // Left to work that out, a model looking for where a colour was defined ran the search five
+        // ways, and went on to read files that never mention it. Said only of a search shown whole.
+        if state.project != nil, total == lines.count, shown.isSuperset(of: lines) {
+            result += "\n[Nothing new: your earlier searches showed every one of these. Searching for this another way will not find more.]"
+        }
+        shown.formUnion(lines)
         return ToolResult(result)
     }
 
@@ -325,6 +418,31 @@ public actor Workspace {
         save()
     }
 
+    /// Counts a look at the files (a list, a search, a read) and returns its result, with a line put
+    /// before it when looks have piled up with nothing changed.
+    ///
+    /// A small model that has found the place for a change goes on looking for a better one. Asked to
+    /// change an app's accent colour, LFM3 read the file that sets it on its fifth call and made twenty
+    /// more looking for where the colour was "defined", until its turn ran out. What it needed was to
+    /// be told to choose: make the change, or ask. Where it is told matters as much as what. At the
+    /// end of a long result the line went unread. In place of the result, it was taken for the tool
+    /// failing ("maybe the tool requires a different format?") and the same call made again. So it
+    /// comes first, and the result follows.
+    /// Only with a project in the folder, and until something in it is changed: files of the user's
+    /// own are for reading too, and a model that has made its change may check it.
+    public func counted(_ result: ToolResult) -> ToolResult {
+        guard let project = state.project, changes(under: project.folder).isEmpty else { return result }
+        looks += 1
+        guard looks >= Self.decideAfter, (looks - Self.decideAfter) % Self.decideAgain == 0 else { return result }
+        var result = result
+        result.text =
+            "[Before this result: that is \(looks) lookups in \(project.folder)/ and no file is changed. You have enough to act. "
+            + "Next, do one of two things: (1) call \(FileTool.name(.edit)) to make the change in the best place you have read, "
+            + "or (2) tell the user what you found and ask the one thing you still need to know. "
+            + "Look further only at something you have not looked at yet.]\n\n" + result.text
+        return result
+    }
+
     /// What follows a change to this path, when it is in the project folder.
     private func next(after path: String) -> String? {
         guard let project = state.project, path.hasPrefix(project.folder + "/") else { return nil }
@@ -342,6 +460,7 @@ public actor Workspace {
         switch TextEdit.replace(find, with: replace, in: text, path: path) {
         case .failed(let message): return .error(message)
         case .changed(let changed):
+            if let broken = Self.brokenJSON(changed, was: text, path: path) { return .error(broken) }
             do { try Data(changed.utf8).write(to: url(path)) } catch { return .error("Could not save \(path).") }
             noteChange(path)
             // The changed lines, so the model can see the edit landed where it meant.
@@ -358,6 +477,22 @@ public actor Workspace {
         }
     }
 
+    /// What to say when a change would leave a JSON file that no longer reads as JSON, and nil when
+    /// it would not or the file did not read as JSON before. A file with one right form can be
+    /// checked, and a change that breaks it is never what was meant: asked for a green accent colour,
+    /// a model put `"green" : "0.42" -> "green" : "0.80"` in an asset's JSON and opened a pull request with it.
+    static func brokenJSON(_ changed: String, was text: String, path: String) -> String? {
+        guard path.lowercased().hasSuffix(".json"), (try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])) != nil
+        else { return nil }
+        do {
+            _ = try JSONSerialization.jsonObject(with: Data(changed.utf8), options: [.fragmentsAllowed])
+            return nil
+        } catch {
+            let reason = (error as NSError).userInfo[NSDebugDescriptionErrorKey] as? String ?? "it would not read as JSON"
+            return "Nothing was changed: with that, \(path) would no longer be valid JSON (\(reason)). Put only the new value in `replace`, in the same form as the text it takes the place of."
+        }
+    }
+
     public func write(_ path: String, content: String) -> ToolResult {
         guard let given = Self.clean(path), !given.isEmpty else { return .error("Give the path of the file to write.") }
         let path = place(for: given)
@@ -368,6 +503,7 @@ public actor Workspace {
             return .error(
                 "\(path) exists and what you gave is much shorter, so nothing was changed. To change part of a file, use \(FileTool.name(.edit)) with the text to find and what replaces it.")
         }
+        if let existing = text(at: path), let broken = Self.brokenJSON(content, was: existing, path: path) { return .error(broken) }
         do {
             try FileManager.default.createDirectory(at: url(path).deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data(content.utf8).write(to: url(path))
@@ -409,6 +545,8 @@ public actor Workspace {
         var placed = url(folder)
         try? placed.setResourceValues(values)
         state.project = Project(folder: folder, afterChange: afterChange)
+        looks = 0
+        shown = []
         save()
         return folder
     }

@@ -223,6 +223,104 @@ import Testing
         #expect(!nothing.isError && nothing.text.contains("Nothing"))
     }
 
+    @Test func searchShowsWhatIsNamedAfterTheWordBeforeTheLinesThatHoldIt() async {
+        // An app's accent colour, the way Xcode keeps it: a folder named after it holding a file that never says the word.
+        let record = "{\"task\": \"" + String(repeating: "x", count: 600) + " change the accent to green " + String(repeating: "y", count: 600) + "\"}"
+        let (_, _, tools) = make(files: [
+            "App/Assets.xcassets/AccentColor.colorset/Contents.json": "{ \"colors\" : [ { \"components\" : { \"green\" : \"0.42\" } } ] }\n",
+            "App/Views/ChatView.swift": "struct ChatView {\n    var body: some View {\n        Text(\"hi\").tint(.accentColor)\n    }\n}\n",
+            "App/Views/AccentPicker.swift": "struct Picker {}\n",
+            "results/run.jsonl": record + "\n",
+            "Vendor/kit/Accent/Tone.swift": "let tone = 1\n",
+        ])
+        _ = await tools["repo_clone"]!.call(["repository": "acme/rocket"])
+        let found = await tools["search_files"]!.call(["query": "accent"])
+        let lines = found.text.components(separatedBy: "\n")
+        // The project's own files before other people's code: names first, then the lines a person
+        // wrote. A record's line comes last, as the part of it around the word.
+        #expect(lines.count == 5)
+        #expect(lines[0] == "rocket/App/Views/AccentPicker.swift  (the file's name matches)")
+        #expect(lines[1] == "rocket/App/Assets.xcassets/AccentColor.colorset/  (the folder's name matches; it holds Contents.json)")
+        #expect(lines[2] == "rocket/App/Views/ChatView.swift:3: Text(\"hi\").tint(.accentColor)")
+        #expect(lines[3] == "rocket/Vendor/kit/Accent/  (the folder's name matches; it holds Tone.swift)")
+        #expect(lines[4].hasPrefix("rocket/results/run.jsonl:1: …") && lines[4].contains(" change the accent to green ") && lines[4].count < 220)
+
+        // Code is searched for as it is written: `.tint` is not "any letter, then tint".
+        // And a search that shows only what an earlier one showed says there is no more to find.
+        let code = await tools["search_files"]!.call(["query": ".tint"])
+        #expect(
+            code.text
+                == "rocket/App/Views/ChatView.swift:3: Text(\"hi\").tint(.accentColor)\n"
+                + "[Nothing new: your earlier searches showed every one of these. Searching for this another way will not find more.]")
+        // A pattern is one when the text itself is nowhere.
+        let pattern = await tools["search_files"]!.call(["query": "struct (Chat|Pick)\\w+"])
+        #expect(
+            pattern.text.components(separatedBy: "\n").prefix(2)
+                == ["rocket/App/Views/AccentPicker.swift:1: struct Picker {}", "rocket/App/Views/ChatView.swift:1: struct ChatView {"])
+
+        // The folder everything is in is where the search was made, not a find.
+        let everywhere = await tools["search_files"]!.call(["query": "rocket"])
+        #expect(!everywhere.text.contains("the folder's name matches"))
+        // A folder with many files says how many.
+        let views = await tools["search_files"]!.call(["query": "views"])
+        #expect(views.text == "rocket/App/Views/  (the folder's name matches; it holds AccentPicker.swift, ChatView.swift)")
+    }
+
+    @Test func lookingOnWithNothingChangedIsToldToChoose() async {
+        let (_, _, tools) = make()
+        _ = await tools["repo_clone"]!.call(["repository": "acme/rocket"])
+        // A search worded another way that shows only what was shown before says so.
+        let first = await tools["search_files"]!.call(["query": "background"])
+        #expect(first.text == "rocket/web/styles.css:3: background: #ffffff;")
+        let again = await tools["search_files"]!.call(["query": "#ffffff"])
+        #expect(again.text.hasSuffix("\n[Nothing new: your earlier searches showed every one of these. Searching for this another way will not find more.]"))
+        let other = await tools["search_files"]!.call(["query": "margin"])
+        #expect(!other.text.contains("Nothing new"))
+
+        // Eight looks with nothing changed, and the eighth is told to choose before it is shown its result.
+        for _ in 0 ..< 4 { #expect((await tools["read_file"]!.call(["path": "rocket/web/styles.css"])).text.hasPrefix("body {")) }
+        let eighth = await tools["list_files"]!.call(["path": "rocket/web"])
+        #expect(
+            eighth.text
+                == "[Before this result: that is 8 lookups in rocket/ and no file is changed. You have enough to act. "
+                + "Next, do one of two things: (1) call edit_file to make the change in the best place you have read, "
+                + "or (2) tell the user what you found and ask the one thing you still need to know. "
+                + "Look further only at something you have not looked at yet.]\n\nFiles in rocket/web/:\nrocket/web/styles.css")
+        // Not at every look after: again at the fourteenth.
+        var later: [ToolResult] = []
+        for _ in 0 ..< 6 { later.append(await tools["read_file"]!.call(["path": "rocket/README.md"])) }
+        #expect(later.map { $0.text.hasPrefix("[Before this result") } == [false, false, false, false, false, true])
+        #expect(later[5].text.contains("that is 14 lookups") && later[5].text.hasSuffix("# Rokcet\n\nFuel tools.\n"))
+        // Once something is changed, the model may look as it likes.
+        _ = await tools["edit_file"]!.call(["path": "rocket/README.md", "find": "Rokcet", "replace": "Rocket"])
+        for _ in 0 ..< 12 { #expect((await tools["read_file"]!.call(["path": "rocket/README.md"])).text.hasPrefix("# Rocket")) }
+
+        // Files of the user's own, with no project among them, are for reading as much as changing.
+        let (_, plain) = plain()
+        _ = await plain["write_file"]!.call(["path": "notes.md", "content": "milk\n"])
+        for _ in 0 ..< 12 { #expect((await plain["read_file"]!.call(["path": "notes.md"])).text == "milk\n") }
+    }
+
+    @Test func aChangeThatBreaksAJSONFileIsRefused() async {
+        let colour = "{\n  \"components\" : { \"red\" : \"0.20\", \"green\" : \"0.42\" }\n}\n"
+        let (_, host, tools) = make(files: ["Assets/Accent.colorset/Contents.json": colour, "notes.md": "a -> b\n"])
+        _ = await tools["repo_clone"]!.call(["repository": "acme/rocket"])
+        // What a model wrote, asked for green: the old value, an arrow and the new one.
+        let broken = await tools["edit_file"]!.call([
+            "path": "rocket/Assets/Accent.colorset/Contents.json", "find": "\"green\" : \"0.42\"", "replace": "\"green\" : \"0.42\" -> \"green\" : \"0.80\"",
+        ])
+        #expect(broken.isError && broken.text.hasPrefix("Nothing was changed: with that, rocket/Assets/Accent.colorset/Contents.json would no longer be valid JSON"))
+        #expect(await tools["read_file"]!.call(["path": "rocket/Assets/Accent.colorset/Contents.json"]).text == colour)
+        // With nothing changed there is nothing to open a pull request with.
+        #expect(await tools["repo_open_pull_request"]!.call(["title": "Green"]).isError && host.pullRequests.isEmpty)
+        // The value alone goes in, and other kinds of file are not judged.
+        let fixed = await tools["edit_file"]!.call(["path": "rocket/Assets/Accent.colorset/Contents.json", "find": "\"0.42\"", "replace": "\"0.80\""])
+        #expect(!fixed.isError)
+        #expect(!(await tools["edit_file"]!.call(["path": "rocket/notes.md", "find": "a -> b", "replace": "a -> b -> c"])).isError)
+        // Nor is a file that was not JSON to begin with, whatever its name.
+        #expect(Workspace.brokenJSON("{ still not", was: "{ not json", path: "x.json") == nil)
+    }
+
     @Test func readGivesALongFileInParts() async {
         let (_, _, tools) = make()
         _ = await tools["repo_clone"]!.call(["repository": "acme/rocket"])
@@ -397,6 +495,62 @@ import Testing
         #expect(ToolGroup.linking([group(withRepository: false)], to: [notes], absent: RepositoryTool.names)[0].skillHints.count == 1)
     }
 
+    @Test func aSkillAboutAServiceGoesWithItsConnectorToo() async throws {
+        // Opening a pull request is GitHub's job to a model, which opens GitHub for it. The steps use the file tools.
+        let skill = Skill.builtIns.first { $0.name == "open-pull-request" }!
+        let github = ToolGroup(
+            name: "github", title: "GitHub", summary: "Repositories, issues and pull requests",
+            tools: [EchoTool()])
+        let linked = ToolGroup.linking([github, group(withRepository: true)], to: Skill.builtIns)
+        #expect(linked[0].skillHints == ["\(skill.name): \(skill.summary)"])
+        var shelf = ToolShelf(groups: linked)
+        let opened = shelf.open(["connector": "github", "need": "open a pull request"], request: "")
+        #expect(opened.text.contains("Skills for GitHub: open-pull-request"))
+        // A skill that is about nothing of GitHub's is not offered there.
+        let other = Skill(name: "daily-note", summary: "Keeping the daily note", instructions: "Add the line with `edit_file`.")
+        #expect(ToolGroup.linking([github], to: [other])[0].skillHints.isEmpty)
+    }
+
+    @Test func openingWhatIsAlreadyOpenSaysToCallTheTool() {
+        var shelf = ToolShelf(groups: [group(withRepository: true)])
+        let first = shelf.open(["connector": "files", "need": "clone the repository"], request: "")
+        #expect(first.text.hasPrefix("Files tools you can call now: repo_clone, list_files,"))
+        let again = shelf.open(["connector": "files", "need": "repo_clone"], request: "")
+        #expect(again.text.hasPrefix("You already have these Files tools: repo_clone, list_files,"))
+        #expect(again.text.contains("Opening a connector runs nothing. Call the tool you need by its own name now."))
+    }
+
+    @Test func onlyASkillsStepsBringToolsIn() async throws {
+        // A file that names GitHub's tools, as this app's own source does, is read and changes nothing.
+        let workspace = Workspace(directory: FileManager.default.temporaryDirectory.appendingPathComponent("workspace-\(UUID().uuidString)"))
+        let host = FixedRepositoryHost(owner: "acme", repo: "rocket", files: ["Tools.swift": "// calls github_get_issue and github_list_issues\n"])
+        let github = ToolGroup(
+            name: "github", title: "GitHub",
+            tools: ["get_issue", "list_issues"].map { name in RenamedTool(name: "github_" + name) })
+        let files = FileTool.group(workspace: workspace, repository: RepositoryCopy(workspace: workspace, host: host))
+        let skill = Skill(name: "triage", summary: "Triaging issues", instructions: "1. List them with `github_list_issues`.")
+        let loads = Loads()
+        let provider = ScriptedProvider(turns: [
+            .init(toolCalls: [ToolCall(name: "repo_clone", arguments: ["repository": "acme/rocket"])]),
+            .init(toolCalls: [ToolCall(name: "read_file", arguments: ["path": "rocket/Tools.swift"])]),
+            .init(toolCalls: [ToolCall(name: "use_skill", arguments: ["name": "triage"])]),
+            .init(text: "Done."),
+        ])
+        var agent = Agent(provider: provider, tools: [UseSkillTool(skills: [skill])])
+        agent.groups = [github, files]
+        var results: [Message] = []
+        for try await event in agent.run(messages: [.user("Look at acme/rocket.")]) {
+            if case .toolsLoaded(let names) = event { loads.record(names) }
+            if case .toolFinished(let message) = event { results.append(message) }
+        }
+        // After the file was read the tools are the file tools alone; the skill then brings in the one it names.
+        #expect(loads.all.count == 2)
+        #expect(!loads.all[0].contains { $0.hasPrefix("github_") })
+        #expect(loads.all[1].contains("github_list_issues"))
+        #expect(results[1].text.contains("github_get_issue") && !results[1].text.contains("ready to call"))
+        #expect(results[2].text.hasSuffix("[These are ready to call by name now, with no connector to open: github_list_issues.]"))
+    }
+
     @Test func aSavedCopyOfThePullRequestSkillTakesTheNewNames() {
         var saved = Skill.builtIns.first { $0.name == "open-pull-request" }!
         saved.instructions = """
@@ -532,4 +686,17 @@ import Testing
         #expect(try String(contentsOf: out.appendingPathComponent("big.txt"), encoding: .utf8) == big)
         #expect(try Data(contentsOf: out.appendingPathComponent("empty.txt")).isEmpty)
     }
+}
+
+private struct RenamedTool: Tool {
+    var name: String
+    var spec: ToolSpec { ToolSpec(name: name, description: "About issues", parameters: ["type": "object"]) }
+    func call(_ arguments: JSONValue) async -> ToolResult { ToolResult("ran \(name)") }
+}
+
+private final class Loads: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [[String]] = []
+    var all: [[String]] { lock.withLock { recorded } }
+    func record(_ names: [String]) { lock.withLock { recorded.append(names) } }
 }

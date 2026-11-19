@@ -131,9 +131,13 @@ public struct Agent: Sendable {
             let isLastStep = step >= stepLimit || outOfTime || answerWithoutTools
             var stepMessages = ContextBudget.fit(transcript, budgetTokens: contextBudgetTokens)
             if let usageNotes, stepMessages.first?.role == .system { stepMessages[0].text += "\n\n" + usageNotes }
+            // Stopped by the count of steps while it was still at work, and not by the clock.
+            let cutShort = isLastStep && !outOfTime && stepMessages.last?.role == .tool
             if isLastStep, stepMessages.last?.role == .tool {
                 // Out of steps: say so, or a model that still wants a tool writes a call and no answer.
-                stepMessages.append(.user("You have no tool calls left. Answer now using what you already have."))
+                // And say that the turn is what ended, not the job: told only to answer, a model that had
+                // cloned a repository and found the file told its user to make the change themselves.
+                stepMessages.append(.user(Self.outOfCalls))
             }
             if outOfTime { stepOptions.thinking = .off }
             // The tools stay declared on the last step. Taking them away changes the
@@ -182,7 +186,7 @@ public struct Agent: Sendable {
                     answerWithoutTools = true
                     continue
                 }
-                if cleaned.text.isEmpty { cleaned.text = "I ran out of steps before I could finish this." }
+                if cleaned.text.isEmpty { cleaned.text = "I ran out of steps before I could finish this. Tell me to go on and I will pick it up from here." }
             }
 
             // A small model can spend its whole reply thinking and never answer.
@@ -213,9 +217,9 @@ public struct Agent: Sendable {
             transcript.append(assistant)
             emit(.assistantMessage(assistant))
 
-            if calls.isEmpty { return stop == .toolCalls ? .stop : stop }
+            if calls.isEmpty { return cutShort ? .steps : stop == .toolCalls ? .stop : stop }
 
-            for call in calls {
+            for (position, call) in calls.enumerated() {
                 try Task.checkCancellation()
                 let tool = toolsByName[call.name]
                 let opensConnector = call.name == ToolGroup.openerName && !shelf.isEmpty
@@ -292,10 +296,25 @@ public struct Agent: Sendable {
                 } else {
                     seenResults.insert(fingerprint)
                 }
-                // A result that names a connector's tool, as a skill's instructions do, brings that tool in.
-                // Not the opener's own result, which lists what it left out.
-                if !result.isError, call.name != ToolGroup.openerName, shelf.loadNamed(in: text, request: request) {
-                    emit(.toolsLoaded(shelf.loaded))
+                // A skill's instructions bring in the connector tools they name. Nothing else a tool
+                // returns does: a file or a page that happens to hold a tool's name is something to read,
+                // not a request for the tool. Reading this app's own code, a model was given seven GitHub
+                // tools by one source file, and they pushed out the two it needed to make its change.
+                if !result.isError, call.name == BuiltInTool.skills.rawValue {
+                    if shelf.loadNamed(in: text, request: request) { emit(.toolsLoaded(shelf.loaded)) }
+                    // Said last, where the model is reading when it chooses its next call: with a skill's
+                    // steps in hand it still went to open the connector the tools belong to.
+                    let ready = shelf.ready(in: text)
+                    if !ready.isEmpty { text += "\n[These are ready to call by name now, with no connector to open: \(ready.joined(separator: ", ")).]" }
+                }
+                // The model cannot see the limit it is working to. Told nothing until its calls were gone,
+                // one that had found the file to change was cut off still reading, and said then that it
+                // would have changed it. So it is told while there is room to act: when a third of its
+                // calls are left, and when three are (told at two, it meant to act and spent one of them
+                // on a last search). Told as a fact and no more: what to do about it depends on the job,
+                // and for a question that takes looking up, looking on is the right use of what is left.
+                if position == calls.count - 1, let note = Self.callsLeftNote(stepLimit - step - 1, of: stepLimit - 1) {
+                    text += "\n" + note
                 }
                 let message = Message.tool(text, call: call, isError: result.isError)
                 transcript.append(message)
@@ -303,6 +322,35 @@ public struct Agent: Sendable {
             }
         }
         return .stop
+    }
+
+    /// Said in place of a tool result's follow-up when the turn has no calls left.
+    static let outOfCalls =
+        "You have no tool calls left in this turn. Answer now with what you already have: say what you did and, if the job is not finished, what is still to do. The user can tell you to go on."
+
+    /// What to tell the model about the calls it has left, at the two points where it is told.
+    /// `left` is how many more steps may call a tool, of `all` the turn had.
+    static func callsLeftNote(_ left: Int, of all: Int) -> String? {
+        if left == all / 3, left > 3 { return "[You have \(left) tool calls left in this turn.]" }
+        if left == 3, all > 3 {
+            return "[You have 3 tool calls left in this turn. If they are not enough to finish, answer and say what is still to do.]"
+        }
+        return nil
+    }
+
+    /// The transcript without what the last turn's tool results were told about calls running out.
+    /// For carrying on a turn that stopped at its limit: the count starts again, and a result that
+    /// still said three calls were left would end the turn a second time.
+    public static func withoutCallsLeftNotes(_ messages: [Message]) -> [Message] {
+        var messages = messages
+        let turn = messages.lastIndex { $0.role == .user } ?? 0
+        for index in messages.indices where index > turn && messages[index].role == .tool {
+            var lines = messages[index].text.components(separatedBy: "\n")
+            guard lines.count > 1, let last = lines.last, last.hasPrefix("[You have "), last.contains(" tool calls left in this turn.") else { continue }
+            lines.removeLast()
+            messages[index].text = lines.joined(separator: "\n")
+        }
+        return messages
     }
 
     static func clip(_ text: String, to limit: Int) -> String {

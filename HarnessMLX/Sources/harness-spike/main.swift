@@ -14,6 +14,22 @@ let suiteSkills =
 
 /// The start of what Linear's server says about using its tools, as the app receives it.
 /// HARNESS_GUIDANCE=0 leaves it out, to measure what it is worth.
+/// What GitHub's own server says about its tools, as a phone had it (cut to the length the app keeps).
+let gitHubGuidance = """
+    The GitHub MCP Server provides tools to interact with GitHub platform.
+
+    Tool selection guidance:
+    \t1. Use 'list_*' tools for broad, simple retrieval and pagination of all items of a type (e.g., all issues, all PRs, all branches) with basic filtering.
+    \t2. Use 'search_*' tools for targeted queries with specific criteria, keywords, or complex filters (e.g., issues with certain text, PRs by author, code containing functions).
+
+    Context management:
+    \t1. Use pagination whenever possible with batches of 5-10 items.
+    \t2. Use minimal_output parameter set to true if the full information is not needed to accomplish a task.
+
+    Tool usage guidance:
+    \t1. For 'search_*' tools: Use separate 'sort' and 'order' parameters if available for sorting results - do not include 'sort:' syntax in query strings.
+    """
+
 let linearGuidance =
     ProcessInfo.processInfo.environment["HARNESS_GUIDANCE"] == "0"
     ? ""
@@ -147,6 +163,11 @@ let imagePath = option("--image")
 let chatTurns = option("--chat")?.components(separatedBy: "|")
 // --save <path>: write the chat's messages as JSON, in the form the app keeps them.
 let savePath = option("--save")
+// --repository-folder <path> --repository owner/name: the chat has GitHub and the file tools as the app has
+// them, with the app's own limits and sampling, and cloning that
+// repository copies the folder. For putting a chat that went wrong on a phone to the model again here.
+let repositoryFolder = option("--repository-folder")
+let repositoryName = option("--repository")
 /// Where a model's files are kept on this Mac, downloading them first if they are not all there.
 /// HARNESS_MODELS_DIR: another folder of models, for trying what changes a model's files.
 func modelFiles(_ repo: String, info known: HubModelInfo? = nil) async throws -> (info: HubModelInfo, directory: URL, downloaded: Bool) {
@@ -507,9 +528,37 @@ if let chatTurns {
             })
     }
     // With --setup linear the chat has Linear's connector, opened on demand as in the app.
-    let chatGroups =
+    var chatGroups =
         setup == "linear"
         ? [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance)] : []
+    var chatContext = 16384
+    var chatOptions = GenerationOptions(maxOutputTokens: 600, temperature: 0.6, thinking: .low)
+    if let repositoryFolder {
+        let name = (repositoryName ?? "acme/project").split(separator: "/").map(String.init)
+        guard name.count == 2 else {
+            print("--repository takes owner/name")
+            exit(2)
+        }
+        let workspace = Workspace(
+            directory: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-chat-\(UUID().uuidString)"))
+        let host = FolderRepositoryHost(owner: name[0], repo: name[1], folder: URL(fileURLWithPath: repositoryFolder))
+        var github = ToolGroup(
+            name: "github", title: "GitHub", summary: "Repositories, issues and pull requests",
+            tools: FileEditTool.adding(to: loadGitHubTools(recorder: recorder), title: "GitHub")
+                .filter { !RepositoryTool.replaces($0.spec.name, connector: "github") })
+        github.guidance = gitHubGuidance
+        // The connectors a new agent has on a phone, in its order: the calendar, reminders and files, then the ones added.
+        let onDevice = connectorSummaries.filter { ["calendar", "reminders"].contains($0.group) }.map { group, summary in
+            ToolGroup(name: group, title: group.capitalized, summary: summary, tools: connectors.filter { $0.group == group })
+        }
+        chatGroups = ToolGroup.linking(
+            onDevice + [FileTool.group(workspace: workspace, repository: RepositoryCopy(workspace: workspace, host: host)), github] + chatGroups,
+            to: chatSkills)
+        chatContext = 32768
+        // The app starts every model at its own standard sampling; the maker's is only offered in the model's settings.
+        chatOptions = chatPreset.options(thinking: thinking)
+        print("  as the app: context \(chatContext), reply up to \(chatOptions.maxOutputTokens) tokens, temperature \(chatOptions.temperature)")
+    }
     var messages: [Message] = [
         .system(
             PromptBuilder.systemPrompt(
@@ -526,8 +575,8 @@ if let chatTurns {
         }
         messages.append(.user(turn))
         var agent = Agent(
-            provider: modelProvider(16384), tools: chatTools,
-            options: .init(maxOutputTokens: 600, temperature: 0.6, thinking: .low))
+            provider: modelProvider(chatContext), tools: chatTools, options: chatOptions,
+            contextBudgetTokens: repositoryFolder == nil ? 12000 : chatContext - chatOptions.maxOutputTokens)
         agent.loadedToolNames = loaded
         agent.groups = chatGroups
         var plainPreset = HarnessPreset.assistant
@@ -541,11 +590,17 @@ if let chatTurns {
             switch event {
             case .assistantMessage(let message):
                 messages.append(message)
-                if message.toolCalls.isEmpty { print("  answer: …" + String(message.text.suffix(260)).replacingOccurrences(of: "\n", with: " / ")) }
+                if message.toolCalls.isEmpty {
+                    print("  answer: …" + String(message.text.suffix(repositoryFolder == nil ? 260 : 1200)).replacingOccurrences(of: "\n", with: " / "))
+                }
                 let stats = message.stats
                 print(String(format: "  step: prompt %d tokens, first token %.1fs%@", stats?.promptTokens ?? -1, stats?.timeToFirstToken ?? -1,
                     message.toolCalls.isEmpty ? "" : "  calls " + message.toolCalls.map { $0.name + " " + $0.arguments.jsonString }.joined(separator: ", ")))
-            case .toolFinished(let message): messages.append(message)
+            case .toolFinished(let message):
+                messages.append(message)
+                if repositoryFolder != nil {
+                    print("    -> " + (message.isError ? "ERROR " : "") + String(message.text.prefix(220)).replacingOccurrences(of: "\n", with: " / "))
+                }
             case .toolsLoaded(let names):
                 loaded = names
                 print("  tools: " + names.joined(separator: ", "))

@@ -5,9 +5,6 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("mapWeights") private var mapsWeights = false
-    /// Under a new name since pinning became the choice to start from: what was picked while the three were being tried does not carry over.
-    @AppStorage("weightsKept") private var weightKeeping = "held"
 
     var body: some View {
         NavigationStack {
@@ -53,24 +50,17 @@ struct SettingsView: View {
                     Text("An agent sets how the model behaves in a chat: its instructions, the tools it can use and how hard it thinks.")
                 }
 
-                if !app.library.installed.isEmpty {
-                    Section {
-                        ForEach(app.library.installed) { model in
-                            NavigationLink {
-                                ModelSettingsView(model: model)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(model.name)
-                                    Text(ModelSettingsView.describe(app.sampling(for: model)).capitalizedFirst)
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                // Everything about models is in one place, the list a chat's title opens: which are on
+                // the device, what each takes, its settings, and getting more.
+                Section {
+                    NavigationLink {
+                        ModelsList()
+                    } label: {
+                        LabeledContent {
+                            Text("\(app.library.installed.count)")
+                        } label: {
+                            Label("Manage Models", systemImage: "cpu")
                         }
-                    } header: {
-                        Text("Model Settings")
-                    } footer: {
-                        Text("How each model on this device picks its words. An agent can set its own temperature instead.")
                     }
                 }
 
@@ -81,25 +71,6 @@ struct SettingsView: View {
                     Text("This Device")
                 } footer: {
                     Text("Models run entirely on this device. Web search and page reading send only the search or address, and connectors only what a tool is asked, in agents where they are turned on.")
-                }
-
-                // EXPERIMENT: see WeightMapping. Not for release as it is.
-                Section {
-                    Toggle("Map Model Weights", isOn: $mapsWeights)
-                        .onChange(of: mapsWeights) { ModelFit.weightsAreMapped = mapsWeights }
-                    if mapsWeights {
-                        Picker("Keep Weights", selection: $weightKeeping) {
-                            Text("Shared and Pinned").tag("held")
-                            Text("Shared").tag("shared")
-                            Text("Copied").tag("copied")
-                        }
-                        // The model is loaded again with the new choice the next time it is used.
-                        .onChange(of: weightKeeping) { app.reloadModel() }
-                    }
-                } header: {
-                    Text("Experimental")
-                } footer: {
-                    Text("Reads a model's weights from storage as they are needed, so a model larger than this app's memory limit can load. The first load of each model rearranges its weights file, which takes a few minutes for a large one. Takes effect the next time a model is loaded.\n\nKeep Weights is how they stay in memory. Shared and Pinned: the graphics processor works on the file's own pages, held in place while a reply is being written and given up after. Shared: the same, not held; a model that fills this device's memory can then spend a reply reading its weights back. Copied: it works on its own copies, which the system can only squeeze; such a model is closed when it does.")
                 }
             }
             .navigationTitle("Settings")
@@ -455,9 +426,4 @@ struct MemoryView: View {
     private func save() {
         app.memory.setFacts(facts)
     }
-}
-
-extension String {
-    /// The same text with its first letter in upper case.
-    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }

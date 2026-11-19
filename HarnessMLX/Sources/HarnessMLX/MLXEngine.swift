@@ -756,9 +756,15 @@ extension MLXEngine {
     public nonisolated static func setMapsWeights(_ on: Bool) { WeightMapping.isOn = on }
     public nonisolated static var mapsWeights: Bool { WeightMapping.isOn }
 
-    /// EXPERIMENT. Caps the freed memory MLX keeps for reuse. That memory counts against the app
-    /// like any it wrote to, and by default MLX keeps as much as it likes.
-    public nonisolated static func setCacheLimit(megabytes: Int) { MLX.Memory.cacheLimit = megabytes << 20 }
+    /// Caps the freed memory MLX keeps for reuse. That memory counts against the app like any it
+    /// wrote to, and by default MLX keeps as much as it likes. Nil puts the limit back as it was.
+    public nonisolated static func setCacheLimit(megabytes: Int?) {
+        let usual = usualCacheLimit
+        MLX.Memory.cacheLimit = megabytes.map { $0 << 20 } ?? usual
+    }
+
+    /// MLX's own limit, read before it is first changed.
+    private static let usualCacheLimit = MLX.Memory.cacheLimit
 
     /// Adds a line to `memory-log.txt` after each reply while weights are mapped: how fast it went,
     /// what the app is charged, what the system will still give it, what MLX holds, how much of the

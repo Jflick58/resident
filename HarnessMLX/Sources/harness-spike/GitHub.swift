@@ -193,3 +193,34 @@ struct RecordingHost: RepositoryHost {
         return try await base.openPullRequest(draft)
     }
 }
+
+/// A host whose one repository is a folder on this Mac: what a chat on a phone cloned from GitHub is
+/// copied from disk here. A pull request is printed, not sent anywhere.
+struct FolderRepositoryHost: RepositoryHost {
+    var owner: String
+    var repo: String
+    var folder: URL
+
+    func download(owner: String, repo: String, into directory: URL) async throws -> RepositoryVersion {
+        guard owner.lowercased() == self.owner.lowercased(), repo.lowercased() == self.repo.lowercased() else {
+            throw RepositoryError("GitHub has no such repository, or this account cannot see it.")
+        }
+        for item in try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) where item.lastPathComponent != ".git" {
+            try FileManager.default.copyItem(at: item, to: directory.appendingPathComponent(item.lastPathComponent))
+        }
+        return RepositoryVersion(branch: "main", commit: "c0ffee0")
+    }
+
+    func openPullRequest(_ draft: PullRequestDraft) async throws -> OpenedPullRequest {
+        print("  PULL REQUEST \(draft.title) | \(draft.body.replacingOccurrences(of: "\n", with: " / "))")
+        for file in draft.files {
+            let before = (try? String(contentsOf: folder.appendingPathComponent(file.path), encoding: .utf8)) ?? ""
+            let was = before.split(separator: "\n", omittingEmptySubsequences: false)
+            let now = file.text.split(separator: "\n", omittingEmptySubsequences: false)
+            print("  CHANGED \(file.path)")
+            for line in was where !now.contains(line) { print("    - \(line)") }
+            for line in now where !was.contains(line) { print("    + \(line)") }
+        }
+        return OpenedPullRequest(number: 42, url: "https://github.com/\(owner)/\(repo)/pull/42", branch: draft.branch, commit: "c0ffee42")
+    }
+}

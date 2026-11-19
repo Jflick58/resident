@@ -95,6 +95,46 @@ extension Array where Element == AgentEvent {
             Agent(provider: provider, tools: [EchoTool()], maxSteps: 3).run(messages: [.user("go")]))
         #expect(events.toolMessages.count == 2)
         #expect(events.assistantMessages.last?.text == "Final answer.")
+        // The turn says it was the limit that ended it, so the app can offer to carry on.
+        #expect(events.stop == .steps)
+        // One that ends by itself on its last step with nothing pending is simply over.
+        let done = ScriptedProvider(turns: [.init(toolCalls: [ToolCall(name: "echo", arguments: ["text": "a"])]), .init(text: "Done.")])
+        #expect(try await collect(Agent(provider: done, tools: [EchoTool()], maxSteps: 3).run(messages: [.user("go")])).stop == .stop)
+    }
+
+    @Test func theModelIsToldHowManyCallsItHasLeftWhileItCanStillAct() async throws {
+        // A model that calls a tool for as long as it is let.
+        let provider = ScriptedProvider { request in
+            request.messages.last?.text.contains("no tool calls left") ?? false
+                ? .init(text: "Here is what I found, and what is still to do.")
+                : .init(toolCalls: [ToolCall(name: "echo", arguments: ["text": .string(UUID().uuidString)])])
+        }
+        // Thirteen steps: twelve that may call a tool, then the answer.
+        let events = try await collect(Agent(provider: provider, tools: [EchoTool()], maxSteps: 13).run(messages: [.user("go")]))
+        let results = events.toolMessages.map(\.text)
+        #expect(results.count == 12)
+        let noted = results.indices.filter { results[$0].contains("tool calls left") }
+        // Told when a third are left and again at three, at the end of the result it has just read, and not otherwise.
+        #expect(noted == [7, 8])
+        #expect(results[7].hasSuffix("\n[You have 4 tool calls left in this turn.]"))
+        #expect(results[8].hasSuffix("\n[You have 3 tool calls left in this turn. If they are not enough to finish, answer and say what is still to do.]"))
+        #expect(events.assistantMessages.last?.text == "Here is what I found, and what is still to do.")
+
+        // Carried on, the turn starts its count again, so what it was told goes. Earlier turns are left as they are.
+        let call = ToolCall(name: "echo", arguments: [:])
+        let earlier = Message.tool("old\n" + Agent.callsLeftNote(3, of: 7)!, call: call)
+        let kept = Agent.withoutCallsLeftNotes(
+            [earlier, .user("go")] + events.toolMessages + [.assistant("Here is what I found, and what is still to do.")])
+        #expect(kept[0].text == earlier.text)
+        #expect(!kept.dropFirst().contains { $0.text.contains("tool calls left") })
+        #expect(kept[9].text == String(results[7].prefix { $0 != "\n" }) && kept.count == 15)
+
+        // A short turn is told once, at three.
+        #expect(Agent.callsLeftNote(3, of: 7) != nil)
+        #expect(([1, 2] + Array(4...7)).allSatisfy { Agent.callsLeftNote($0, of: 7) == nil })
+        #expect(Agent.callsLeftNote(8, of: 25) != nil && Agent.callsLeftNote(9, of: 25) == nil && Agent.callsLeftNote(2, of: 25) == nil)
+        // Out of calls, it is told the turn is over and not the job.
+        #expect(Agent.outOfCalls.contains("what is still to do") && Agent.outOfCalls.contains("The user can tell you to go on."))
     }
 
     @Test func wrapsUpWhenOutOfTimeWithToolsStillDeclared() async throws {

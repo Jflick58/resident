@@ -43,14 +43,21 @@ public struct DeviceProfile: Sendable {
     /// Memory an app can use before the system ends it.
     public var memoryBudgetBytes: Int64
     public var freeDiskBytes: Int64
+    /// All the memory the device has, or 0 when that is not known. A model too large for
+    /// `memoryBudgetBytes` can still run with its weights read from their file as they are needed,
+    /// which the system does not count against the app, as long as they fit in this.
+    public var physicalMemoryBytes: Int64
 
-    public init(memoryBudgetBytes: Int64, freeDiskBytes: Int64) {
+    public init(memoryBudgetBytes: Int64, freeDiskBytes: Int64, physicalMemoryBytes: Int64 = 0) {
         self.memoryBudgetBytes = memoryBudgetBytes
         self.freeDiskBytes = freeDiskBytes
+        self.physicalMemoryBytes = physicalMemoryBytes
     }
 
     public static func current() -> DeviceProfile {
-        DeviceProfile(memoryBudgetBytes: currentMemoryBudget(), freeDiskBytes: currentFreeDisk())
+        DeviceProfile(
+            memoryBudgetBytes: currentMemoryBudget(), freeDiskBytes: currentFreeDisk(),
+            physicalMemoryBytes: Int64(ProcessInfo.processInfo.physicalMemory))
     }
 
     static func currentMemoryBudget() -> Int64 {
@@ -126,6 +133,9 @@ public struct FitReport: Sendable {
     public var architecture: String?
     public var quantizationBits: Int?
     public var capabilities: ModelCapabilities
+    /// True when the model runs only with its weights read from their file as they are needed: it
+    /// is larger than the app may hold, and fills most of the device's memory while it is at work.
+    public var fillsMemory = false
 
     public var canInstall: Bool { verdict == .runsWell || verdict == .tight }
 }
@@ -181,26 +191,42 @@ public enum ModelFit {
         return Int64(2 * layers * kvHeads * headDimension * 2)
     }
 
-    /// EXPERIMENT. True when weights are used straight from a mapped file, so they are not charged to the app.
-    nonisolated(unsafe) public static var weightsAreMapped = UserDefaults.standard.bool(forKey: "mapWeights")
-
-    static func estimatedMemory(weightBytes: Int64, cacheBytesPerToken: Int64, contextTokens: Int) -> Int64 {
+    /// What the app is charged for a model at a context length. `mapped` is with the weights read from
+    /// their file as they are needed, which the system does not count against the app.
+    static func estimatedMemory(weightBytes: Int64, cacheBytesPerToken: Int64, contextTokens: Int, mapped: Bool = false) -> Int64 {
         // Weights are held in memory at about their file size. Add the cache for
         // the context, plus working memory for activations and the app itself.
         let overhead = Int64(400 << 20) + weightBytes / 10
-        if weightsAreMapped {
-            // Mapped weights are not charged, but they still have to fit in the device's memory
-            // beside everything else, or every token waits on storage. How much room that leaves is
-            // what the experiment is measuring, so for now anything under three quarters is let through:
-            // Private LLM runs an 8 GB model on a 12 GB iPhone at 9.6 tokens a second.
-            let physical = Int64(ProcessInfo.processInfo.physicalMemory)
-            return weightBytes > physical * 3 / 4 ? Int64.max / 4 : cacheBytesPerToken * Int64(contextTokens) + overhead
-        }
-        return weightBytes + cacheBytesPerToken * Int64(contextTokens) + overhead
+        return (mapped ? 0 : weightBytes) + cacheBytesPerToken * Int64(contextTokens) + overhead
+    }
+
+    /// True when a model's weights can be mapped on this device: they are not charged to the app,
+    /// but they still have to fit in the device's memory beside everything else, or every token
+    /// waits on storage. Three quarters of it is the most that has been seen to work: an 8.6 GB
+    /// model on a 12 GB iPhone, slowly.
+    static func canMap(weightBytes: Int64, on device: DeviceProfile) -> Bool {
+        device.physicalMemoryBytes > 0 && weightBytes <= device.physicalMemoryBytes * 3 / 4
+    }
+
+    /// True when the model in `directory` has to be loaded with its weights mapped: held the ordinary
+    /// way it would not fit in what the app may use, at any context length. Everything smaller loads
+    /// the ordinary way. The same sums as `evaluate`, from the model's own files.
+    public static func needsMapping(modelDirectory directory: URL, device: DeviceProfile) -> Bool {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        let weightBytes = files.filter { $0.pathExtension == "safetensors" && !$0.lastPathComponent.hasPrefix("prompt-cache") }
+            .reduce(Int64(0)) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        let config = (try? Data(contentsOf: directory.appendingPathComponent("config.json"))).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) }
+        return needsMapping(weightBytes: weightBytes, cacheBytesPerToken: cacheBytesPerToken(config: config), device: device)
+    }
+
+    static func needsMapping(weightBytes: Int64, cacheBytesPerToken: Int64, device: DeviceProfile) -> Bool {
+        let least = estimatedMemory(weightBytes: weightBytes, cacheBytesPerToken: cacheBytesPerToken, contextTokens: 2048)
+        return least > device.memoryBudgetBytes * 95 / 100 && canMap(weightBytes: weightBytes, on: device)
     }
 
     public static func capabilities(of info: HubModelInfo) -> ModelCapabilities {
-        let hasVisionConfig = info.config?["vision_config"] != nil
+        // An empty one says nothing: LFM3's text model carries `"vision_config": {}` and has no image encoder.
+        let hasVisionConfig = !(info.config?["vision_config"]?.objectValue?.isEmpty ?? true)
         let hasPreprocessor = info.files.contains { $0.path == "preprocessor_config.json" }
         let template = info.chatTemplate ?? ""
         return ModelCapabilities(
@@ -230,11 +256,13 @@ public enum ModelFit {
         let bits = quantization?["bits"]?.intValue
         let capabilities = capabilities(of: info)
 
-        func report(_ verdict: FitVerdict, _ headline: String, _ detail: String, context: Int = 0, memory: Int64 = 0) -> FitReport {
+        func report(
+            _ verdict: FitVerdict, _ headline: String, _ detail: String, context: Int = 0, memory: Int64 = 0, fillsMemory: Bool = false
+        ) -> FitReport {
             FitReport(
                 verdict: verdict, headline: headline, detail: detail, downloadBytes: downloadBytes,
                 weightBytes: weightBytes, estimatedMemoryBytes: memory, contextTokens: context,
-                architecture: architecture, quantizationBits: bits, capabilities: capabilities)
+                architecture: architecture, quantizationBits: bits, capabilities: capabilities, fillsMemory: fillsMemory)
         }
 
         // 1. Format.
@@ -308,6 +336,19 @@ public enum ModelFit {
                     .tight, "Will run, with a shorter memory",
                     "Uses about \(format(memory)) of the \(format(budget)) apps can use here, so conversations are limited to about \(context / 1000)k tokens.",
                     context: context, memory: memory)
+            }
+        }
+        // Too large to hold the ordinary way. With its weights read from their file as they are needed
+        // it can still run, where the device has the memory for them: it loads, and it is slow.
+        if canMap(weightBytes: weightBytes, on: device) {
+            for context in [32768, 16384, 8192] where context <= max(declaredLimit, 8192) {
+                let memory = estimatedMemory(weightBytes: weightBytes, cacheBytesPerToken: perToken, contextTokens: context, mapped: true)
+                guard memory <= comfortable else { continue }
+                if let blocked = storageProblem() { return blocked }
+                return report(
+                    .tight, "Will run slowly: it fills this device's memory",
+                    "Its weights are \(format(weightBytes)), more than an app here may hold, so they are read from storage as it runs. Short replies work; long ones slow down.",
+                    context: context, memory: memory, fillsMemory: true)
             }
         }
         let minimum = estimatedMemory(weightBytes: weightBytes, cacheBytesPerToken: perToken, contextTokens: 2048)

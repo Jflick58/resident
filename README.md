@@ -107,15 +107,15 @@ Apple's on-device model can be used too, where the phone has it.
 
 ## 📏 What we measured
 
-Claims about harnesses are cheap, so these are the numbers behind ours. Each is one run on a Mac with the real model and the same harness the app uses, so a gap of a task or two is noise.
+Claims about harnesses are cheap, so these are the numbers behind ours. Each is one run on a Mac with the real model and the same harness the app uses, so a gap of a task or two is noise. The task counts are with LFM3's 4-bit build.
 
 | Test | Result |
 |---|---|
 | 17 general tasks, 4 built-in tools plus 13 connectors, LFM3 1.7B | **17 of 17**, with a first prompt of about 1,200 tokens (4,700 with every tool declared) |
 | 12 tasks against Linear's real tool definitions, LFM3 1.7B, tools opened on demand | **12 of 12** |
 | The same 12 tasks with all tools declared up front | 10 of 12, with an 18,600-token prompt and 97 seconds a task |
-| Speed on an iPhone Duo, LFM3 1.7B, app on screen | 76 to 95 tokens a second |
-| LFM3 1.7B's builds against the weights as trained, on 42 prompts from the suite | The 4-bit build picks the same next token **89.5%** of the time, 5-bit 93.8%, 6-bit **97.3%**, 8-bit 98.6% |
+| Speed on an iPhone Duo, LFM3 1.7B, app on screen | About 65 tokens a second with the 6-bit build the app offers there, 76 to 95 with the 4-bit |
+| LFM3 1.7B's builds against the weights as trained, on 42 prompts from the suite | The 4-bit build picks the same next token **89.5%** of the time, 5-bit 93.8%, 6-bit **97.3%**, 8-bit 98.6%. The app offers the 6-bit where it fits with a full-length chat and the 4-bit elsewhere |
 
 `harness-spike` in `HarnessMLX` reruns these on your own Mac, and `spike-results/` holds the raw results. [`evals/README.md`](evals/README.md) covers the suite of 423 cases and the comparison of builds.
 

@@ -6,9 +6,13 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
 
 
 - **Agent loop** (`Agent.swift`): generate, run requested tools, feed results
-  back, up to 8 steps. On the last step the model is told it has no calls left;
+  back, up to 8 steps (14 with a connector's tools declared, 26 with the file
+  tools). The model cannot see that limit, so it is told how many calls it has
+  left when a third remain and again at three. On the last step it is told it
+  has none and to say what is still to do;
   the tools stay declared so the start of the prompt does not change, and are
-  taken away only if it calls one anyway. Identical repeated calls are refused,
+  taken away only if it calls one anyway. A turn that ends this way can be
+  carried on (see Resumable turns). Identical repeated calls are refused,
   tool results are clipped, and a step where the model only thinks and runs out
   of tokens is retried once with thinking off.
 - **Context budget**: old tool results are shortened first, then whole old
@@ -52,6 +56,19 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   is the text to find and the text that replaces it, never the whole file
   written back; a long file is read a part at a time; a search prints
   `path:line: text`; a path that is nearly right gets "did you mean".
+  A search looks for the text as written, and reads it as a pattern only when
+  that finds nothing (`.tint` is code, not "any letter, then tint"). It shows
+  the files and folders named after the word before the lines that hold it,
+  the project's own files before vendored ones, and lines too long to have
+  been written by hand last; one that shows only what earlier searches showed
+  says there is no more to find. An edit that would leave a JSON file no
+  longer valid JSON is refused. With a cloned repository in the folder, the
+  eighth look with nothing changed, and every sixth after it, begins with a
+  line telling the model to choose: make the change in the best place it has
+  read, or ask the user the one thing it still needs to know. Asked to change
+  an app's accent colour in a repository of 960 files, LFM3 1.7B found the
+  file that sets it on its fifth call and spent its other twenty looking for
+  a better one.
 - **GitHub at the two ends** (`RepositoryCopy.swift`, `RepositoryHost.swift`):
   with the GitHub connector signed in, Files gains two tools and no more.
   `repo_clone` downloads a repository into a folder of its own, named
@@ -103,7 +120,10 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   tokens at most), the least recently used dropping out first; one opening
   takes at most three quarters of that. A
   held-back tool called by name is run anyway, and if that call fails the
-  error carries the tool's parameters.
+  error carries the tool's parameters. Opening a connector whose tools are
+  already declared says so, and to call the tool by its own name. Only a
+  skill's steps bring in the tools they name: a file or a page that names a
+  tool is something to read, not a request for it.
 - **Gmail and Google Calendar**: Google hosts MCP servers for both, but they
   answer only projects enrolled in its Workspace developer preview, so the two
   are defined in `ConnectorsView.swift` and left off the suggested list.
@@ -113,7 +133,11 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   task. The prompt carries one line per skill (name and when to use it); the
   `use_skill` tool loads the steps only when a task matches. Four ship with
   the app (write-email, plan-day, summarize, open-pull-request); Settings > Skills edits them,
-  adds new ones, and imports a `SKILL.md`.
+  adds new ones, and imports a `SKILL.md`. Loading one declares the connector
+  tools its steps name and ends by listing them as ready to call. A connector's
+  opening names the skills that are about it: the ones that use its tools, and
+  the ones whose summary names the service, so a model that opens GitHub to
+  open a pull request is pointed at the skill for it.
 - **Photos and documents** (`Attachments.swift`, `DocumentReader.swift`): the
   + button attaches photos (library or camera) and files. PDFs are read page
   by page with PDFKit, scanned pages and photos through on-device text
@@ -141,9 +165,22 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
 - **Resumable turns** (`ChatModel.continueTurn`): the chat is saved after every
   finished step. A turn cut off by the app closing shows a Continue button;
   one paused by the app going to the background carries on by itself when the
-  app returns. Finished tool calls are not repeated.
+  app returns. Finished tool calls are not repeated. A turn that used all its
+  steps shows Continue too: the answer the model was made to give is dropped
+  and the turn picks up after its last tool result, with its steps afresh.
 - **Fit check** (`ModelFit.swift`): from a Hugging Face link, without
   downloading weights, decides format (MLX or not), architecture, memory
   (weights + cache for the context + overhead, against what the device grants
   the app) and storage. Verdicts: runs well, will run with a shorter context,
-  too large, or unsupported, each with a one-sentence reason.
+  too large, or unsupported, each with a one-sentence reason. A model too
+  large for what the app may hold can still run where its weights fit in three
+  quarters of the device's memory: they are used straight from their file,
+  which the system does not count against the app, and the list says it fills
+  the device's memory and will be slow. That is decided for each model from
+  its size, with no setting; everything smaller loads the ordinary way.
+- **Builds** (`ModelCatalog.swift`): a recommended model may name a lighter
+  build of the same weights. The list offers whichever leaves the conversation
+  the most room on the device, and the better-rounded one when they leave the
+  same: LFM3 1.7B is its 6-bit build where that fits with a full-length chat
+  and its 4-bit build elsewhere. An installed build that is not the one
+  offered goes by its repository's name, so no two models share one.

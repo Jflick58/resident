@@ -118,6 +118,8 @@ import Testing
     @Test func detectsVision() {
         let info = Self.mlxRepo(weights: 2, extra: ["vision_config": ["hidden_size": 768]])
         #expect(ModelFit.capabilities(of: info).vision)
+        // LFM3's text model carries an empty one, and cannot see.
+        #expect(!ModelFit.capabilities(of: Self.mlxRepo(weights: 2, extra: ["vision_config": [:]])).vision)
     }
 
     @Test func cacheEstimateUsesNestedTextConfig() {
@@ -169,12 +171,73 @@ import Testing
         #expect(ModelFit.cacheBytesPerToken(config: recorded) == ModelFit.cacheBytesPerToken(config: config))
     }
 
+    @Test func aModelTooLargeToHoldIsMappedAndSaysItFillsMemory() {
+        // A 12 GB phone lets an app hold about 6 GB. The 27B's weights are 8.6 GB.
+        let phone = DeviceProfile(memoryBudgetBytes: 6 * Self.gigabyte, freeDiskBytes: 40 * Self.gigabyte, physicalMemoryBytes: 12 * Self.gigabyte)
+        let large = ModelCatalog.model(repo: "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit")!
+        let report = large.fit(on: phone)
+        #expect(report.canInstall && report.fillsMemory && report.verdict == .tight)
+        #expect(report.headline == "Will run slowly: it fills this device's memory")
+        #expect(report.contextTokens == 32768)
+        #expect(ModelCatalog.recommended(on: phone).contains { $0.model.repo == large.repo })
+        // What fits the ordinary way is left to: nothing about it says mapped.
+        let small = ModelCatalog.model(repo: "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit")!.fit(on: phone)
+        #expect(small.verdict == .runsWell && !small.fillsMemory)
+        // The same sums decide how a model is loaded.
+        #expect(ModelFit.needsMapping(weightBytes: large.weightBytes, cacheBytesPerToken: 16384, device: phone))
+        #expect(!ModelFit.needsMapping(weightBytes: 3_460_000_000, cacheBytesPerToken: 16384, device: phone))
+        // Weights over three quarters of the device's memory would wait on storage at every token: too large.
+        let smaller = DeviceProfile(memoryBudgetBytes: 4 * Self.gigabyte, freeDiskBytes: 40 * Self.gigabyte, physicalMemoryBytes: 8 * Self.gigabyte)
+        #expect(large.fit(on: smaller).verdict == .wontRun)
+        #expect(!ModelFit.needsMapping(weightBytes: large.weightBytes, cacheBytesPerToken: 16384, device: smaller))
+        // A device whose memory is not known is judged by what an app may hold, as before.
+        #expect(large.fit(on: Self.phone).verdict == .wontRun)
+    }
+
     @Test func modelsGoByTheNameTheyAreRecommendedUnder() {
-        #expect(ModelCatalog.displayName(for: "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit") == "Bonsai 2 27B")
-        #expect(ModelCatalog.displayName(for: "PRISM-ML/ternary-bonsai-2-9b-mlx-2bit") == "Bonsai 2 9B")
-        #expect(ModelCatalog.displayName(for: "someone/Their-Model-MLX-4bit") == "Their Model MLX 4bit")
+        func name(_ repo: String, stored: String? = nil) -> String { ModelCatalog.displayName(for: repo, on: Self.phone, stored: stored) }
+        #expect(name("prism-ml/Ternary-Bonsai-2-27B-mlx-2bit", stored: "Ternary Bonsai 2 27B mlx 2bit") == "Bonsai 2 27B")
+        #expect(name("PRISM-ML/ternary-bonsai-2-9b-mlx-2bit") == "Bonsai 2 9B")
+        #expect(name("someone/Their-Model-MLX-4bit") == "Their Model MLX 4bit")
+        // A name the user's model was stored under is kept.
+        #expect(name("someone/Their-Model-MLX-4bit", stored: "Mine") == "Mine")
         // Of one author's three coder fine-tunes only one is recommended: the others keep their repository's name.
-        #expect(ModelCatalog.displayName(for: "AJ-Gonzalez/coder-lfm3-1.7b-k3.1-pro") == "LFM3 Coder 1.7B")
-        #expect(ModelCatalog.displayName(for: "AJ-Gonzalez/coder-lfm3-1.7b-qwen4-max") == "coder lfm3 1.7b qwen4 max")
+        #expect(name("AJ-Gonzalez/coder-lfm3-1.7b-k3.1-pro") == "LFM3 Coder 1.7B")
+        #expect(name("AJ-Gonzalez/coder-lfm3-1.7b-qwen4-max", stored: "coder lfm3 1.7b qwen4 max") == "coder lfm3 1.7b qwen4 max")
+    }
+
+    @Test func recommendsTheBuildThatLeavesTheConversationTheMostRoom() {
+        func device(_ megabytes: Int64) -> DeviceProfile {
+            DeviceProfile(memoryBudgetBytes: megabytes << 20, freeDiskBytes: 40 * Self.gigabyte)
+        }
+        func lfm3(_ megabytes: Int64) -> (repo: String, context: Int)? {
+            ModelCatalog.recommended(on: device(megabytes)).first { $0.model.name == "LFM3 1.7B" }.map { ($0.model.repo, $0.report.contextTokens) }
+        }
+        let better = "LiquidAI/LFM3-1.7B-MLX-6bit"
+        let lighter = "LiquidAI/LFM3-1.7B-MLX-4bit"
+        // With room for both at full length, the build closer to the model as trained.
+        #expect(lfm3(6144)?.repo == better)
+        #expect(lfm3(3072)?.repo == better)
+        // Where the larger build would shorten the conversation, or not fit at all, the lighter one.
+        #expect(lfm3(2560)! == (lighter, 32768))
+        #expect(lfm3(2048)?.repo == lighter)
+        // One line in the list either way, and both builds are known to the catalog.
+        #expect(ModelCatalog.recommended(on: device(2048)).filter { $0.model.name == "LFM3 1.7B" }.count == 1)
+        #expect(ModelCatalog.model(repo: lighter)?.capabilities == ModelCatalog.model(repo: better)?.capabilities)
+        #expect(ModelCatalog.model(repo: lighter)?.weightBytes == 970_000_000)
+    }
+
+    @Test func twoBuildsOfOneModelNeverShareAName() {
+        let better = "LiquidAI/LFM3-1.7B-MLX-6bit"
+        let lighter = "LiquidAI/LFM3-1.7B-MLX-4bit"
+        // The build offered on a device has the model's name there. The other, added by its link or
+        // installed back when it was the one recommended, is named from its repository.
+        #expect(ModelCatalog.displayName(for: better, on: Self.phone, stored: "LFM3 1.7B MLX 6bit") == "LFM3 1.7B")
+        #expect(ModelCatalog.displayName(for: lighter, on: Self.phone, stored: "LFM3 1.7B") == "LFM3 1.7B MLX 4bit")
+        let small = DeviceProfile(memoryBudgetBytes: 2 * Self.gigabyte, freeDiskBytes: 40 * Self.gigabyte)
+        #expect(ModelCatalog.displayName(for: lighter, on: small, stored: "LFM3 1.7B") == "LFM3 1.7B")
+        #expect(ModelCatalog.displayName(for: better, on: small) == "LFM3 1.7B MLX 6bit")
+        // A build the catalog has dropped altogether gives up a name the catalog still uses.
+        #expect(ModelCatalog.displayName(for: "LiquidAI/LFM3-1.7B-MLX-5bit", on: Self.phone, stored: "LFM3 1.7B") == "LFM3 1.7B MLX 5bit")
     }
 }
