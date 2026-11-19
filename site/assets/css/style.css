@@ -10,6 +10,9 @@
   --muted: #a3a2a8;
   --link: #ffb347;
   --radius: 22px;
+  /* The water the page goes down into: its tint near the surface, and what it deepens to. */
+  --ice: #8ab4ff;
+  --abyss: #06203f;
   color-scheme: dark;
 }
 
@@ -21,6 +24,8 @@
     --text: #1b1a19;
     --muted: #615f5b;
     --link: #c2500a;
+    --ice: #2f6fd6;
+    --abyss: #b7d0f1;
     color-scheme: light;
   }
 }
@@ -430,6 +435,88 @@ details p { color: var(--muted); }
 .closing h2 { max-width: none; }
 .closing p { color: var(--muted); }
 
+/* The iceberg: what shows above the water, and the three depths under it. The picture and the
+   four rows beside it share one set of rows, so each row sits beside its own part of the ice. */
+
+.band > h2.wide { max-width: 28ch; }
+
+.berg {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(104px, 240px) minmax(0, 1fr);
+  grid-template-rows: 130fr 140fr 140fr 150fr;
+  height: 560px;
+  margin-top: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background:
+    linear-gradient(to bottom, transparent calc(48.2% - 1px), color-mix(in srgb, var(--ice) 22%, transparent) calc(48.2% - 1px) 48.2%, transparent 48.2%),
+    linear-gradient(to bottom, transparent calc(73.2% - 1px), color-mix(in srgb, var(--ice) 22%, transparent) calc(73.2% - 1px) 73.2%, transparent 73.2%),
+    linear-gradient(to bottom, transparent 0 23.2%, color-mix(in srgb, var(--bg), var(--ice) 10%) 23.2%, color-mix(in srgb, var(--bg), var(--abyss) 80%) 100%);
+}
+/* The waterline. */
+.berg::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 23.2%;
+  border-top: 1.5px solid color-mix(in srgb, var(--ice) 75%, transparent);
+}
+.berg svg { grid-column: 1; grid-row: 1 / -1; width: 100%; height: 100%; display: block; }
+.berg .mass polygon { fill: var(--ice); }
+.berg .mass .edge { fill: none; stroke: var(--ice); stroke-opacity: 0.55; stroke-width: 1.2; vector-effect: non-scaling-stroke; opacity: 1; }
+.berg .level {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 28px 0 14px;
+  color: inherit;
+}
+.berg .level p { margin: 0; color: var(--muted); }
+.berg .level h3 { font-size: 1.3rem; }
+.berg .level .tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ice);
+}
+.berg .surface .tag { color: var(--orange); }
+.berg a.level { position: relative; }
+.berg a.level::after {
+  content: "↓";
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.3rem;
+  color: color-mix(in srgb, var(--ice) 70%, transparent);
+  transition: transform 0.15s ease;
+}
+.berg a.level:hover { text-decoration: none; }
+.berg a.level:hover h3 { color: var(--link); }
+.berg a.level:hover::after { transform: translateY(-35%); color: var(--ice); }
+
+/* Each section under the surface is a little deeper than the one before it. */
+.deep-1 { background: color-mix(in srgb, var(--bg), var(--abyss) 22%); }
+.deep-2 { background: color-mix(in srgb, var(--bg), var(--abyss) 40%); }
+.deep-3 { background: color-mix(in srgb, var(--bg), var(--abyss) 58%); }
+.deep-1 .grid article, .deep-2 .grid article, .deep-3 .grid article { background: color-mix(in srgb, var(--panel) 62%, transparent); }
+main:has(> .deep-3:last-child) + .foot { background: color-mix(in srgb, var(--bg), var(--abyss) 58%); }
+
+.eyebrow .depth {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--ice) 60%, transparent);
+  border-radius: 999px;
+  color: var(--ice);
+}
+
 /* Pages of text */
 
 .prose {
@@ -462,6 +549,11 @@ details p { color: var(--muted); }
 /* Small screens */
 
 @media (max-width: 720px) {
+  .berg { height: 520px; grid-template-columns: 30% minmax(0, 1fr); }
+  .berg .level { padding: 0 34px 0 8px; }
+  .berg a.level::after { right: 12px; font-size: 1.1rem; }
+  .berg .level h3 { font-size: 1.1rem; }
+  .berg .level p { font-size: 0.92rem; line-height: 1.4; }
   .facts { grid-template-columns: 1fr; gap: 18px; }
   .flow { flex-direction: column; }
   .flow .arrow { transform: rotate(90deg); }
