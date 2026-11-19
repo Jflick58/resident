@@ -37,5 +37,11 @@ Two other requests on the same repository, same model (0.1), 9 calls each:
   "Open a PR that renames the Try Again button to Retry"       PR: the label in ModelsView.swift (one of two such buttons)
   "...makes search_files return up to 40 matches instead of 30"  PR: searchMatches = 30 -> 40 in Workspace.swift, as asked
 
-The 46 pull request, file and skill cases of the suite (made-up repository): 46 of 46 with the
-6-bit build (suite-lfm3-6bit-code46.jsonl).
+The same request to Bonsai 2 9B, with the repository named in it (0.6, the shipped harness):
+10 calls, PR in the colour set: the light colour to red 0, green 1, blue 0, valid JSON, the dark
+colour left as it was. Asked without the repository named, after "What repo is your code at", it
+loaded the skill and asked which repository.
+
+The suite's cases on the made-up repository, 6-bit build: 46 of 46 pull request, file and skill
+cases part-way through this work (suite-lfm3-6bit-code46.jsonl), and 36 of 36 pull request and
+file cases with what shipped (suite-lfm3-6bit-code36-final.jsonl).
