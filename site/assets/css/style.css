@@ -10,9 +10,8 @@
   --muted: #a3a2a8;
   --link: #ffb347;
   --radius: 22px;
-  /* The water the page goes down into: its tint near the surface, and what it deepens to. */
-  --ice: #8ab4ff;
-  --abyss: #06203f;
+  /* A cool tint for the engineering section, which sits under the rest. */
+  --deep: #06203f;
   color-scheme: dark;
 }
 
@@ -24,8 +23,7 @@
     --text: #1b1a19;
     --muted: #615f5b;
     --link: #c2500a;
-    --ice: #2f6fd6;
-    --abyss: #b7d0f1;
+    --deep: #b7d0f1;
     color-scheme: light;
   }
 }
@@ -59,9 +57,9 @@ h1 { font-size: clamp(2.3rem, 6.4vw, 4.2rem); font-weight: 700; }
 h2 { font-size: clamp(1.8rem, 4.2vw, 2.7rem); font-weight: 700; }
 h3 { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
 
-/* No paragraph ends on a word by itself, and the short ones under a heading or a number break evenly. */
+/* No paragraph ends on a word by itself, and the short ones under a heading break evenly. */
 p { margin: 0.7em 0 0; text-wrap: pretty; }
-.lede, .sub, .facts span { text-wrap: balance; }
+.lede, .sub { text-wrap: balance; }
 
 /* Top bar */
 
@@ -100,16 +98,18 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   padding: 84px max(20px, calc((100vw - 1080px) / 2));
 }
 
-.hero { text-align: center; padding-top: 72px; padding-bottom: 40px; }
+.hero { text-align: center; padding-top: 72px; padding-bottom: 72px; }
 .hero-mark { width: 104px; height: auto; margin-bottom: 22px; }
 .hero h1 { max-width: 16ch; margin-inline: auto; }
 
 .lede {
-  max-width: 50ch;
+  max-width: 52ch;
   margin: 22px auto 0;
   font-size: clamp(1.1rem, 2.2vw, 1.3rem);
   color: var(--muted);
 }
+/* The line under it: what is in the box. */
+.lede + .lede { margin-top: 14px; color: var(--text); font-weight: 500; }
 
 .actions {
   display: flex;
@@ -128,18 +128,13 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   color: #1b1206;
   background: linear-gradient(100deg, var(--yellow), var(--orange) 55%, var(--rose));
 }
-.button.soon { cursor: default; }
+.button:hover { text-decoration: none; filter: brightness(1.06); }
 
 .quiet { color: var(--muted); }
 .quiet:hover { color: var(--text); }
 
-.shots {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: clamp(12px, 3vw, 30px);
-  margin-top: 60px;
-}
+/* Where the app stands, said quietly under the buttons. */
+.note { margin-top: 18px; font-size: 0.95rem; color: var(--muted); }
 
 /* A phone drawn around each screenshot: the body, its edge, the side buttons
    and the Dynamic Island. Every size is a share of the phone's width, so the
@@ -190,8 +185,12 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   border-radius: 4px;
 }
 
-
 .band { border-top: 1px solid var(--line); }
+.band > h2 { max-width: 20ch; }
+.band > h2.wide { max-width: 28ch; }
+/* A heading made of short sentences breaks between them, never inside one. */
+h2.beats { max-width: none; }
+h2.beats span { display: inline-block; }
 
 .eyebrow {
   margin: 0 0 12px;
@@ -202,101 +201,23 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   color: var(--orange);
 }
 
-/* Three numbers under the hero */
-
-.facts {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  padding-top: 44px;
-  padding-bottom: 44px;
-}
-.facts div { display: flex; flex-direction: column; gap: 4px; }
-.facts strong {
-  font-size: clamp(1.7rem, 4vw, 2.5rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-.facts span { color: var(--muted); font-size: 0.98rem; max-width: 26ch; }
-
-/* Seventy tools, one line, four opened */
-
-.flow {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
-  margin-top: 40px;
-}
-.flow > div:not(.arrow) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 22px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.flow .num {
-  font-size: clamp(2rem, 5vw, 3rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  background: linear-gradient(100deg, var(--yellow), var(--orange) 60%, var(--rose));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.flow .what { color: var(--muted); font-size: 0.98rem; }
-.flow .arrow { align-self: center; color: var(--muted); font-size: 1.4rem; }
-
-/* What the app does for the model: two columns of plain text */
-
-/* Two ways of running the same tasks, set against each other row by row. */
-.versus { margin-top: 46px; border-top: 1px solid var(--line); }
-.versus > div {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 5fr);
-  gap: 22px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
-}
-.versus span:nth-child(1) { font-weight: 600; }
-.versus span:nth-child(2) { color: var(--muted); }
-.versus .head span { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.versus .head span:nth-child(3) { color: var(--orange); }
-.versus > div:not(.head) span:nth-child(3) { font-weight: 600; }
-.group { margin-top: 64px; font-size: 1.35rem; }
-.group + .pairs { margin-top: 22px; }
-
-.pairs {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 34px 56px;
-  margin-top: 48px;
-}
-.pairs article { padding-top: 18px; border-top: 1px solid var(--line); }
-.pairs p { color: var(--muted); }
-.band > h2 { max-width: 20ch; }
-
 .sub {
-  max-width: 56ch;
+  max-width: 58ch;
   margin-top: 16px;
   font-size: 1.12rem;
   color: var(--muted);
 }
 
+.fine { margin-top: 26px; font-size: 0.95rem; color: var(--muted); }
+
+/* Cards, three across. */
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-top: 40px;
 }
-
-/* Six cards sit three by three, never four and two. */
-.grid.three, .grid.six { grid-template-columns: repeat(3, 1fr); }
-
 .grid article {
   padding: 24px;
   background: var(--panel);
@@ -314,7 +235,7 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   color: var(--orange) !important;
 }
 
-.fine { margin-top: 26px; font-size: 0.95rem; color: var(--muted); }
+/* Words on one side, a picture on the other. */
 
 .split {
   display: flex;
@@ -322,93 +243,103 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   gap: clamp(28px, 6vw, 80px);
 }
 .split.reverse { flex-direction: row-reverse; }
-.split > div:first-child { flex: 1.1; }
-.split > div:first-child p { max-width: 46ch; color: var(--muted); font-size: 1.08rem; }
-.split > div:first-child p.eyebrow { color: var(--orange); font-size: 0.82rem; }
+.split > div:first-child { flex: 1.1; min-width: 0; }
+.split > div:first-child > p { max-width: 46ch; color: var(--muted); font-size: 1.08rem; }
+.split > div:first-child > p.eyebrow { color: var(--orange); font-size: 0.82rem; }
 .split h2 { margin-bottom: 6px; }
+.split .device { width: min(40%, 300px); }
+/* Under a section's heading, with room above. */
+.band > .split { margin-top: 44px; }
+.band.split { margin-top: 0; }
 
-/* Drawn panels beside the text: an agent list, a shortcut. Pictures of the idea, not screenshots. */
+/* A run of the agent, as it happened: what was asked, each step with the time it came at, and the answer. */
 
-.panel {
-  flex: 0.9;
-  max-width: 420px;
-  padding: 10px;
+.run {
+  padding: 22px 24px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 26px;
-  box-shadow: 0 30px 70px -40px rgba(0, 0, 0, 0.7);
+  border-radius: var(--radius);
 }
-.panel .row {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 14px 14px;
-  border-bottom: 1px solid var(--line);
-}
-.panel .row:last-child { border-bottom: 0; }
-.panel .row div { display: flex; flex-direction: column; gap: 2px; }
-.panel .row span { color: var(--muted); font-size: 0.93rem; line-height: 1.4; }
-.panel .glyph {
-  flex: none;
-  width: 26px;
-  text-align: center;
-  font-size: 1.1rem;
-  line-height: 1.5;
-  color: var(--orange) !important;
-}
-.panel .row.add strong { color: var(--muted); font-weight: 500; }
-.panel-title {
-  margin: 10px 14px 8px;
-  font-size: 0.76rem;
+.run + .run { margin-top: 16px; }
+.run .label {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.panel .action, .panel .activity {
-  margin: 0 4px 8px;
-  padding: 16px;
+.run .ask {
+  display: inline-block;
+  margin: 0;
+  padding: 11px 16px;
   border-radius: 18px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  line-height: 2;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  color: var(--text);
+  font-size: 1.02rem;
 }
-.panel .token {
-  padding: 3px 9px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--orange) 20%, transparent);
-  color: var(--link);
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-.panel .field {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12px;
-  padding-top: 10px;
+.run ol { list-style: none; margin: 16px 0 0; padding: 0; }
+.run li {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
   border-top: 1px solid var(--line);
-  line-height: 1.5;
+  color: var(--muted);
 }
-.panel .field span:last-child { color: var(--link); }
-.panel .activity { line-height: 1.5; }
-.panel .activity > div:first-child { display: flex; justify-content: space-between; gap: 12px; }
-.panel .activity span { color: var(--muted); }
-.meter {
-  height: 6px;
-  margin-top: 12px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
+.run li span { text-wrap: pretty; }
+.run li .at { font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--muted) 75%, transparent); }
+.run li.done { color: var(--text); font-weight: 600; }
+.run li.done .at { color: var(--orange); }
+
+/* Why it was built: a few paragraphs in one voice. */
+
+.story > * { max-width: 760px; }
+.story p:not(.eyebrow) { font-size: 1.15rem; color: var(--muted); }
+.story h2 { margin-bottom: 8px; }
+
+/* The engineering section sits a little deeper than the rest. */
+.under { background: color-mix(in srgb, var(--bg), var(--deep) 30%); }
+
+/* What goes wrong, what the app does about it, and what that gets you: three columns, a row each. */
+
+.fixes { margin-top: 46px; border-top: 1px solid var(--line); }
+.fixes > div {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr) minmax(0, 4fr);
+  gap: 28px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
 }
-.meter i {
-  display: block;
-  width: 37.5%;
-  height: 100%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--yellow), var(--orange), var(--rose));
+.fixes span:nth-child(1) { font-weight: 600; }
+.fixes span:nth-child(2) { color: var(--muted); }
+.fixes span:nth-child(3) { font-weight: 600; }
+.fixes .head span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
-.split .device { width: min(40%, 300px); }
+.fixes .head span:nth-child(3) { color: var(--orange); }
+
+/* How it is checked, set apart from the claims it backs. */
+.evidence {
+  max-width: 860px;
+  margin-top: 34px;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--orange);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+}
+.evidence p { margin: 0; color: var(--muted); }
+.evidence strong { color: var(--text); }
+
+.group { margin-top: 56px; font-size: 1.35rem; }
 
 .narrow > * { max-width: 760px; }
+.detail > details, .detail > .group { max-width: 860px; }
 
 details {
   border-bottom: 1px solid var(--line);
@@ -430,92 +361,24 @@ summary::after { content: "+"; color: var(--muted); font-weight: 400; }
 details[open] summary::after { content: "–"; }
 details p { color: var(--muted); }
 
+/* Commands to copy. */
+.code {
+  margin: 18px 0 0;
+  padding: 18px 20px;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  font: 0.88rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text);
+}
+.code .say { color: var(--muted); }
+
 .closing { text-align: center; }
 .closing img { border-radius: 22px; margin-bottom: 16px; }
 .closing h2 { max-width: none; }
 .closing p { color: var(--muted); }
-
-/* The iceberg: what shows above the water, and the three depths under it. The picture and the
-   four rows beside it share one set of rows, so each row sits beside its own part of the ice. */
-
-.band > h2.wide { max-width: 28ch; }
-
-.berg {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(104px, 240px) minmax(0, 1fr);
-  grid-template-rows: 130fr 140fr 140fr 150fr;
-  height: 560px;
-  margin-top: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background:
-    linear-gradient(to bottom, transparent calc(48.2% - 1px), color-mix(in srgb, var(--ice) 22%, transparent) calc(48.2% - 1px) 48.2%, transparent 48.2%),
-    linear-gradient(to bottom, transparent calc(73.2% - 1px), color-mix(in srgb, var(--ice) 22%, transparent) calc(73.2% - 1px) 73.2%, transparent 73.2%),
-    linear-gradient(to bottom, transparent 0 23.2%, color-mix(in srgb, var(--bg), var(--ice) 10%) 23.2%, color-mix(in srgb, var(--bg), var(--abyss) 80%) 100%);
-}
-/* The waterline. */
-.berg::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 23.2%;
-  border-top: 1.5px solid color-mix(in srgb, var(--ice) 75%, transparent);
-}
-.berg svg { grid-column: 1; grid-row: 1 / -1; width: 100%; height: 100%; display: block; }
-.berg .mass polygon { fill: var(--ice); }
-.berg .mass .edge { fill: none; stroke: var(--ice); stroke-opacity: 0.55; stroke-width: 1.2; vector-effect: non-scaling-stroke; opacity: 1; }
-.berg .level {
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 0 28px 0 14px;
-  color: inherit;
-}
-.berg .level p { margin: 0; color: var(--muted); }
-.berg .level h3 { font-size: 1.3rem; }
-.berg .level .tag {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ice);
-}
-.berg .surface .tag { color: var(--orange); }
-.berg a.level { position: relative; }
-.berg a.level::after {
-  content: "↓";
-  position: absolute;
-  right: 28px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.3rem;
-  color: color-mix(in srgb, var(--ice) 70%, transparent);
-  transition: transform 0.15s ease;
-}
-.berg a.level:hover { text-decoration: none; }
-.berg a.level:hover h3 { color: var(--link); }
-.berg a.level:hover::after { transform: translateY(-35%); color: var(--ice); }
-
-/* Each section under the surface is a little deeper than the one before it. */
-.deep-1 { background: color-mix(in srgb, var(--bg), var(--abyss) 22%); }
-.deep-2 { background: color-mix(in srgb, var(--bg), var(--abyss) 40%); }
-.deep-3 { background: color-mix(in srgb, var(--bg), var(--abyss) 58%); }
-.deep-1 .grid article, .deep-2 .grid article, .deep-3 .grid article { background: color-mix(in srgb, var(--panel) 62%, transparent); }
-main:has(> .deep-3:last-child) + .foot { background: color-mix(in srgb, var(--bg), var(--abyss) 58%); }
-
-.eyebrow .depth {
-  display: inline-block;
-  margin-right: 8px;
-  padding: 2px 10px;
-  border: 1px solid color-mix(in srgb, var(--ice) 60%, transparent);
-  border-radius: 999px;
-  color: var(--ice);
-}
 
 /* Pages of text */
 
@@ -549,34 +412,22 @@ main:has(> .deep-3:last-child) + .foot { background: color-mix(in srgb, var(--bg
 /* Small screens */
 
 @media (max-width: 720px) {
-  .berg { height: 520px; grid-template-columns: 30% minmax(0, 1fr); }
-  .berg .level { padding: 0 34px 0 8px; }
-  .berg a.level::after { right: 12px; font-size: 1.1rem; }
-  .berg .level h3 { font-size: 1.1rem; }
-  .berg .level p { font-size: 0.92rem; line-height: 1.4; }
-  .facts { grid-template-columns: 1fr; gap: 18px; }
-  .flow { flex-direction: column; }
-  .flow .arrow { transform: rotate(90deg); }
-  .pairs { grid-template-columns: 1fr; gap: 26px; }
-  .grid.three, .grid.six { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: 1fr; }
 
   .bar nav { gap: 14px; font-size: 0.88rem; }
   .bar nav a:nth-child(n + 3) { display: none; }
   .hero, .band { padding-top: 60px; padding-bottom: 60px; }
-  .shots .device:nth-child(3) { display: none; }
-  .versus > div { grid-template-columns: 1fr; gap: 4px; }
-  .versus .head { display: none; }
-  .versus span:nth-child(2)::before { content: "Every tool declared: "; }
-  .versus span:nth-child(3)::before { content: "Resident: "; }
-  .shots .device { width: 46%; }
   .split, .split.reverse { flex-direction: column; align-items: flex-start; }
+  .split > div:first-child { width: 100%; }
   .split .device { width: min(70%, 300px); align-self: center; }
-  .panel { max-width: none; width: 100%; }
+
+  /* Each row of the table becomes a short stack, with its columns named. */
+  .fixes > div { grid-template-columns: 1fr; gap: 6px; }
+  .fixes .head { display: none; }
+  .fixes span:nth-child(2)::before { content: "Resident: "; color: var(--text); font-weight: 600; }
+  .fixes span:nth-child(3)::before { content: "You get: "; color: var(--orange); }
 }
 
 @media (min-width: 721px) and (max-width: 960px) {
-  .grid.three, .grid.six { grid-template-columns: repeat(2, 1fr); }
+  .grid { grid-template-columns: repeat(2, 1fr); }
 }
-
-/* One screenshot on its own is shown a little larger. */
-.shots .device:only-child { width: min(60%, 320px); }
