@@ -13,11 +13,11 @@ A small Jekyll site: one page of marketing, plus privacy and support.
   about it, then the inference work), and the models. The two engineering
   sections have a cooler background (`.under`).
 - The use cases under "See it work" are shown as screenshots of the app, not
-  as drawings of it. Their numbers (tool calls, seconds) come from the saved
-  chats, `tools/site-chat.json` and `tools/site-pull-request.json`: the time
-  is the last message's date less the first's. If a chat is replaced, take the
-  screenshots again and correct the numbers, and keep them honest about where
-  the run was made.
+  as drawings of it. The tool-call counts beside them come from the saved
+  chats, `tools/site-chat.json` and `tools/site-pull-request.json`. Those
+  chats were run on a Mac, so the page gives no timings for them: a time shown
+  there would have to say where it was measured. If a chat is replaced, take
+  the screenshots again and correct the counts.
 - `assets/css/style.css` holds every style. Colours are variables at the top,
   taken from the app's mark, with a dark and a light set.
 - `assets/img/` holds the mark, the icon and the screenshots. The screenshots
