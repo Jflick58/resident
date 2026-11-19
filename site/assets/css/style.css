@@ -283,7 +283,6 @@ h2.beats span { display: inline-block; }
   text-align: center;
   text-wrap: balance;
 }
-.case + .fine { margin-top: 56px; max-width: 78ch; }
 
 /* Why it was built: a few paragraphs in one voice. */
 
