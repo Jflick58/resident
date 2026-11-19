@@ -248,49 +248,42 @@ h2.beats span { display: inline-block; }
 .split > div:first-child > p.eyebrow { color: var(--orange); font-size: 0.82rem; }
 .split h2 { margin-bottom: 6px; }
 .split .device { width: min(40%, 300px); }
-/* Under a section's heading, with room above. */
-.band > .split { margin-top: 44px; }
-.band.split { margin-top: 0; }
 
-/* A run of the agent, as it happened: what was asked, each step with the time it came at, and the answer. */
+/* A use case: what was asked and what came of it, beside two screenshots of that chat. */
 
-.run {
-  padding: 22px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+.case {
+  display: flex;
+  align-items: center;
+  gap: clamp(28px, 5vw, 64px);
+  margin-top: 64px;
 }
-.run + .run { margin-top: 16px; }
-.run .label {
-  margin: 0 0 14px;
+.case.reverse { flex-direction: row-reverse; }
+.case > div:first-child { flex: 1; min-width: 0; }
+.case h3 { font-size: 1.5rem; }
+.case p { max-width: 40ch; color: var(--muted); font-size: 1.08rem; }
+.case .meta {
+  margin-top: 16px;
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.pair {
+  flex: none;
+  display: flex;
+  gap: clamp(12px, 2vw, 24px);
+  width: min(58%, 604px);
+}
+.shot { flex: 1; min-width: 0; margin: 0; }
+.shot .device { width: 100%; }
+.shot figcaption {
+  margin-top: 16px;
+  font-size: 0.92rem;
   color: var(--muted);
+  text-align: center;
+  text-wrap: balance;
 }
-.run .ask {
-  display: inline-block;
-  margin: 0;
-  padding: 11px 16px;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--text) 9%, transparent);
-  color: var(--text);
-  font-size: 1.02rem;
-}
-.run ol { list-style: none; margin: 16px 0 0; padding: 0; }
-.run li {
-  display: grid;
-  grid-template-columns: 3em minmax(0, 1fr);
-  gap: 10px;
-  padding: 9px 0;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-}
-.run li span { text-wrap: pretty; }
-.run li .at { font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--muted) 75%, transparent); }
-.run li.done { color: var(--text); font-weight: 600; }
-.run li.done .at { color: var(--orange); }
+.case + .fine { margin-top: 56px; max-width: 78ch; }
 
 /* Why it was built: a few paragraphs in one voice. */
 
@@ -300,21 +293,6 @@ h2.beats span { display: inline-block; }
 
 /* The engineering section sits a little deeper than the rest. */
 .under { background: color-mix(in srgb, var(--bg), var(--deep) 30%); }
-
-/* The lines a pull request changed, under the run that changed them. */
-.diff {
-  margin-top: 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  overflow: hidden;
-  font: 0.86rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-.diff .file { margin: 0; padding: 10px 18px; border-bottom: 1px solid var(--line); color: var(--muted); overflow-wrap: anywhere; }
-.diff pre { margin: 0; padding: 6px 0; overflow-x: auto; font: inherit; }
-.diff pre span { display: block; width: max-content; min-width: 100%; padding: 1px 18px; }
-.diff .was { background: color-mix(in srgb, var(--rose) 18%, transparent); }
-.diff .now { background: color-mix(in srgb, #2ea043 22%, transparent); }
 
 /* What goes wrong, what the app does about it, and what that gets you: three columns, a row each. */
 
@@ -376,20 +354,6 @@ summary::after { content: "+"; color: var(--muted); font-weight: 400; }
 details[open] summary::after { content: "–"; }
 details p { color: var(--muted); }
 
-/* Commands to copy. */
-.code {
-  margin: 18px 0 0;
-  padding: 18px 20px;
-  max-width: 100%;
-  overflow-x: auto;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  font: 0.88rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: var(--text);
-}
-.code .say { color: var(--muted); }
-
 .closing { text-align: center; }
 .closing img { border-radius: 22px; margin-bottom: 16px; }
 .closing h2 { max-width: none; }
@@ -435,6 +399,20 @@ details p { color: var(--muted); }
   .split, .split.reverse { flex-direction: column; align-items: flex-start; }
   .split > div:first-child { width: 100%; }
   .split .device { width: min(70%, 300px); align-self: center; }
+
+  /* A use case stacks, and its two screenshots sit in a row that scrolls sideways. */
+  .case, .case.reverse { flex-direction: column; align-items: stretch; gap: 24px; margin-top: 48px; }
+  .pair {
+    width: auto;
+    margin-inline: -20px;
+    padding: 4px 20px 8px;
+    gap: 18px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .pair::-webkit-scrollbar { display: none; }
+  .shot { flex: none; width: 72%; scroll-snap-align: center; }
 
   /* Each row of the table becomes a short stack, with its columns named. */
   .fixes > div { grid-template-columns: 1fr; gap: 6px; }

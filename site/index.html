@@ -47,89 +47,70 @@ questions:
   <p class="lede">Tools, skills, memory and an agent harness engineered for small models. Open source.</p>
   <p class="actions">
     <a class="button" href="#watch">See Resident work</a>
-    <a class="quiet" href="#start">Build from source</a>
+    <a class="quiet" href="https://github.com/jflick58/resident#readme">Build from source</a>
   </p>
   <p class="note">Coming soon to the App Store.</p>
 </section>
 
 <section id="watch" class="band">
   <p class="eyebrow">See it work</p>
-  <h2 class="beats"><span>One question.</span> <span>Four tool calls.</span> <span>A 1.7B model.</span></h2>
+  <h2>A 1.7B model, put to work.</h2>
   <p class="sub">
-    A real run, start to finish. Nobody told the model which pages to read. It chose each step from
-    the result of the one before.
+    Two chats LFM3 1.7B really had, as they look in the app. Nobody told it which pages to read or
+    which file to change.
   </p>
-  <div class="split">
+
+  <div class="case">
     <div>
-      <div class="run">
-        <p class="label">LFM3 1.7B · 4 tool calls · 38 seconds on a Mac</p>
-        <p class="ask">What’s the latest stable version of Swift, and what’s new in it? Keep it short.</p>
-        <ol>
-          <li><span class="at">0:05</span><span>Searched the web for “latest stable Swift version release notes what’s new”</span></li>
-          <li><span class="at">0:08</span><span>Read swift.org</span></li>
-          <li><span class="at">0:13</span><span>Read developer.apple.com</span></li>
-          <li><span class="at">0:24</span><span>Read swiftlee-weekly.com</span></li>
-          <li class="done"><span class="at">0:38</span><span>Answered: Swift 6.4, released September 14, 2026, and what is new in it</span></li>
-        </ol>
-      </div>
-      <div class="run">
-        <p class="label">The next message · 1 tool call · 28 seconds</p>
-        <p class="ask">How many days until New Year’s Day 2027?</p>
-        <ol>
-          <li><span class="at">0:18</span><span>Ran code: the difference between two dates, in JavaScript</span></li>
-          <li class="done"><span class="at">0:28</span><span>Answered: 46 days</span></li>
-        </ol>
-      </div>
-      <p class="fine">
-        This run was made on a Mac, through the same harness the app uses, and the screenshot is
-        that chat opened in the app. The model wrote 36 to 67 tokens a second in it. On a 12 GB
-        iPhone it writes about 65.
+      <h3>Research a question</h3>
+      <p>
+        Asked for the latest Swift release, it searched the web, read three pages and answered.
+        Asked next how many days were left until New Year, it worked the sum out in code.
       </p>
+      <p class="meta">4 tool calls · 38 seconds on a Mac</p>
     </div>
-    {% include shot.html name="chat" alt="The same chat in the app: the question, a web search, three pages read, and the start of the answer" %}
+    <div class="pair">
+      <figure class="shot">
+        {% include shot.html name="chat" alt="A chat in the app: the question about Swift, a web search, three pages read, and the start of the answer" %}
+        <figcaption>It searches, reads three pages and answers</figcaption>
+      </figure>
+      <figure class="shot">
+        {% include shot.html name="code" alt="The end of the same chat: a question about days until New Year, a step that ran code, and the answer, 46 days" %}
+        <figcaption>The next question is worked out in code</figcaption>
+      </figure>
+    </div>
   </div>
-</section>
-<section id="pull-request" class="band">
-  <p class="eyebrow">A code change</p>
-  <h2 class="beats"><span>One request.</span> <span>Nine tool calls.</span> <span>One pull request.</span></h2>
-  <p class="sub">
-    The same model, pointed at Resident’s own repository. It cloned 964 files, found the one line
-    that sets the limit, changed it and opened a pull request on GitHub.
+
+  <div class="case reverse">
+    <div>
+      <h3>Change code and open a pull request</h3>
+      <p>
+        Pointed at Resident’s own repository, it cloned 964 files, found the one line that sets a
+        limit, changed it and opened
+        <a href="https://github.com/jflick58/resident/pull/5">pull request #5</a> on GitHub.
+      </p>
+      <p class="meta">9 tool calls · 55 seconds on a Mac</p>
+    </div>
+    <div class="pair">
+      <figure class="shot">
+        {% include shot.html name="repository" alt="A chat in the app: a request to raise a search limit and open a pull request, then the repository cloned, searched and read" %}
+        <figcaption>It clones the repository and finds the line</figcaption>
+      </figure>
+      <figure class="shot">
+        {% include shot.html name="pull-request" alt="The end of the same chat: the file edited, a pull request opened, and an answer that gives the link to it" %}
+        <figcaption>It changes the line and opens the pull request</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <p class="fine">
+    Both chats were run on a Mac, through the same harness and the same GitHub code the app uses, and
+    the screenshots show them opened in the app. Three practice runs of the code change, on a copy of
+    the repository, made the same change first in 80 to 117 seconds. The transcripts are in the
+    repository:
+    <a href="https://github.com/jflick58/resident/blob/main/tools/site-chat.json">the research</a> and
+    <a href="https://github.com/jflick58/resident/blob/main/tools/site-pull-request.json">the pull request</a>.
   </p>
-  <div class="split reverse">
-    <div>
-      <div class="run">
-        <p class="label">LFM3 1.7B · 9 tool calls · 55 seconds on a Mac</p>
-        <p class="ask">File search in jflick58/resident stops at 30 matches. Open a PR that raises it to 40.</p>
-        <ol>
-          <li><span class="at">0:08</span><span>Loaded its pull request skill</span></li>
-          <li><span class="at">0:14</span><span>Cloned jflick58/resident</span></li>
-          <li><span class="at">0:22</span><span>Searched the files for “30”</span></li>
-          <li><span class="at">0:27</span><span>Asked for a file at the wrong path, and was told the right one</span></li>
-          <li><span class="at">0:28</span><span>Searched the files for “searchMatches”</span></li>
-          <li><span class="at">0:30</span><span>Read Workspace.swift</span></li>
-          <li><span class="at">0:37</span><span>Changed one line</span></li>
-          <li><span class="at">0:42</span><span>Opened pull request #5</span></li>
-          <li><span class="at">0:49</span><span>Read the changed lines again</span></li>
-          <li class="done"><span class="at">0:55</span><span>Answered with the link</span></li>
-        </ol>
-      </div>
-      <div class="diff">
-        <p class="file">HarnessKit/Sources/HarnessKit/Code/Workspace.swift</p>
-        <pre><span class="was">-    static let searchMatches = 30</span><span class="now">+    static let searchMatches = 40</span></pre>
-      </div>
-      <p class="fine">
-        That is <a href="https://github.com/jflick58/resident/pull/5">pull request #5</a> on
-        Resident’s repository, as the model wrote it. The run was made on a Mac on November 19, 2026,
-        through the same harness and the same GitHub code the app uses. Three practice runs against
-        a copy of the repository made the same change first, in 80 to 117 seconds. The screenshot is
-        that chat opened in the app, and
-        <a href="https://github.com/jflick58/resident/blob/main/tools/site-pull-request.json">the whole transcript</a>
-        is in the repository.
-      </p>
-    </div>
-    {% include shot.html name="pull-request" alt="The end of that chat in the app: the file edited, a pull request opened, and an answer that gives the link to it" %}
-  </div>
 </section>
 
 <section id="does" class="band">
@@ -440,28 +421,6 @@ questions:
     <a href="https://github.com/ml-explore/mlx-swift-lm">mlx-swift-lm</a>,
     <a href="https://github.com/jflick58/resident/tree/main/Vendor">listed in the repository</a>.
   </p>
-</section>
-
-<section id="start" class="band split">
-  <div>
-    <p class="eyebrow">Get started</p>
-    <h2 class="beats"><span>Build it today.</span> <span>On the App Store soon.</span></h2>
-    <p>
-      You need a Mac with Xcode and an iPhone. The model runs on the phone itself, so the simulator
-      will not do.
-    </p>
-    <pre class="code">git clone https://github.com/jflick58/resident.git
-cd resident
-brew install xcodegen
-cp Config/Local.xcconfig.example Config/Local.xcconfig
-<span class="say"># put your Apple team, a bundle ID and your phone's name in that file</span>
-./run-device.sh</pre>
-    <p>
-      That builds the app, installs it and opens it. Pick a model, wait for the download, and ask it
-      something. The <a href="https://github.com/jflick58/resident#readme">README</a> has the rest.
-    </p>
-  </div>
-  {% include shot.html name="models" alt="The list of models: Apple Intelligence, the model on this device, and recommended models to download" %}
 </section>
 
 <section id="models" class="band">
