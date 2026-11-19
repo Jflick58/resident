@@ -93,15 +93,15 @@ struct EmptyChatView: View {
     var body: some View {
         VStack(spacing: 12) {
             // The app's mark and name, then a greeting for the time of day, by name once memory holds one.
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 Image("Mark")
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 72)
+                    .frame(height: 128)
                     .accessibilityHidden(true)
                 Text("Resident")
-                    .font(.subheadline.weight(.semibold))
-                    .tracking(1.5)
+                    .font(.headline.weight(.semibold))
+                    .tracking(2.5)
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
             }
