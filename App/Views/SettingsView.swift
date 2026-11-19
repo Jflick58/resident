@@ -10,6 +10,17 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
+                    // Everything about models is in one place, the list a chat's title opens: which are on
+                    // the device, what each takes, its settings, and getting more.
+                    NavigationLink {
+                        ModelsList()
+                    } label: {
+                        LabeledContent {
+                            Text("\(app.library.installed.count)")
+                        } label: {
+                            Label("Manage Models", systemImage: "cpu")
+                        }
+                    }
                     NavigationLink {
                         PresetListView()
                     } label: {
@@ -48,20 +59,6 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("An agent sets how the model behaves in a chat: its instructions, the tools it can use and how hard it thinks.")
-                }
-
-                // Everything about models is in one place, the list a chat's title opens: which are on
-                // the device, what each takes, its settings, and getting more.
-                Section {
-                    NavigationLink {
-                        ModelsList()
-                    } label: {
-                        LabeledContent {
-                            Text("\(app.library.installed.count)")
-                        } label: {
-                            Label("Manage Models", systemImage: "cpu")
-                        }
-                    }
                 }
 
                 Section {
