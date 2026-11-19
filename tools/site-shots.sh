@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Takes the screenshots the website uses, from the simulator, in dark mode.
 #   tools/site-shots.sh
+#   SIM="iPhone 18 Pro Max" OUT=store/screenshots/iphone-6.9 tools/site-shots.sh      for the App Store
 #   SIM="iPad Pro 13-inch (M5)" OUT=store/screenshots/ipad-13 tools/site-shots.sh   for the App Store
 # They land in site/assets/img/ as shot-<name>.png, or in OUT at full size. The simulator holds no
 # real data, so nothing private can end up on the site. Build the app for the
