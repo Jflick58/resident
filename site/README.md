@@ -6,11 +6,16 @@ A small Jekyll site: one page of marketing, plus privacy and support.
     jekyll serve        # then open http://localhost:4000
 
 - `index.html` is the page. Its sections are plain HTML; the lists of models
-  and questions are in the front matter at the top of the file. The page goes
-  down like an iceberg: why a local model matters, then three depths under the
-  surface (the harness, the engineering that keeps a small model dependable,
-  and the inference work). The iceberg is an SVG drawn in the page, and each
-  deeper section has a slightly deeper background (`.deep-1` to `.deep-3`).
+  and questions are in the front matter at the top of the file. The order is
+  the argument: what the app is, one real run of it, what it can do, why a
+  local model matters, why it was built, the engineering (what goes wrong
+  with a small model and what the harness does about it, then the inference
+  work), and how to get it. The two engineering sections have a cooler
+  background (`.under`).
+- The run under "See it work" is written out by hand from
+  `tools/site-chat.json`: each step's time is that message's date less the
+  first message's. If the chat is replaced, replace those lines with it, and
+  keep the label honest about where the run was made.
 - `assets/css/style.css` holds every style. Colours are variables at the top,
   taken from the app's mark, with a dark and a light set.
 - `assets/img/` holds the mark, the icon and the screenshots. The screenshots
@@ -24,9 +29,11 @@ chat shown is one LFM3 1.7B really had: it was run on a Mac through the same
 agent, saved to `tools/site-chat.json`, and put in the simulator's data with
 LFM3 listed as the model on the device. To show a different chat, save a new
 one (the script says how) and run the script again. The status bar is set to
-9:41, and the opening screen is told it is morning to match. The shortcut and
-Live Activity panel is drawn in HTML and is not a screenshot.
+9:41, and the opening screen is told it is morning to match.
 
 What the page says the app does is what it did when the page was written.
-Before publishing, check it against the app, and replace the "coming soon"
-button with the App Store link.
+Before publishing, check it against the app. Every number on the page is one
+`spike-results/` or the app backs, and the page says where each was measured.
+When the app is on the App Store, replace the two "Coming soon to the App
+Store" lines (under the first buttons and at the foot) with the link, and make
+it the first button.
