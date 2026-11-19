@@ -3,431 +3,312 @@ layout: default
 models:
   - name: LFM3
     maker: Liquid AI
-    note: Small and quick, and the most dependable with tools in testing. The one to start with.
-  - name: Bonsai 2
-    maker: PrismML
-    note: Large models trained to be small. The 9B fits where a 4B would, and all of them see images.
+    note: Start here. Small, fast, and the most dependable small model with tools in Resident’s tests.
   - name: Qwen 3.5
     maker: Alibaba
-    note: Strong all-rounders that use tools well and read photos and screenshots.
+    note: An all-rounder for tools, photos and screenshots.
+  - name: Bonsai 2
+    maker: PrismML
+    note: Larger models in less memory, with image support. Check the fit for your device.
   - name: Gemma 4
     maker: Google
-    note: Natural writing and good vision in a small download.
+    note: For writing and working with images.
   - name: Apple Intelligence
     maker: Built in
-    note: Nothing to download. Answers at once, on devices that have it.
-  - name: Anything in MLX
+    note: Try the model already on your device, where supported. No model download needed.
+  - name: Bring a model
     maker: Hugging Face
-    note: Paste a link. Resident checks that the model fits your device before it downloads.
+    note: Paste an MLX model link. Resident checks format, architecture, memory and storage before download.
 questions:
-  - q: Is it as good as Claude Code or Codex?
-    a: No. The model in your pocket is far smaller than the ones behind those tools, and on a hard problem it shows. What is the same is the kind of work, which is reading files, changing them, calling tools and opening a pull request. A 1.7B model handles a small change that is clearly described, a 9B handles more, and when you want more than a phone can give you can point Resident at any OpenAI-compatible server.
-  - q: Does it work without the internet?
-    a: Yes. Once a model is on your device, chatting needs no connection. Web search, page reading and connectors do, and only when the agent uses them.
-  - q: Is anything sent to a server?
-    a: Not to a model provider, and not to Resident, which has no server. A web search sends the search, reading a page sends its address, and a connected service receives what its tool is asked. Each of those has a switch in every agent.
-  - q: Which devices does it run on?
-    a: iPhone and iPad with iOS 18 or later. Larger models need a recent device with more memory, and Resident tells you which ones fit before you download. The 27B needs 12 GB. The Shortcuts actions need iOS 27, and Apple Intelligence needs iOS 26 and a device that supports it.
-  - q: Which model should I start with?
-    a: LFM3 1.7B. It is a 1.3 GB download on a recent iPhone and under 1 GB on an older one, it is quick, and in testing it is the most dependable small model with tools. If your device has Apple Intelligence, you can start with that and download nothing.
-  - q: Can it work while I use other apps?
-    a: From Shortcuts, yes. Apple Intelligence can run for as long as a task takes. On iOS 27, a model Resident runs itself also keeps working with the app closed, more slowly than on screen. Inside the app, a reply pauses when you leave and carries on when you come back.
-  - q: Is it open source?
-    a: Yes, under the Apache 2.0 license. The app, the harness, the changes to the inference library, the test suite and the results are all on GitHub.
+  - q: What makes this an agent?
+    a: The model can call a tool, read the result and decide what to do next, across several steps. Resident runs that loop, manages the context and executes the tools. You can see the tool calls in the chat and choose which tools each agent can use.
+  - q: How much can a phone-sized model do?
+    a: Start with a focused request, such as researching a question, working with a file or making a small code change. Results depend on the model, the task and the tools you enable. These models do not match the capability of the large models behind Claude Code or Codex. Resident gives them a similar way to work, within the limits of a phone.
+  - q: Does it work offline?
+    a: Once a model is downloaded, chat and local tools can run without an internet connection. Web search, reading websites and connected services need the internet. Downloading a model needs a connection too.
+  - q: What leaves my phone?
+    a: With an on-device model, your conversation is not sent to a model provider. Web tools send queries and page requests; connectors send their tool arguments to the services you enable. If you choose a remote model server, that server receives the conversation. Resident has no account, analytics or server of its own.
+  - q: Which devices does it support?
+    a: iPhone and iPad with iOS 18 or later. Available models depend on your device’s memory, and Resident checks fit before downloading. Shortcuts actions require iOS 27. The built-in Apple model requires iOS 26 and a device that supports Apple Intelligence. Resident has been built and tuned on an iPhone Duo; performance on other devices will vary.
+  - q: Does it keep working when I leave the app?
+    a: In-app work pauses when you leave and resumes when you return. Shortcuts can run tasks with the app closed; on iOS 27 this includes downloaded models, which run more slowly in the background. Longer Shortcuts jobs can use Wait for Resident to continue waiting for the result.
+  - q: Can I use a model on my Mac or another server?
+    a: Yes. Point Resident at an OpenAI-compatible server, such as Ollama or LM Studio. The harness still runs in the app, but inference happens on that server and your conversation is sent to it.
+  - q: Can I install it from the App Store?
+    a: Not yet. You can build Resident from source with a Mac, Xcode and a real iPhone or iPad. The app and harness are open source under Apache 2.0. The README has the setup instructions.
 ---
 
-<section class="hero">
+<section class="hero" aria-labelledby="intro-title">
   <img class="hero-mark" src="{{ '/assets/img/mark.png' | relative_url }}" alt="" width="120" height="130">
-  <h1>Small model. Serious agent.</h1>
+  <p class="eyebrow">An AI agent that runs on your iPhone</p>
+  <h1 id="intro-title">Small model. Serious agent.</h1>
   <p class="lede">
-    Resident puts an AI agent on your iPhone, powered by models that run on the device. It can
-    research a question, work with your files and take action in the apps you connect, using tools
-    across several steps to carry out what you asked.
+    Give a local model the tools to do useful work. Resident can research a question, edit your
+    files and work with connected apps, carrying a task across multiple steps. The model and
+    the agent loop run on your phone.
   </p>
-  <p class="lede">Tools, skills, memory and an agent harness engineered for small models. Open source.</p>
+  <p class="hero-support">Tools, skills and memory. Engineered for small models. Open source.</p>
   <p class="actions">
-    <a class="button" href="#watch">See Resident work</a>
+    <a class="button" href="#watch">See it in action</a>
     <a class="quiet" href="#start">Build from source</a>
   </p>
-  <p class="note">Coming soon to the App Store.</p>
+  <p class="note">For iPhone and iPad. Coming soon to the App Store.</p>
 </section>
 
-<section id="watch" class="band">
-  <p class="eyebrow">See it work</p>
-  <h2 class="beats"><span>One question.</span> <span>Four tool calls.</span> <span>A 1.7B model.</span></h2>
+<section id="watch" class="band" aria-labelledby="watch-title">
+  <p class="eyebrow">A real run</p>
+  <h2 id="watch-title">One request. The model takes the next steps.</h2>
   <p class="sub">
-    A real run, start to finish. Nobody told the model which pages to read. It chose each step from
-    the result of the one before.
+    Asked about a Swift release, LFM3 1.7B searched the web, read three pages and wrote a summary.
+    Resident ran the tools and returned their results so the model could decide what to do next.
   </p>
   <div class="split">
     <div>
       <div class="run">
-        <p class="label">LFM3 1.7B · 4 tool calls · 38 seconds on a Mac</p>
+        <p class="label">LFM3 1.7B · Run on a Mac · November 16, 2026</p>
         <p class="ask">What’s the latest stable version of Swift, and what’s new in it? Keep it short.</p>
-        <ol>
-          <li><span class="at">0:05</span><span>Searched the web for “latest stable Swift version release notes what’s new”</span></li>
-          <li><span class="at">0:08</span><span>Read swift.org</span></li>
-          <li><span class="at">0:13</span><span>Read developer.apple.com</span></li>
-          <li><span class="at">0:24</span><span>Read swiftlee-weekly.com</span></li>
-          <li class="done"><span class="at">0:38</span><span>Answered: Swift 6.4, released September 14, 2026, and what is new in it</span></li>
-        </ol>
-      </div>
-      <div class="run">
-        <p class="label">The next message · 1 tool call · 28 seconds</p>
-        <p class="ask">How many days until New Year’s Day 2027?</p>
-        <ol>
-          <li><span class="at">0:18</span><span>Ran code: the difference between two dates, in JavaScript</span></li>
-          <li class="done"><span class="at">0:28</span><span>Answered: 46 days</span></li>
+        <ol aria-label="Recorded tool calls and response">
+          <li><span class="at">0:05</span><span>Searched the web for the latest Swift release and its changes</span></li>
+          <li><span class="at">0:08</span><span>Read the Swift project’s website</span></li>
+          <li><span class="at">0:13</span><span>Read Apple’s developer website</span></li>
+          <li><span class="at">0:24</span><span>Read a Swift community release page</span></li>
+          <li class="done"><span class="at">0:38</span><span>Returned a version, release date and summary of changes</span></li>
         </ol>
       </div>
       <p class="fine">
-        This run was made on a Mac, through the same harness the app uses, and the screenshot is
-        that chat opened in the app. The model wrote 36 to 67 tokens a second in it. On a 12 GB
-        iPhone it writes about 65.
+        Recorded through the same harness used by the app. The screenshot shows this saved chat
+        in the iPhone simulator; the timings are from the Mac run.
+        <a href="https://github.com/jflick58/resident/blob/main/tools/site-chat.json">Read the full transcript</a>.
       </p>
+      <details class="followup">
+        <summary>It can calculate with a tool, too</summary>
+        <p>
+          In the next message, the user asked how many days remained until New Year’s Day 2027.
+          The model ran JavaScript to subtract the dates and returned 46 days, measured from
+          November 16, 2026. That turn took 28 seconds on the Mac.
+        </p>
+      </details>
     </div>
-    {% include shot.html name="chat" alt="The same chat in the app: the question, a web search, three pages read, and the start of the answer" %}
+    {% include shot.html name="chat" alt="The recorded research chat displayed in the iPhone app: a web search, three page reads and the start of the answer" %}
   </div>
 </section>
 
-<section id="does" class="band">
-  <p class="eyebrow">What it can do</p>
-  <h2>A real harness, not a chat app.</h2>
+<section id="why" class="band story" aria-labelledby="why-title">
+  <p class="eyebrow">Why I built Resident</p>
+  <h2 id="why-title">I wanted to put the model on my phone to work.</h2>
+  <p>
+    I build AI agents for a living. When I started trying local models on my phone, I wanted to
+    give them the kinds of tasks I already used AI for: research, files and work in other apps.
+  </p>
+  <p>
+    The apps I tried kept getting in the way. Some ran models well but gave them few ways to act.
+    Others offered tools without managing the context a small model needs to use them.
+  </p>
+  <p>
+    So I built Resident around the whole task: finding the right tool, getting useful information
+    back, recovering from a bad call and continuing to the next step. Then I worked on making
+    that loop fit the memory and compute available on a phone.
+  </p>
+  <p class="story-belief">
+    The goal is to get as much useful work as possible out of the model that fits in your pocket.
+  </p>
+  <p class="byline"><a href="https://github.com/jflick58">Justin Flick</a> · Creator of Resident</p>
+</section>
+
+<section id="does" class="band" aria-labelledby="does-title">
+  <p class="eyebrow">Put it to work</p>
+  <h2 id="does-title">Research a question. Change a file. Move a task forward.</h2>
   <p class="sub">
-    If you use Claude Code or Codex, the loop will be familiar: read, act, check the result, carry
-    on. Resident runs that loop on a phone, and not only for code.
+    Resident gives local models access to the web, a file workspace and the services you connect.
+    Start with a focused task and follow the work in the chat.
   </p>
   <div class="grid">
     <article>
-      <h3>Works on your files</h3>
+      <h3>Research and work with information</h3>
       <p>
-        The tools a coding agent has: list, search, read, edit and write. They work on a folder you
-        can see in the Files app, so you can put files in and take out what it wrote.
+        Search the web, read pages and work with attached photos, PDFs and documents.
+        A JavaScript sandbox gives the model a way to calculate with numbers and dates.
       </p>
     </article>
     <article>
-      <h3>Ships pull requests</h3>
+      <h3>Make a change you can use</h3>
       <p>
-        With GitHub connected it clones a repository, changes the code and opens a pull request for
-        you to review. The branch and the commit are made for it.
+        Read, search, edit and create files in Resident’s folder in the Files app. Connect
+        GitHub to bring in a repository, make a small code change and open a pull request for review.
       </p>
     </article>
     <article>
-      <h3>Runs code</h3>
+      <h3>Work with your apps</h3>
       <p>
-        A JavaScript sandbox on the device, with no network and no access to your files. Arithmetic,
-        dates and data are computed, not guessed.
-      </p>
-    </article>
-    <article>
-      <h3>Reads the web</h3>
-      <p>
-        Search and page reading run on the phone, with no account or key. A long page is ranked
-        against the question, so only the passages that matter are read.
-      </p>
-    </article>
-    <article>
-      <h3>Loads skills</h3>
-      <p>
-        Saved instructions for one kind of job, loaded only when a request matches. Import a
-        SKILL.md, or turn something it just did into a skill with one tap.
-      </p>
-    </article>
-    <article>
-      <h3>Remembers</h3>
-      <p>
-        A short list of lasting facts about you, used in later chats. You can read it, edit it or
-        switch it off.
-      </p>
-    </article>
-    <article>
-      <h3>Knows your day</h3>
-      <p>
-        Reads your calendar and reminders, adds to them and checks reminders off, through iOS itself
-        on the device.
-      </p>
-    </article>
-    <article>
-      <h3>Takes the shape you give it</h3>
-      <p>
-        An agent is a set of instructions and a switch for each tool. Start with Assistant or Coder,
-        or write your own.
-      </p>
-    </article>
-    <article>
-      <h3>Runs from Shortcuts</h3>
-      <p>
-        Ask Resident puts an agent inside your automations with the app closed, and shows a long job
-        as a Live Activity you can stop.
+        Look up issues, create tickets and use tools from connected services. Calendar and
+        Reminders work through iOS, so the agent can read your schedule and add a reminder on the device.
       </p>
     </article>
   </div>
   <p class="fine">
-    Also in there: photos, PDFs and documents as attachments, and dictation by a speech model that
-    runs on the device.
+    Capability depends on the model and the task. Small models work best with clear, bounded
+    requests; review their answers and changes.
   </p>
 </section>
 
-<section class="band split">
+<section id="connectors" class="band split" aria-labelledby="connectors-title">
   <div>
-    <p class="eyebrow">Connectors</p>
-    <h2>Works in the services you use.</h2>
+    <p class="eyebrow">Make it your agent</p>
+    <h2 id="connectors-title">Your tools. Your instructions. Your choice of model.</h2>
     <p>
-      GitHub, Linear, Notion, Atlassian, Sentry, Hugging Face and DeepWiki are in the list. Any other
-      service that speaks the Model Context Protocol (MCP) is added by pasting its address.
+      Connect GitHub, Linear, Notion, Atlassian, Sentry and more. Add a supported web-based MCP
+      server by its address and sign in with the service. Credentials stay in the device’s Keychain.
     </p>
-    <p>
-      You sign in on the service’s own page, as you would for any app. Resident never sees your
-      password, keeps its access in the iPhone’s Keychain and renews it without asking again.
-    </p>
-    <p>
-      Then ask in plain words: what is on my plate, is this issue done yet, file a ticket for that.
-    </p>
+    <dl class="agent-options">
+      <div>
+        <dt>Give it a way to work</dt>
+        <dd>Import a SKILL.md or save a workflow as a skill. Resident loads the instructions when a task needs them.</dd>
+      </div>
+      <div>
+        <dt>Choose what it remembers</dt>
+        <dd>Keep useful facts between chats, with memory you can read, edit, clear or switch off.</dd>
+      </div>
+      <div>
+        <dt>Set its scope</dt>
+        <dd>Create agents with their own instructions and enabled tools. Use Ask Resident in Shortcuts to include an agent in an automation.</dd>
+      </div>
+    </dl>
+    <p class="fine">MCP connections support tools over Streamable HTTP. Shortcuts actions require iOS 27.</p>
   </div>
-  {% include shot.html name="connectors" alt="The Add Connector screen: GitHub, Linear, Notion, Atlassian, Sentry, Hugging Face and DeepWiki, and a field for the address of any other MCP server" %}
+  {% include shot.html name="connectors" alt="Resident’s connector picker, with GitHub, Linear, Notion and other services, plus an option to add an MCP server" %}
 </section>
 
-<section id="local" class="band">
-  <p class="eyebrow">Why local</p>
-  <h2 class="beats"><span>The model runs on your phone.</span> <span>You control its connections.</span></h2>
+<section id="engineering" class="band under detail" aria-labelledby="engineering-title">
+  <p class="eyebrow">Built around the limits of a phone</p>
+  <h2 id="engineering-title" class="wide">The harness makes room for the work.</h2>
   <p class="sub">
-    Local inference does not send your conversation to a model provider. Web searches and connected
-    services receive the information needed for the tools you enable.
+    A model that fits on a phone has little room to waste. Resident manages the tools, context
+    and execution around it so more of that capacity goes toward your request.
   </p>
-  <div class="grid">
-    <article>
-      <h3>Private</h3>
-      <p>
-        Every token is computed by the chip in your pocket. There is no account and no analytics,
-        and Resident has no server for a conversation to go to. What you write goes out only when
-        a tool sends it, and every tool has a switch.
-      </p>
-    </article>
-    <article>
-      <h3>No data center</h3>
-      <p>
-        It works offline, it costs nothing per message, and it keeps working whatever happens to
-        somebody else’s API.
-      </p>
-    </article>
-    <article>
-      <h3>Wired into your device</h3>
-      <p>
-        Calendar, Reminders, the Files app and Shortcuts are within reach through iOS itself, with no
-        service in between.
-      </p>
-    </article>
-  </div>
-</section>
-
-<section id="why" class="band story">
-  <p class="eyebrow">Why I built it</p>
-  <h2 class="beats"><span>I wanted local AI</span> <span>I could put to work.</span></h2>
-  <p>
-    I build AI assistants for a living. When I started trying models on my phone, I wanted to see how
-    far they could go.
-  </p>
-  <p>
-    The apps I tried kept getting in the way. Some offered little beyond conversation. Others exposed
-    tools without doing enough to help a small model choose and use them.
-  </p>
-  <p>
-    So I built Resident: an app that brings together the tools, context management, memory and
-    execution loop those models need to carry out useful tasks.
-  </p>
-  <p>
-    The work has been in the details: keeping tool definitions small, making failures recoverable,
-    and getting each step to run efficiently on a phone. Resident is where I am putting that work
-    into practice.
-  </p>
-</section>
-
-<section id="engineering" class="band under detail">
-  <p class="eyebrow">Engineering</p>
-  <h2 class="wide">Small models need carefully designed tools.</h2>
-  <p class="sub">
-    A small model can reason well and still fall over on a real task. It drowns in a big set of
-    tools, loses its place between steps, or writes a call nothing can parse. Each part of Resident’s
-    harness answers a failure like that, seen in a real transcript.
-  </p>
-  <div class="fixes" role="table" aria-label="What goes wrong with a small model, what Resident does about it, and what you get">
+  <div class="fixes" role="table" aria-label="Problems the harness addresses and why they matter">
     <div class="head" role="row">
-      <span role="columnheader">What goes wrong</span>
+      <span role="columnheader">The constraint</span>
       <span role="columnheader">What Resident does</span>
-      <span role="columnheader">What you get</span>
+      <span role="columnheader">Why it matters</span>
     </div>
     <div role="row">
-      <span role="cell">Tool definitions fill the context before the task starts</span>
-      <span role="cell">Shows one line per connector, opens only the tools a request needs, and trims their definitions</span>
-      <span role="cell">Room for the task itself</span>
+      <span role="cell">Too many tools, too little context</span>
+      <span role="cell">Lists connectors briefly, opens relevant tools on demand and trims their definitions.</span>
+      <span role="cell">More room for your request and the information needed to answer it.</span>
     </div>
     <div role="row">
-      <span role="cell">A task takes several tool calls</span>
-      <span role="cell">Feeds each result back fitted to size, and saves the chat after every step</span>
-      <span role="cell">Work that carries across steps, and carries on if iOS cuts it off</span>
+      <span role="cell">Results too large to use</span>
+      <span role="cell">Shortens structured results, reads files in parts and selects relevant passages from web pages.</span>
+      <span role="cell">The next step gets useful context within a limited budget.</span>
     </div>
     <div role="row">
-      <span role="cell">The model makes a bad call</span>
-      <span role="cell">Returns an error it can act on, loads the tool it meant, and for JSON tool calls holds the decoder to a grammar</span>
-      <span role="cell">A model that recovers instead of stalling</span>
+      <span role="cell">Tool calls that go wrong</span>
+      <span role="cell">Returns errors the model can act on and constrains tool-call syntax for supported models.</span>
+      <span role="cell">A chance to correct the call and continue the task.</span>
     </div>
     <div role="row">
-      <span role="cell">Every step rereads the whole chat</span>
-      <span role="cell">Keeps the start of the prompt fixed, so the model’s cache of it stays good and each step reads only what is new</span>
-      <span role="cell">Less waiting between steps</span>
-    </div>
-    <div role="row">
-      <span role="cell">The model you want does not fit the phone</span>
-      <span role="cell">Checks fit before download, picks the build that suits the device, and maps weights too big to load</span>
-      <span role="cell">No trial and error, and room for larger models</span>
+      <span role="cell">Repeated work between steps</span>
+      <span role="cell">Reuses cached context and saves progress after each completed step.</span>
+      <span role="cell">Less repeated processing, and a way to resume interrupted work.</span>
     </div>
   </div>
 
   <div class="evidence">
+    <h3>Measured with the same model and the same tasks.</h3>
     <p>
-      <strong>How this is checked.</strong> A public suite of
-      <a href="https://github.com/jflick58/resident/tree/main/evals">423 scored requests</a> runs any model through the same
-      harness as the app, on a Mac. The services in it are simulated and its pull request cases use
-      one small made-up repository, so it tests the model and the harness, not a real account or a
-      large codebase. LFM3 1.7B on the same 387 cases, before and after one round of harness fixes:
-      357 passed, then 374. A chat that goes wrong on a phone is copied off it and replayed the same
-      way.
+      One before-and-after comparison used LFM3 1.7B on 387 shared test cases.
+      After a round of harness fixes, it passed 374, up from 357.
+    </p>
+    <p>
+      These are controlled tests on a Mac: external services are simulated, and pull request cases
+      use a small fixture repository. They measure behavior inside the harness, not a success rate
+      for arbitrary real-world work. Individual runs vary.
+    </p>
+    <p class="evidence-links">
+      <a href="https://github.com/jflick58/resident/blob/main/spike-results/suite-lfm3-baseline.jsonl">Before</a>
+      <a href="https://github.com/jflick58/resident/blob/main/spike-results/suite-lfm3-after.jsonl">After</a>
+      <a href="https://github.com/jflick58/resident/tree/main/evals">Suite and methodology</a>
     </p>
   </div>
 
-  <h3 class="group">The details, for those who want them</h3>
+  <h3 class="group">Inside the engineering</h3>
   <details>
-    <summary>A big MCP server costs one line</summary>
+    <summary>Tools arrive when the task needs them</summary>
     <p>
-      A connector is one line in the prompt until a request needs it. Then the model gets the six
-      tools that best fit what it asked for, not the whole server; Linear’s has about 70. On 12
-      Linear tasks with LFM3 1.7B, declaring every tool up front, 27 of Linear’s among them, made an
-      18,600-token prompt and 10 tasks were finished. Opened on demand, and trimmed to what it takes
-      to make the call, the tools it needed came to under 3,000 tokens and all 12 were finished.
+      A connector starts as one line in the prompt. When needed, Resident exposes a small set of
+      relevant tools and trims their descriptions and schemas. Skills follow the same principle:
+      make the capability discoverable, then load its instructions when they are useful.
     </p>
   </details>
   <details>
-    <summary>Tools shaped like a coding agent’s</summary>
+    <summary>File tools keep code changes manageable</summary>
     <p>
-      Small models have seen list, search, read and edit endlessly. They have not seen GitHub’s API.
-      So the model works with the tools it knows, and the branch, the commit and the upload are the
-      harness’s job. On the same 13 pull request cases, moving from GitHub’s own tools to these took
-      Qwen 3.5 4B from 6 passed to 12 and LFM3 1.7B from 11 to 13, in about half the steps.
+      The model lists, searches, reads and edits local files. With GitHub connected, the harness
+      handles downloading a repository and turning changed files into a branch, commit and pull
+      request. The model can focus on the edit without assembling that sequence of GitHub API calls.
+      The code sandbox is separate: it runs JavaScript with no network or file access.
     </p>
   </details>
   <details>
-    <summary>Results that are fitted, not cut off</summary>
+    <summary>Error recovery is part of the loop</summary>
     <p>
-      Twenty issues with pages of description would fill the context. A structured result is
-      shortened field by field with every item kept, a long file is read a part at a time, and a
-      result the model has already seen is named instead of sent again.
+      Unrecognized tools and malformed calls return feedback the model can use to try again.
+      For supported tagged-JSON formats, including Qwen 3, a decoder grammar restricts tool names
+      and arguments to the declared schema. Other formats, including LFM3, use parsing and error
+      feedback. This helps with call structure; it does not guarantee the model chooses the right action.
     </p>
   </details>
-  <details>
-    <summary>Mistakes that come back with the fix</summary>
+  <details id="inference">
+    <summary>Making room for a 27B model on a 12 GB iPhone</summary>
     <p>
-      A tool called by the wrong name loads the closest real ones. A failed call returns the
-      parameters it needed, and a call that cannot be parsed comes back as an error the model can
-      read. A model still searching after it has found the place is told to make the change or ask.
-      For models that write tool calls as JSON, such as Qwen 3, a grammar on the decoder makes a
-      malformed call impossible to write. The other formats are not held to one yet.
+      Bonsai 2 27B has 8.6 GB of weights. Supporting it on the tested 12 GB iPhone required changes
+      to the inference library: mapping aligned weights from their file, pinning pages during a
+      reply, and custom Metal kernels that avoid loading 420 MB of redundant biases.
     </p>
-  </details>
-  <details>
-    <summary>A prompt that is read once</summary>
     <p>
-      The start of the prompt never changes, so each step reads only what is new. Tools opened in the
-      middle of a chat are declared where the conversation stands, not back at the top. The
-      instructions and tools that open every chat are read once and saved beside the model, which for
-      a large model saves most of a minute. And turns are kept exactly as the model wrote them,
-      because these models cannot back their cache up: one token rendered differently would mean
-      reading the whole prompt again.
+      It runs at about 7 tokens a second and slows during longer replies. LFM3 1.7B runs at about
+      65 on that phone. The larger model is an option for exploring what fits; the smaller one is
+      the recommended starting point. Resident checks fit before download and chooses a suitable
+      build for your device.
     </p>
-  </details>
-  <details>
-    <summary>Builds chosen by measurement</summary>
-    <p>
-      Every quantized build of a model is compared with the full-precision weights, token by token.
-      The 4-bit LFM3 picks the same next token 89.5% of the time and the 6-bit 97.3%, so the app
-      offers the 6-bit wherever it leaves room for a full-length chat, and the 4-bit elsewhere.
-    </p>
+    <p><a href="https://github.com/jflick58/resident/tree/main/Vendor">Explore the inference changes</a>.</p>
   </details>
   <p class="fine">
-    Each piece is written up, with the file to read for it, in
+    The agent loop, context management, caching and model-fit checks are documented in
     <a href="https://github.com/jflick58/resident/blob/main/docs/HARNESS.md">the harness notes</a>.
   </p>
 </section>
 
-<section id="inference" class="band under">
-  <p class="eyebrow">Pushing the phone</p>
-  <h2>A 27B model on a 12 GB iPhone.</h2>
+<section id="local" class="band" aria-labelledby="local-title">
+  <p class="eyebrow">Local by design</p>
+  <h2 id="local-title" class="beats"><span>The model lives on your phone.</span> <span>You choose its connections.</span></h2>
   <p class="sub">
-    iOS lets an app use about half of the phone’s memory. The weights of Bonsai 2 27B are 8.6 GB.
-    Running it, and keeping it running past the first reply, meant changing the inference library
-    itself.
+    With an on-device model, inference happens on your hardware. Your conversations are stored
+    on the device. There is no Resident account, analytics or inference server.
   </p>
   <div class="grid">
     <article>
-      <h3>Weights mapped, not loaded</h3>
-      <p>
-        The weights file is rearranged in place so every large tensor starts on a page boundary, then
-        mapped read-only. The GPU reads the file’s own pages, which iOS does not charge to the app.
-      </p>
+      <h3>Work offline</h3>
+      <p>After downloading a model, chat and local tools can run without a connection or a per-message inference fee.</p>
     </article>
     <article>
-      <h3>Pinned while it works</h3>
-      <p>
-        Mapped pages are the first thing a phone short of memory takes back. Left alone, the 27B’s
-        second reply had not started after 70 seconds of reading its weights in again. So what the
-        model has read is pinned for the length of a reply, then let go.
-      </p>
+      <h3>Connect deliberately</h3>
+      <p>Web tools send searches and page requests. Connected services receive tool arguments. You choose which tools each agent can use.</p>
     </article>
     <article>
-      <h3>420 MB that never loads</h3>
-      <p>
-        In a ternary model every bias is its scale negated, so the biases hold nothing new. Custom
-        Metal kernels compute those layers without them, and 420 MB of the 27B never has to be in
-        memory.
-      </p>
+      <h3>Bring your own server</h3>
+      <p>Optionally connect to Ollama, LM Studio or another OpenAI-compatible server. In that mode, the server receives the conversation and runs the model.</p>
     </article>
   </div>
-  <p class="fine">
-    Where that leaves it: Bonsai 2 27B answers at about 7 tokens a second on a 12 GB iPhone and slows
-    as a reply runs long, while LFM3 1.7B runs at about 65. Mapping switches on by itself, and only
-    for a model too large to load. The changes are a fork of
-    <a href="https://github.com/ml-explore/mlx-swift-lm">mlx-swift-lm</a>,
-    <a href="https://github.com/jflick58/resident/tree/main/Vendor">listed in the repository</a>.
-  </p>
+  <p class="fine"><a href="{{ '/privacy/' | relative_url }}">Read what stays on your device and what can leave it</a>.</p>
 </section>
 
-<section id="start" class="band split">
-  <div>
-    <p class="eyebrow">Get started</p>
-    <h2 class="beats"><span>Build it today.</span> <span>On the App Store soon.</span></h2>
-    <p>
-      You need a Mac with Xcode and an iPhone. The model runs on the phone itself, so the simulator
-      will not do.
-    </p>
-    <pre class="code">git clone https://github.com/jflick58/resident.git
-cd resident
-brew install xcodegen
-cp Config/Local.xcconfig.example Config/Local.xcconfig
-<span class="say"># put your Apple team, a bundle ID and your phone's name in that file</span>
-./run-device.sh</pre>
-    <p>
-      That builds the app, installs it and opens it. Pick a model, wait for the download, and ask it
-      something. The <a href="https://github.com/jflick58/resident#readme">README</a> has the rest.
-    </p>
-  </div>
-  {% include shot.html name="models" alt="The list of models: Apple Intelligence, the model on this device, and recommended models to download" %}
-</section>
-
-<section id="models" class="band">
-  <p class="eyebrow">Models</p>
-  <h2>The newest small models, and any you bring.</h2>
+<section id="models" class="band" aria-labelledby="models-title">
+  <p class="eyebrow">Choose your model</p>
+  <h2 id="models-title">Start small. See what your phone can do.</h2>
   <p class="sub">
-    Tested models are a tap away, and any MLX model on Hugging Face can be added by its link. Before
-    anything downloads, Resident checks that it will run on your device.
+    Start with LFM3 1.7B, then explore the model library. Resident checks compatibility and memory
+    before you download. Models run on Apple silicon with <a href="https://github.com/ml-explore/mlx">MLX</a>.
   </p>
   <div class="grid models">
     {% for model in page.models %}
@@ -438,11 +319,35 @@ cp Config/Local.xcconfig.example Config/Local.xcconfig
     </article>
     {% endfor %}
   </div>
-  <p class="fine">Models run on Apple silicon with <a href="https://github.com/ml-explore/mlx">MLX</a>. You can also point Resident at a server you run, such as Ollama or LM Studio.</p>
 </section>
 
-<section id="questions" class="band narrow">
-  <h2>Questions</h2>
+<section id="start" class="band split" aria-labelledby="start-title">
+  <div>
+    <p class="eyebrow">Get Resident</p>
+    <h2 id="start-title">Build it today. Put it to work.</h2>
+    <p>
+      Resident is available as source today, with an App Store release coming soon. You need a Mac
+      with Xcode and a real iPhone or iPad to run downloaded models on the device.
+    </p>
+    <pre class="code"><code>git clone https://github.com/jflick58/resident.git
+cd resident
+brew install xcodegen
+cp Config/Local.xcconfig.example Config/Local.xcconfig</code></pre>
+    <p>
+      Set your Apple team ID, bundle ID and device name in <code>Config/Local.xcconfig</code>,
+      then run <code>./run-device.sh</code> to build and install. Choose a model in the app,
+      download it and try a focused task.
+    </p>
+    <p class="actions">
+      <a class="button" href="https://github.com/jflick58/resident#readme">Read the setup guide</a>
+      <a class="quiet" href="https://github.com/jflick58/resident">Explore the source</a>
+    </p>
+  </div>
+  {% include shot.html name="models" alt="Resident’s model library, showing the built-in Apple model and recommended downloads" %}
+</section>
+
+<section id="questions" class="band narrow" aria-labelledby="questions-title">
+  <h2 id="questions-title">Questions before you start</h2>
   {% for item in page.questions %}
   <details>
     <summary>{{ item.q }}</summary>
@@ -451,12 +356,10 @@ cp Config/Local.xcconfig.example Config/Local.xcconfig
   {% endfor %}
 </section>
 
-<section class="band closing">
+<section class="band closing" aria-labelledby="closing-title">
   <img src="{{ '/assets/img/icon.png' | relative_url }}" alt="" width="96" height="96">
-  <h2>Resident</h2>
-  <p>A fully local AI agent for iPhone. Open source.</p>
-  <p class="actions">
-    <a class="button" href="https://github.com/jflick58/resident">Build from source</a>
-  </p>
-  <p class="note">Coming soon to the App Store.</p>
+  <h2 id="closing-title">Put local AI to work.</h2>
+  <p>Resident. An agent harness built for the model in your pocket.</p>
+  <p class="actions"><a class="button" href="#start">Build from source</a></p>
+  <p class="note">Open source under Apache 2.0. Coming soon to the App Store.</p>
 </section>

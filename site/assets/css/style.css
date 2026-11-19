@@ -31,6 +31,11 @@
 * { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
+[id] { scroll-margin-top: 88px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
 
 body {
   margin: 0;
@@ -42,6 +47,23 @@ body {
 
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
+a:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 20px;
+  z-index: 10;
+  padding: 12px 18px;
+  background: var(--bg);
+  border: 1px solid var(--link);
+  transform: translateY(-160%);
+}
+.skip-link:focus { transform: translateY(0); }
 
 img { max-width: 100%; height: auto; }
 
@@ -108,8 +130,12 @@ p { margin: 0.7em 0 0; text-wrap: pretty; }
   font-size: clamp(1.1rem, 2.2vw, 1.3rem);
   color: var(--muted);
 }
-/* The line under it: what is in the box. */
-.lede + .lede { margin-top: 14px; color: var(--text); font-weight: 500; }
+.hero-support {
+  max-width: 44ch;
+  margin: 20px auto 0;
+  font-size: 1rem;
+  font-weight: 500;
+}
 
 .actions {
   display: flex;
@@ -194,11 +220,11 @@ h2.beats span { display: inline-block; }
 
 .eyebrow {
   margin: 0 0 12px;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--orange);
+  color: var(--link);
 }
 
 .sub {
@@ -228,11 +254,11 @@ h2.beats span { display: inline-block; }
 
 .maker {
   margin: 0 0 6px;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--orange) !important;
+  color: var(--link) !important;
 }
 
 /* Words on one side, a picture on the other. */
@@ -245,7 +271,9 @@ h2.beats span { display: inline-block; }
 .split.reverse { flex-direction: row-reverse; }
 .split > div:first-child { flex: 1.1; min-width: 0; }
 .split > div:first-child > p { max-width: 46ch; color: var(--muted); font-size: 1.08rem; }
-.split > div:first-child > p.eyebrow { color: var(--orange); font-size: 0.82rem; }
+.split > div:first-child > p.eyebrow { color: var(--link); font-size: 0.875rem; }
+.split > div:first-child > p.fine { font-size: 0.95rem; }
+.split .actions { justify-content: flex-start; }
 .split h2 { margin-bottom: 6px; }
 .split .device { width: min(40%, 300px); }
 /* Under a section's heading, with room above. */
@@ -263,7 +291,7 @@ h2.beats span { display: inline-block; }
 .run + .run { margin-top: 16px; }
 .run .label {
   margin: 0 0 14px;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -288,15 +316,26 @@ h2.beats span { display: inline-block; }
   color: var(--muted);
 }
 .run li span { text-wrap: pretty; }
-.run li .at { font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--muted) 75%, transparent); }
+.run li .at { font-variant-numeric: tabular-nums; color: var(--muted); }
 .run li.done { color: var(--text); font-weight: 600; }
-.run li.done .at { color: var(--orange); }
+.run li.done .at { color: var(--link); }
+
+.followup summary { font-size: 1rem; }
+
+/* Tools, skills and memory, grouped around how someone configures an agent. */
+.agent-options { margin: 28px 0 0; }
+.agent-options > div { padding: 18px 0; border-top: 1px solid var(--line); }
+.agent-options dt { font-weight: 600; }
+.agent-options dd { margin: 6px 0 0; color: var(--muted); }
 
 /* Why it was built: a few paragraphs in one voice. */
 
 .story > * { max-width: 760px; }
 .story p:not(.eyebrow) { font-size: 1.15rem; color: var(--muted); }
 .story h2 { margin-bottom: 8px; }
+.story > h2 { max-width: 26ch; }
+.story p.story-belief { color: var(--text); }
+.story p.byline { margin-top: 24px; font-size: 0.95rem; }
 
 /* The engineering section sits a little deeper than the rest. */
 .under { background: color-mix(in srgb, var(--bg), var(--deep) 30%); }
@@ -315,13 +354,13 @@ h2.beats span { display: inline-block; }
 .fixes span:nth-child(2) { color: var(--muted); }
 .fixes span:nth-child(3) { font-weight: 600; }
 .fixes .head span {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.fixes .head span:nth-child(3) { color: var(--orange); }
+.fixes .head span:nth-child(3) { color: var(--link); }
 
 /* How it is checked, set apart from the claims it backs. */
 .evidence {
@@ -334,6 +373,8 @@ h2.beats span { display: inline-block; }
   background: color-mix(in srgb, var(--panel) 70%, transparent);
 }
 .evidence p { margin: 0; color: var(--muted); }
+.evidence h3 + p, .evidence p + p { margin-top: 14px; }
+.evidence-links { display: flex; flex-wrap: wrap; gap: 12px 24px; }
 .evidence strong { color: var(--text); }
 
 .group { margin-top: 56px; font-size: 1.35rem; }
@@ -414,9 +455,13 @@ details p { color: var(--muted); }
 @media (max-width: 720px) {
   .grid { grid-template-columns: 1fr; }
 
-  .bar nav { gap: 14px; font-size: 0.88rem; }
-  .bar nav a:nth-child(n + 3) { display: none; }
+  .bar { gap: 12px; padding-inline: 16px; }
+  .bar nav { gap: 10px; font-size: 0.875rem; }
+  .bar nav a { white-space: nowrap; }
+  .bar nav a:not(:first-child):not(:last-child) { display: none; }
   .hero, .band { padding-top: 60px; padding-bottom: 60px; }
+  .hero { padding-top: 36px; padding-bottom: 48px; }
+  .hero-mark { width: 76px; margin-bottom: 16px; }
   .split, .split.reverse { flex-direction: column; align-items: flex-start; }
   .split > div:first-child { width: 100%; }
   .split .device { width: min(70%, 300px); align-self: center; }
@@ -425,7 +470,7 @@ details p { color: var(--muted); }
   .fixes > div { grid-template-columns: 1fr; gap: 6px; }
   .fixes .head { display: none; }
   .fixes span:nth-child(2)::before { content: "Resident: "; color: var(--text); font-weight: 600; }
-  .fixes span:nth-child(3)::before { content: "You get: "; color: var(--orange); }
+  .fixes span:nth-child(3)::before { content: "Why it matters: "; color: var(--link); }
 }
 
 @media (min-width: 721px) and (max-width: 960px) {

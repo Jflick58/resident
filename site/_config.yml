@@ -1,9 +1,9 @@
 title: Resident
 tagline: Fully Local AI Agent
 description: >-
-  Resident runs open AI models entirely on your iPhone inside a real agent
-  harness: files, code, pull requests, MCP servers and skills, with no data
-  center behind it.
+  Put local AI to work. Resident runs models and an agent harness on your
+  iPhone, with tools, skills and memory for research, files and connected apps.
+  Open source.
 url: ""
 baseurl: ""
 markdown: kramdown
