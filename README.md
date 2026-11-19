@@ -99,6 +99,7 @@ These are in the app's library. The fit check tells you which ones your phone ca
 | Qwen 3.5 2B | Alibaba | Fast and light, still handles tools and images |
 | Qwen 3 4B / 1.7B | Alibaba | Reliable tool use; the 1.7B suits older phones |
 | Bonsai 2 9B / 4B / 2B | PrismML | Large models squeezed small; all see images |
+| Bonsai 2 27B | PrismML | The largest that runs on a phone: it fills a 12 GB iPhone, so it is slow there |
 | Gemma 4 E2B / E4B | Google | Natural writing and good vision |
 
 Apple's on-device model can be used too, where the phone has it.
@@ -113,8 +114,9 @@ Claims about harnesses are cheap, so these are the numbers behind ours. Each is 
 | 12 tasks against Linear's real tool definitions, LFM3 1.7B, tools opened on demand | **12 of 12** |
 | The same 12 tasks with all tools declared up front | 10 of 12, with an 18,600-token prompt and 97 seconds a task |
 | Speed on an iPhone Duo, LFM3 1.7B, app on screen | 76 to 95 tokens a second |
+| LFM3 1.7B's builds against the weights as trained, on 42 prompts from the suite | The 4-bit build picks the same next token **89.5%** of the time, 5-bit 93.8%, 6-bit **97.3%**, 8-bit 98.6% |
 
-`harness-spike` in `HarnessMLX` reruns these on your own Mac, and `spike-results/` holds the raw results.
+`harness-spike` in `HarnessMLX` reruns these on your own Mac, and `spike-results/` holds the raw results. [`evals/README.md`](evals/README.md) covers the suite of 423 cases and the comparison of builds.
 
 ## 🛠 Building and testing
 

@@ -1,0 +1,12 @@
+LFM3 1.7B: each build against the weights as trained (LiquidAI/LFM3-1.7B-MLX-bf16).
+48 of the 293 prompts of a 70-case run of the suite, thinking low; 42 short enough to use; 64 tokens of each reply.
+harness-spike --fidelity requests.jsonl LiquidAI/LFM3-1.7B-MLX-bf16 <build> --limit 48 --reply-tokens 64
+
+(reference against itself)                     3457 MB  divergence 0.0000 (worst in twenty 0.0000)  same token 100.0%  same reply 100.0%  42 replies, 2505 tokens
+LiquidAI/LFM3-1.7B-MLX-4bit                     973 MB  divergence 0.1502 (worst in twenty 0.7589)  same token  89.5%  same reply   2.4%  42 replies, 2505 tokens
+hermitdave/LFM3-1.7B-MLX-DWQ-4bit               973 MB  divergence 0.1210 (worst in twenty 0.5835)  same token  90.4%  same reply   2.4%  42 replies, 2505 tokens
+UraionLabs/LFM3-1.7B-MLX-oQ4e                  1037 MB  divergence 0.0988 (worst in twenty 0.4965)  same token  91.5%  same reply   2.4%  42 replies, 2505 tokens
+LiquidAI/LFM3-1.7B-MLX-5bit                    1189 MB  divergence 0.0461 (worst in twenty 0.2493)  same token  93.8%  same reply   2.4%  42 replies, 2505 tokens
+mlx-community/LFM3-1.7B-OptiQ-4bit             1341 MB  divergence 0.0530 (worst in twenty 0.2776)  same token  93.5%  same reply   0.0%  42 replies, 2505 tokens
+LiquidAI/LFM3-1.7B-MLX-6bit                    1405 MB  divergence 0.0116 (worst in twenty 0.0592)  same token  97.3%  same reply  31.0%  42 replies, 2505 tokens
+LiquidAI/LFM3-1.7B-MLX-8bit                    1837 MB  divergence 0.0019 (worst in twenty 0.0098)  same token  98.6%  same reply  50.0%  42 replies, 2505 tokens

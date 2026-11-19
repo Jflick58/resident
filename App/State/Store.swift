@@ -142,6 +142,11 @@ struct Store {
         for index in library.endpoints.indices {
             library.endpoints[index].apiKey = Keychain.get("endpoint.\(library.endpoints[index].id.uuidString)") ?? ""
         }
+        // A model added by its link was named after its repository. One the app has since come to
+        // recommend goes by the name it has there.
+        for index in library.installed.indices {
+            if let curated = ModelCatalog.model(repo: library.installed[index].repo) { library.installed[index].name = curated.name }
+        }
         return library
     }
 

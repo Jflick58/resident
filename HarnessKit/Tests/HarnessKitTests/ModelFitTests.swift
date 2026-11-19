@@ -126,19 +126,52 @@ import Testing
     }
 
     @Test func catalogFitsMatchExpectations() {
-        // On a 6 GB budget every curated model installs except the largest.
-        let largest = "mlx-community/gemma-4-e4b-it-4bit"
+        // On a 6 GB budget every curated model installs except the 27B.
+        let largest = "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit"
         for model in ModelCatalog.models where model.repo != largest {
             let report = model.fit(on: Self.phone)
             #expect(report.canInstall, "\(model.name): \(report.headline)")
         }
         #expect(ModelCatalog.model(repo: largest)?.fit(on: Self.phone).verdict == .wontRun)
         let tablet = DeviceProfile(memoryBudgetBytes: 10 * Self.gigabyte, freeDiskBytes: 40 * Self.gigabyte)
-        #expect(ModelCatalog.model(repo: largest)?.fit(on: tablet).verdict == .runsWell)
+        #expect(ModelCatalog.model(repo: "mlx-community/gemma-4-e4b-it-4bit")?.fit(on: tablet).verdict == .runsWell)
         #expect(ModelCatalog.model(repo: "mlx-community/Qwen3-4B-4bit")?.fit(on: Self.phone).verdict == .runsWell)
 
         let oldPhone = DeviceProfile(memoryBudgetBytes: 3 * Self.gigabyte, freeDiskBytes: 40 * Self.gigabyte)
         #expect(ModelCatalog.model(repo: "mlx-community/gemma-4-e4b-it-4bit")?.fit(on: oldPhone).verdict == .wontRun)
         #expect(ModelCatalog.model(repo: "mlx-community/Qwen3-1.7B-4bit")?.fit(on: oldPhone).canInstall == true)
+    }
+
+    @Test func recommendsOnlyWhatLeavesRoomForAnAgentsPrompt() {
+        func names(_ gigabytes: Int64) -> Set<String> {
+            let device = DeviceProfile(memoryBudgetBytes: gigabytes * Self.gigabyte, freeDiskBytes: 40 * Self.gigabyte)
+            return Set(ModelCatalog.recommended(on: device).map(\.model.name))
+        }
+        // Gemma 4 E4B fits a 6 GB budget only with 4,000 tokens of context, less than an agent's own prompt can take.
+        #expect(ModelCatalog.model(repo: "mlx-community/gemma-4-e4b-it-4bit")?.fit(on: Self.phone).verdict == .tight)
+        #expect(!names(6).contains("Gemma 4 E4B"))
+        #expect(names(6).isSuperset(of: ["LFM3 1.7B", "LFM3 VL 2B", "Bonsai 2 9B", "Bonsai 2 4B", "Qwen 3.5 4B", "Gemma 4 E2B"]))
+        #expect(names(10).contains("Gemma 4 E4B"))
+        // The 27B is offered where it has room, and nowhere else.
+        #expect(!names(6).contains("Bonsai 2 27B"))
+        #expect(!names(10).contains("Bonsai 2 27B"))
+        #expect(names(14).contains("Bonsai 2 27B"))
+    }
+
+    @Test func catalogCountsOnlyTheLayersWhoseCacheGrows() {
+        // What the catalog records gives the estimate the repository's own configuration gives.
+        // Qwen 3.5 4B has 32 layers, 8 of them full attention.
+        let types: [JSONValue] = (0 ..< 32).map { $0 % 4 == 3 ? "full_attention" : "linear_attention" }
+        let config: JSONValue = [
+            "text_config": ["num_hidden_layers": 32, "num_key_value_heads": 4, "head_dim": 256, "layer_types": .array(types)]
+        ]
+        let recorded = ModelCatalog.model(repo: "mlx-community/Qwen3.5-4B-4bit")?.hubInfo.config
+        #expect(ModelFit.cacheBytesPerToken(config: recorded) == ModelFit.cacheBytesPerToken(config: config))
+    }
+
+    @Test func modelsGoByTheNameTheyAreRecommendedUnder() {
+        #expect(ModelCatalog.displayName(for: "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit") == "Bonsai 2 27B")
+        #expect(ModelCatalog.displayName(for: "PRISM-ML/ternary-bonsai-2-9b-mlx-2bit") == "Bonsai 2 9B")
+        #expect(ModelCatalog.displayName(for: "someone/Their-Model-MLX-4bit") == "Their Model MLX 4bit")
     }
 }

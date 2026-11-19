@@ -9,10 +9,7 @@ struct ModelsView: View {
     @State private var editingEndpoint: RemoteEndpoint?
 
     private var recommended: [(model: CatalogModel, report: FitReport)] {
-        ModelCatalog.models
-            .filter { !app.isInstalled($0.repo) }
-            .map { ($0, $0.fit(on: app.device)) }
-            .filter { $0.report.canInstall }
+        ModelCatalog.recommended(on: app.device).filter { !app.isInstalled($0.model.repo) }
     }
 
     @State private var tuning: InstalledModel?
@@ -387,10 +384,7 @@ struct AddFromHubView: View {
         }
     }
 
-    static func displayName(for repo: String) -> String {
-        let name = repo.split(separator: "/").last.map(String.init) ?? repo
-        return name.replacingOccurrences(of: "-", with: " ")
-    }
+    static func displayName(for repo: String) -> String { ModelCatalog.displayName(for: repo) }
 
     private func symbol(for verdict: FitVerdict) -> String {
         switch verdict {
