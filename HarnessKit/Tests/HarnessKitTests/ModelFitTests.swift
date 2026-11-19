@@ -179,7 +179,9 @@ import Testing
         #expect(report.canInstall && report.fillsMemory && report.verdict == .tight)
         #expect(report.headline == "Will run slowly: it fills this device's memory")
         #expect(report.contextTokens == 32768)
-        #expect(ModelCatalog.recommended(on: phone).contains { $0.model.repo == large.repo })
+        // It is offered after everything that runs well, though the list has it among the first.
+        #expect(ModelCatalog.recommended(on: phone).last?.model.repo == large.repo)
+        #expect(ModelCatalog.models.firstIndex { $0.repo == large.repo }! < 4)
         // What fits the ordinary way is left to: nothing about it says mapped.
         let small = ModelCatalog.model(repo: "prism-ml/Ternary-Bonsai-2-9B-mlx-2bit")!.fit(on: phone)
         #expect(small.verdict == .runsWell && !small.fillsMemory)

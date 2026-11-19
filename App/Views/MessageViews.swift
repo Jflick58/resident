@@ -532,7 +532,7 @@ struct SummaryMarker: View {
             } label: {
                 HStack(spacing: 8) {
                     VStack { Divider() }
-                    Label("Summarised above", systemImage: "arrow.up.and.line.horizontal.and.arrow.down")
+                    Label("Summarized above", systemImage: "arrow.up.and.line.horizontal.and.arrow.down")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize()

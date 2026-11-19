@@ -14,12 +14,14 @@ A small Jekyll site: one page of marketing, plus privacy and support.
   hold nobody's data.
 
 The screenshots come from `tools/site-shots.sh`, taken in the iPhone 18 Pro
-simulator. The simulator cannot run a model, so the chat shown is one LFM3
-1.7B really had: it was run on a Mac through the same agent, saved to
-`tools/site-chat.json`, and put in the simulator's data with LFM3 listed as
-the model on the device. To show a different chat, save a new one (the script
-says how) and run the script again. The shortcut and Live Activity panel is
-drawn in HTML and is not a screenshot.
+simulator: the opening screen, a chat, the models, the agents, Settings and
+the services that can be connected. The simulator cannot run a model, so the
+chat shown is one LFM3 1.7B really had: it was run on a Mac through the same
+agent, saved to `tools/site-chat.json`, and put in the simulator's data with
+LFM3 listed as the model on the device. To show a different chat, save a new
+one (the script says how) and run the script again. The status bar is set to
+9:41, and the opening screen is told it is morning to match. The shortcut and
+Live Activity panel is drawn in HTML and is not a screenshot.
 
 What the page says the app does is what it did when the page was written.
 Before publishing, check it against the app, and replace the "coming soon"

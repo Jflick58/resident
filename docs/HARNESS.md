@@ -176,7 +176,7 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   large for what the app may hold can still run where its weights fit in three
   quarters of the device's memory: they are used straight from their file,
   which the system does not count against the app, and the list says it fills
-  the device's memory and will be slow. That is decided for each model from
+  the device's memory and will be slow, below the models that run well. That is decided for each model from
   its size, with no setting; everything smaller loads the ordinary way.
 - **Builds** (`ModelCatalog.swift`): a recommended model may name a lighter
   build of the same weights. The list offers whichever leaves the conversation

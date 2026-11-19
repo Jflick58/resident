@@ -182,9 +182,11 @@ public enum ModelCatalog {
     public static let leastContext = 8192
 
     /// The curated models worth offering on `device`, each in the build that suits it: those that fit
-    /// with room for an agent's prompt.
+    /// with room for an agent's prompt. A model that only runs by filling the device's memory comes
+    /// after the ones that run well, whatever its place in the list: it is offered, not suggested.
     public static func recommended(on device: DeviceProfile) -> [(model: CatalogModel, report: FitReport)] {
-        models.map { $0.build(on: device) }.filter { $0.report.canInstall && $0.report.contextTokens >= leastContext }
+        let fitting = models.map { $0.build(on: device) }.filter { $0.report.canInstall && $0.report.contextTokens >= leastContext }
+        return fitting.filter { !$0.report.fillsMemory } + fitting.filter { $0.report.fillsMemory }
     }
 
     /// A repository's own name with the dashes read as spaces: what a model added by its link is called.

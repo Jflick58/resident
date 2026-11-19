@@ -90,6 +90,19 @@ struct EmptyChatView: View {
     let hasModel: Bool
     var showModels: () -> Void
 
+    /// The moment the greeting is for. `-demoHour <0-23>` at launch sets its hour, so that a
+    /// screenshot whose status bar says 9:41 does not ask whether you are up late.
+    private static var now: Date {
+        #if DEBUG
+            if let hour = Int(UserDefaults.standard.string(forKey: "demoHour") ?? ""),
+                let date = Calendar.current.date(bySettingHour: hour, minute: 41, second: 0, of: Date())
+            {
+                return date
+            }
+        #endif
+        return Date()
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             // The app's mark and name, then a greeting for the time of day, by name once memory holds one.
@@ -106,10 +119,10 @@ struct EmptyChatView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.bottom, 14)
-            Text(Greeting.line(name: app.memoryEnabled ? Greeting.name(in: app.memory.facts) : nil))
+            Text(Greeting.line(name: app.memoryEnabled ? Greeting.name(in: app.memory.facts) : nil, date: Self.now))
                 .font(.title.weight(.semibold))
                 .multilineTextAlignment(.center)
-            Text(Greeting.invitation())
+            Text(Greeting.invitation(date: Self.now))
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
