@@ -128,6 +128,7 @@ Claims about harnesses are cheap, so these are the numbers behind ours. Each is 
 | `./run-sim.sh` | Build, run in the simulator and take a screenshot |
 | `cd HarnessKit && swift test` | The harness's unit tests, in a few seconds |
 | `xcodegen generate` | Regenerate `Resident.xcodeproj` from `project.yml` |
+| `tools/app-store-upload.sh` | Archive the release build and upload it to App Store Connect (the app's owner only) |
 
 To run a real model through the harness on a Mac and score it:
 
