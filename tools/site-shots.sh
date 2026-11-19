@@ -16,7 +16,7 @@ limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 limit 120 xcrun simctl boot "$device" 2>/dev/null
 limit 240 xcrun simctl bootstatus "$device" -b >/dev/null 2>&1
 limit 30 xcrun simctl ui "$device" appearance dark
-limit 30 xcrun simctl status_bar "$device" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3
+limit 30 xcrun simctl status_bar "$device" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4
 limit 240 xcrun simctl install "$device" DerivedData/Build/Products/Debug-iphonesimulator/Resident.app || { echo "The simulator would not take the app."; exit 1; }
 limit 30 xcrun simctl privacy "$device" grant microphone "$BUNDLE_ID"
 
@@ -37,7 +37,7 @@ shot() {
 
 # The simulator cannot run a model, so the chat is one LFM3 really had, run on
 # a Mac through the same agent and saved by the test tool:
-#   harness-spike LiquidAI/LFM3-1.7B-MLX-4bit --thinking low --chat "<a>|<b>" --save tools/site-chat.json
+#   harness-spike LiquidAI/LFM3-1.7B-MLX-6bit --thinking low --chat "<a>|<b>" --save tools/site-chat.json
 # It is put in the app's data with LFM3 listed as the model on the device.
 data="$(limit 30 xcrun simctl get_app_container "$device" "$BUNDLE_ID" data)/Library/Application Support/Harness"
 limit 60 xcrun simctl launch "$device" "$BUNDLE_ID" >/dev/null; sleep 4
@@ -46,7 +46,7 @@ python3 -I - "$data" tools/site-chat.json <<'SEED'
 import glob, json, os, sys, uuid
 data, chat = sys.argv[1], sys.argv[2]
 agent = "A0000000-0000-4000-8000-000000000001"
-model = {"repo": "LiquidAI/LFM3-1.7B-MLX-4bit", "name": "LFM3 1.7B", "sizeBytes": 991059565, "contextTokens": 32768,
+model = {"repo": "LiquidAI/LFM3-1.7B-MLX-6bit", "name": "LFM3 1.7B", "sizeBytes": 1423163359, "contextTokens": 32768,
          "capabilities": {"tools": True, "thinking": True, "vision": False}}
 old = os.path.join(data, "library.json")
 if os.path.exists(old):
@@ -60,8 +60,10 @@ json.dump({"id": name, "title": "Latest Swift release", "presetID": agent, "mess
            "updatedAt": "2026-11-16T17:41:00Z", "isTitled": True}, open(os.path.join(data, "conversations", name + ".json"), "w"))
 SEED
 
-shot home 7
+# The status bar says 9:41, so the greeting is told it is morning.
+shot home 7 -demoHour 9
 shot models 6 -openSheet models
 shot agents 6 -openSheet presets
 shot settings 6 -openSheet settings
+shot connectors 6 -openSheet addConnector
 shot chat 6 -openLatestChat YES

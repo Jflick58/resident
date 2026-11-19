@@ -55,9 +55,16 @@ public struct DeviceProfile: Sendable {
     }
 
     public static func current() -> DeviceProfile {
-        DeviceProfile(
-            memoryBudgetBytes: currentMemoryBudget(), freeDiskBytes: currentFreeDisk(),
-            physicalMemoryBytes: Int64(ProcessInfo.processInfo.physicalMemory))
+        DeviceProfile(memoryBudgetBytes: currentMemoryBudget(), freeDiskBytes: currentFreeDisk(), physicalMemoryBytes: currentPhysicalMemory())
+    }
+
+    static func currentPhysicalMemory() -> Int64 {
+        #if targetEnvironment(simulator)
+            // The simulator reports the Mac's memory. Model a current Pro iPhone instead, as the budget below does.
+            return 12 << 30
+        #else
+            return Int64(ProcessInfo.processInfo.physicalMemory)
+        #endif
     }
 
     static func currentMemoryBudget() -> Int64 {
