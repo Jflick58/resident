@@ -1,0 +1,41 @@
+A pull request on a real repository, LFM3 1.7B (6-bit), on a Mac. 2026-11-18.
+
+The chat, as it failed on an iPhone: "What repo is your code at", then "Can you open a PR to
+change the accent color to green", against this repository at c9622bf (960 files). The right
+change is to App/Resources/Assets.xcassets/AccentColor.colorset/Contents.json. On the phone the
+model read that file on its 11th call, made 14 more looking for where `.accentColor` is "defined",
+and ran out of calls with nothing changed. Run with:
+
+  harness-spike LiquidAI/LFM3-1.7B-MLX-6bit --thinking low --chat "..." \
+      --repository-folder <git archive of c9622bf> --repository jflick58/resident
+
+One line a run. Calls are tool calls in the turn, of 25 allowed. Two runs of one chat differ a
+lot, so these show what happens, not a rate.
+
+harness                                     temperature  calls  how it ended
+as it was                                   0.1          19     PR: .tint(.accentColor) -> .tint(.green) in ChatView.swift
+search and opener fixed, calls-left notes   0.1          25     ran out; said what it found and asked which green
++ "choose" line after the 8th look (end)    0.1          16     asked which green
++ the same                                  0.1          19     PR: .tint(.green)
++ the 8th look held back instead            0.1          13     asked which green
++ the same                                  0.1          24     PR: .tint(.green); took the held-back look for a broken tool
++ the same                                  0.1          14     PR: .tint(.green)
++ "choose" line before the result (shipped) 0.6          23     PR in the colour set, as invalid JSON (such an edit is now refused)
++ the same                                  0.6          25     ran out; said what it found and what is left
++ the same                                  0.6          15     PR in the colour set: green 0.42 -> 1.0 in one of its two colours
+
+0.6 is what the app uses; the earlier runs used the maker's 0.1 by mistake.
+
+What changed for certain: the colour set is in the first search's first line (it is a folder named
+AccentColor, and no line in it says "accent"); the model no longer opens a connector for tools a
+skill has just given it; a file that names GitHub's tools no longer swaps the declared tools; a turn
+that runs out says what is left and can be carried on. What did not: this model does not know that
+`.accentColor` is the asset catalog's colour, and neither the calls-left notes nor being told to
+choose reliably stop it looking for a definition that is not there.
+
+Two other requests on the same repository, same model (0.1), 9 calls each:
+  "Open a PR that renames the Try Again button to Retry"       PR: the label in ModelsView.swift (one of two such buttons)
+  "...makes search_files return up to 40 matches instead of 30"  PR: searchMatches = 30 -> 40 in Workspace.swift, as asked
+
+The 46 pull request, file and skill cases of the suite (made-up repository): 46 of 46 with the
+6-bit build (suite-lfm3-6bit-code46.jsonl).

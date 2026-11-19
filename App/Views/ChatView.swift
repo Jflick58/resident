@@ -61,8 +61,10 @@ extension ChatView {
                         ErrorBanner(message: error, retry: chat.isRunning ? nil : { chat.retry() })
                     } else if chat.canContinue {
                         ErrorBanner(
-                            message: "This reply was cut off before it finished.", actionTitle: "Continue",
-                            retry: { chat.continueTurn() })
+                            message: chat.reachedStepLimit
+                                ? "This turn used all its steps before the work was finished."
+                                : "This reply was cut off before it finished.",
+                            actionTitle: "Continue", retry: { chat.continueTurn() })
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }

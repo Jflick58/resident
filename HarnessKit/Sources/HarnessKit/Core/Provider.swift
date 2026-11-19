@@ -58,6 +58,9 @@ public enum StopReason: String, Codable, Sendable {
     /// The model asked for tools.
     case toolCalls
     case cancelled
+    /// The turn used every step it had, and the model was made to answer with work still to do.
+    /// The same turn can be carried on.
+    case steps
 }
 
 public enum ProviderEvent: Sendable {

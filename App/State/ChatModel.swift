@@ -110,15 +110,23 @@ final class ChatModel {
         return conversation.messages.dropFirst(before).last { $0.role == .assistant && !$0.text.isEmpty }?.text
     }
 
-    /// True when the last turn was cut off before it finished and can be carried on.
-    var canContinue: Bool { !isRunning && conversation.turnInProgress == true }
+    /// True when the last turn was cut off before it finished and can be carried on: by the app
+    /// closing, or by the turn's limit of steps.
+    var canContinue: Bool { !isRunning && (conversation.turnInProgress == true || reachedStepLimit) }
+
+    /// True when the last turn stopped at its limit of steps with work still to do.
+    var reachedStepLimit: Bool { conversation.reachedStepLimit == true }
 
     /// Carries on with an unfinished turn from the last completed step. Tool
     /// results already in the transcript are kept, so finished searches and page
-    /// reads are not repeated; only the step that was cut off runs again.
+    /// reads are not repeated; only the step that was cut off runs again. For a
+    /// turn that stopped at its limit, that step is the answer the model was made
+    /// to give: it goes, and the turn picks up where the tools left off.
     func continueTurn() {
         guard canContinue else { return }
         errorMessage = nil
+        // The turn gets its steps afresh, so what it was told about running out of them goes.
+        if reachedStepLimit { conversation.messages = Agent.withoutCallsLeftNotes(conversation.messages) }
         // Drop what the cut-off step left behind: a half-written reply, or tool
         // calls that never got their results.
         while let last = conversation.messages.last, last.role == .assistant {
@@ -204,6 +212,7 @@ final class ChatModel {
         lastToolSummary = nil
         userStopped = false
         conversation.turnInProgress = true
+        conversation.reachedStepLimit = nil
         app.update(conversation)
         let preset = preset
         task = Task {
@@ -286,6 +295,7 @@ final class ChatModel {
             conversation.loadedTools = names
         case .finished(let reason):
             if reason == .cancelled { keepPartialReply() }
+            if reason == .steps { conversation.reachedStepLimit = true }
             if reason == .length {
                 errorMessage = "The reply reached this agent's length limit. Ask it to continue, or raise the limit in the agent."
             }

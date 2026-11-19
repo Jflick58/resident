@@ -173,7 +173,7 @@ struct RootView: View {
                 app.select(.local(model.repo))
             }
             // -weightsKept held|shared|copied: how a mapped model's weights are kept, to measure one way
-            // against another. It is the setting under Experimental, which a launch argument overrides.
+            // against another. There is no setting for it: without the argument they are held.
             if let prompt = defaults.string(forKey: "demoPrompt"), let currentID,
                 let chat = app.chatModel(for: currentID), chat.conversation.isEmpty
             {

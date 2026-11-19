@@ -11,6 +11,8 @@ struct Conversation: Codable, Identifiable, Hashable {
     /// True while a turn is unfinished. Saved with the chat, so a turn cut off by
     /// the app closing can be picked up again.
     var turnInProgress: Bool?
+    /// True when the last turn stopped at its limit of steps with work still to do. It can be carried on.
+    var reachedStepLimit: Bool?
     /// Connector tools the model has opened in this chat, so they stay declared.
     var loadedTools: [String]?
     /// How hard to think in this chat, when it differs from the agent's setting.
@@ -142,10 +144,14 @@ struct Store {
         for index in library.endpoints.indices {
             library.endpoints[index].apiKey = Keychain.get("endpoint.\(library.endpoints[index].id.uuidString)") ?? ""
         }
-        // A model added by its link was named after its repository. One the app has since come to
-        // recommend goes by the name it has there.
+        // A model added by its link was named after its repository, and what it can do was read from
+        // its files. One the app has since come to recommend goes by the name it has there, with what
+        // the catalog knows it can do; a build the catalog has moved on from gives the name up.
+        let device = DeviceProfile.current()
         for index in library.installed.indices {
-            if let curated = ModelCatalog.model(repo: library.installed[index].repo) { library.installed[index].name = curated.name }
+            let model = library.installed[index]
+            library.installed[index].name = ModelCatalog.displayName(for: model.repo, on: device, stored: model.name)
+            if let curated = ModelCatalog.model(repo: model.repo) { library.installed[index].capabilities = curated.capabilities }
         }
         return library
     }

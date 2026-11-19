@@ -85,6 +85,19 @@ The first line is the reference against itself and must read 0 and 100%: if it d
 
 It compares builds of one model. A model retrained to be small, as the Bonsai models are, is a different model from the one it came from: put those through the suite.
 
+## Replaying a chat on a real repository
+
+The pull request cases work on a made-up repository of six files. A real one is where a small model gets lost, so a chat can be put to a model against a folder standing in for a repository:
+
+```sh
+git -C ~/code/project archive HEAD | tar -x -C /tmp/project
+$SPIKE LiquidAI/LFM3-1.7B-MLX-6bit --thinking low \
+    --chat "What repo is your code at|Can you open a PR to change the accent color to green" \
+    --repository-folder /tmp/project --repository owner/project --save chat.json
+```
+
+The chat has GitHub and the file tools as the app has them, with the app's own limits and sampling. Cloning that repository copies the folder, and a pull request is printed as the lines it changes and sent nowhere. `--save` keeps the chat the way the app keeps it, with what the model thought at each step, which is where to look when a run goes wrong. This is how a chat that failed on a phone is reproduced: copy it off the phone, read where it went wrong, and replay its messages here until the harness gets the model through.
+
 ## The categories
 
 | Category | Cases | What it checks |

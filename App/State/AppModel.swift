@@ -250,8 +250,8 @@ final class AppModel {
     /// How much of a long prompt the model has read so far, in tokens, and nil when it is not reading one.
     nonisolated static func promptProgress() -> (read: Int, total: Int)? { MLXEngine.promptProgress }
 
-    /// EXPERIMENT. How the next mapped model's weights are kept: "held" (the file's own pages, pinned
-    /// while a turn runs), "shared" (the same, not pinned), or "copied" (the GPU's own copies, as at first).
+    /// How the next mapped model's weights are kept: "held" (the file's own pages, pinned while a
+    /// turn runs), "shared" (the same, not pinned), or "copied" (the GPU's own copies, as at first).
     nonisolated static func setWeightKeeping(_ name: String) {
         MLXEngine.setSharesWeightPages(name == "shared" || name == "held")
         MLXEngine.setHoldsWeights(name == "held")
@@ -440,13 +440,17 @@ final class AppModel {
             if await MLXEngine.shared.loadedModelDirectory != directory {
                 loadState = .loading(name: model.name, fraction: 0)
                 defer { loadState = .idle }
-                // EXPERIMENT: weights used straight from a mapped file, when switched on in Settings.
-                MLXEngine.setMapsWeights(UserDefaults.standard.bool(forKey: "mapWeights"))
+                // A model too large for what the app may hold is used straight from its file, mapped.
+                // Everything smaller loads the ordinary way. There is no setting for it: which a model
+                // needs follows from its size and the device's memory.
+                let maps = ModelFit.needsMapping(modelDirectory: directory, device: device)
+                MLXEngine.setMapsWeights(maps)
                 // With weights mapped, the memory MLX keeps for reuse is what crowds them out of
                 // memory: capped at 64 MB, Bonsai 9B on a Mac peaked at 419 MB charged, not 1.1 GB, at the same speed.
-                if UserDefaults.standard.bool(forKey: "mapWeights") { MLXEngine.setCacheLimit(megabytes: 64) }
-                // EXPERIMENT: how the mapped weights are kept in memory. A launch argument of the same name wins over the setting.
-                Self.setWeightKeeping(UserDefaults.standard.string(forKey: "weightsKept") ?? "held")
+                MLXEngine.setCacheLimit(megabytes: maps ? 64 : nil)
+                // Mapped weights are the file's own pages, pinned while a turn runs. The two ways
+                // that lost to it stay reachable for measuring, by launch argument only: -weightsKept shared|copied.
+                Self.setWeightKeeping(UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["weightsKept"] as? String ?? "held")
                 try await MLXEngine.shared.load(directory: directory) { fraction in
                     Task { @MainActor in
                         if case .loading = self.loadState {

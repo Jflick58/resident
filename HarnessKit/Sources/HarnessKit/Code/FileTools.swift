@@ -120,12 +120,13 @@ public struct FileTool: Tool {
             return ""
         }
         switch kind {
-        case .list: return await workspace.list(text("path", "folder", "directory"), source: source)
-        case .search: return await workspace.search(text("query", "pattern", "text"), in: text("path", "folder"), source: source)
+        case .list: return await workspace.counted(await workspace.list(text("path", "folder", "directory"), source: source))
+        case .search:
+            return await workspace.counted(await workspace.search(text("query", "pattern", "text"), in: text("path", "folder"), source: source))
         case .read:
             let start = arguments["start_line"]?.intValue ?? arguments["start_line"]?.doubleValue.map(Int.init)
                 ?? Int(arguments["start_line"]?.stringValue ?? "") ?? 1
-            return await workspace.read(text("path", "file"), from: start, source: source)
+            return await workspace.counted(await workspace.read(text("path", "file"), from: start, source: source))
         case .edit:
             return await workspace.edit(
                 text("path", "file"), find: text("find", "old_string", "old_text", "search"),
