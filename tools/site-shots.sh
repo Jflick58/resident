@@ -73,8 +73,11 @@ shot agents 6 -openSheet presets
 shot settings 6 -openSheet settings
 shot connectors 6 -openSheet addConnector
 shot chat 6 -openLatestChat YES
+# The same chat at its end: the next message, answered by running code.
+shot code 7 -openLatestChat YES -openAtEnd YES
 if [ -f tools/site-pull-request.json ]; then
   seed tools/site-pull-request.json "Search limit"
-  # Opened at its end: the pull request and the answer are what there is to see.
+  # Its start, where the repository is cloned and searched, and its end, where the pull request is opened.
+  shot repository 6 -openLatestChat YES
   shot pull-request 7 -openLatestChat YES -openAtEnd YES
 fi
