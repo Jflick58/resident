@@ -95,6 +95,7 @@ These are in the app's library. The fit check tells you which ones your phone ca
 |---|---|---|
 | LFM3 1.7B | Liquid AI | Small, fast, and the most dependable with tools in our tests |
 | LFM3 VL 2B | Liquid AI | LFM3 that can read photos and documents |
+| LFM3 Coder 1.7B | AJ Gonzalez | LFM3 tuned for code by a community author |
 | Qwen 3.5 4B | Alibaba | The best all-rounder: strong with tools, sees images |
 | Qwen 3.5 2B | Alibaba | Fast and light, still handles tools and images |
 | Qwen 3 4B / 1.7B | Alibaba | Reliable tool use; the 1.7B suits older phones |

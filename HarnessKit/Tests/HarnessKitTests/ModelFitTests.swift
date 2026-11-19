@@ -173,5 +173,8 @@ import Testing
         #expect(ModelCatalog.displayName(for: "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit") == "Bonsai 2 27B")
         #expect(ModelCatalog.displayName(for: "PRISM-ML/ternary-bonsai-2-9b-mlx-2bit") == "Bonsai 2 9B")
         #expect(ModelCatalog.displayName(for: "someone/Their-Model-MLX-4bit") == "Their Model MLX 4bit")
+        // Of one author's three coder fine-tunes only one is recommended: the others keep their repository's name.
+        #expect(ModelCatalog.displayName(for: "AJ-Gonzalez/coder-lfm3-1.7b-k3.1-pro") == "LFM3 Coder 1.7B")
+        #expect(ModelCatalog.displayName(for: "AJ-Gonzalez/coder-lfm3-1.7b-qwen4-max") == "coder lfm3 1.7b qwen4 max")
     }
 }
