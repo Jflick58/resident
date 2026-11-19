@@ -98,6 +98,16 @@ $SPIKE LiquidAI/LFM3-1.7B-MLX-6bit --thinking low \
 
 The chat has GitHub and the file tools as the app has them, with the app's own limits and sampling. Cloning that repository copies the folder, and a pull request is printed as the lines it changes and sent nowhere. `--save` keeps the chat the way the app keeps it, with what the model thought at each step, which is where to look when a run goes wrong. This is how a chat that failed on a phone is reproduced: copy it off the phone, read where it went wrong, and replay its messages here until the harness gets the model through.
 
+The same chat can be run for real. With `--live` in place of the folder, cloning downloads the repository from GitHub and the pull request is opened on it, through the code the app uses (`GitHubHost`), with a token in `GITHUB_TOKEN`:
+
+```sh
+GITHUB_TOKEN=$(gh auth token) $SPIKE LiquidAI/LFM3-1.7B-MLX-6bit --thinking low \
+    --chat "File search in owner/project stops at 30 matches. Open a PR that raises it to 40." \
+    --repository owner/project --live --live-paths Sources/Search.swift --save chat.json
+```
+
+Such a run is held to that one repository and to one pull request, and with `--live-paths` a pull request that changes any other file is refused before anything is sent. GitHub's own connector still answers from canned data here, so a run in which the model calls one of its tools is not a real one. The pull request shown on the website was made this way: `spike-results/pullrequest-live.txt` is that run and the practice runs before it, and `tools/site-pull-request.json` is its chat.
+
 ## The categories
 
 | Category | Cases | What it checks |

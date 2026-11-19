@@ -1,0 +1,69 @@
+A pull request on this repository, opened for real. LFM3 1.7B (6-bit), on a Mac. 2026-11-19.
+
+The request: "File search in jflick58/resident stops at 30 matches. Open a PR that raises it to 40."
+The right change is one line of HarnessKit/Sources/HarnessKit/Code/Workspace.swift:
+static let searchMatches = 30 becomes 40.
+
+First, three practice runs against a copy of the repository at 5e7a93d, where a pull request is
+printed and sent nowhere (--repository-folder). The app's limits and sampling (temperature 0.6):
+
+  harness-spike LiquidAI/LFM3-1.7B-MLX-6bit --thinking low --chat "..." \
+      --repository-folder <git archive of 5e7a93d> --repository jflick58/resident
+
+run  calls  seconds  how it ended
+1    8      80       PR: searchMatches = 30 -> 40 in Workspace.swift, nothing else changed
+2    8      117      PR: searchMatches = 30 -> 40 in Workspace.swift, nothing else changed
+3    9      107      PR: searchMatches = 30 -> 40 in Workspace.swift, nothing else changed
+
+Seconds are from the request to the answer. No run called one of GitHub's own tools, whose answers
+are canned here.
+
+Then once for real (--live): the repository is downloaded from GitHub and the pull request is opened
+on it, by the app's own GitHubHost, with the token of the GitHub CLI on this Mac. The run was held
+to this repository, to one pull request, and to that one file:
+
+  GITHUB_TOKEN=$(gh auth token) harness-spike LiquidAI/LFM3-1.7B-MLX-6bit --thinking low --chat "..." \
+      --repository jflick58/resident --live \
+      --live-paths HarnessKit/Sources/HarnessKit/Code/Workspace.swift --save tools/site-pull-request.json
+
+9 tool calls and 55 seconds from the request to the answer. It opened
+https://github.com/jflick58/resident/pull/5 (+1 -1 in one file). What the test bed printed:
+
+== LiquidAI/LFM3-1.7B-MLX-6bit  setup=core  thinking=low
+Fit on a 6 GB phone: Runs well on this device. Uses about 2.2 GB of the 6.0 GB apps can use here.
+Capabilities: vision=false tools=true thinking=true  download=1.3 GB
+Loaded in 0.7s, memory 1.4 GB
+  FOR REAL: jflick58/resident is downloaded from GitHub, and a pull request is opened on it
+  as the app: context 32768, reply up to 2048 tokens, temperature 0.6
+--- File search in jflick58/resident stops at 30 matches. Open a PR that raises it to 40.
+  tools: list_files, search_files, read_file, edit_file, write_file, repo_open_pull_request, github_search_pull_requests, github_get_file_contents, github_search_users, github_search_issues, github_list_pull_requests, github_search_commits
+  step: prompt 32 tokens, first token 0.2s  calls use_skill {"name":"open-pull-request"}
+  tools: list_files, search_files, read_file, edit_file, write_file, repo_open_pull_request, github_get_file_contents, github_search_users, github_search_issues, github_list_pull_requests, github_search_commits, repo_clone
+    -> Instructions for open-pull-request: / Every tool named here can be called once you have read this: do not open a connector for them. If a call says there is no tool named `repo_clone`, say to add GitHub under Settings > Co
+  step: prompt 481 tokens, first token 1.4s  calls repo_clone {"repository":"jflick58/resident"}
+  DOWNLOADED jflick58/resident at 5e7a93d on main
+    -> Cloned jflick58/resident into resident/, branch main, 964 files. / Files in resident/ (964 in all; list a folder to see inside it): / resident/.github/  (1 files) / resident/App/  (27 files) / resident/Config/  (2 files) / residen
+  step: prompt 216 tokens, first token 0.6s  calls search_files {"query":"30"}
+    -> resident/App/Intents/AskIntent.swift:90: /// An action normally has 30 seconds. An agent turn with a few tool calls / resident/App/Intents/AskIntent.swift:217: // more than the 30 seconds an action is otherwise given. / resi
+  step: prompt 1101 tokens, first token 2.6s  calls read_file {"path":"resident/HarnessKit/Sources/HarnessKit/Workspace.swift"}
+    -> ERROR There is no file resident/HarnessKit/Sources/HarnessKit/Workspace.swift. Did you mean: resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift?
+  step: prompt 51 tokens, first token 0.2s  calls search_files {"path":"resident/HarnessKit/Sources/HarnessKit","query":"searchMatches"}
+    -> resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift:31: static let searchMatches = 30 / resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift:32: static let searchMatchesPerFile = 4 / resident/HarnessKit/Source
+  step: prompt 173 tokens, first token 0.5s  calls read_file {"path":"resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift"}
+    -> import Foundation /  / /// A folder of files on this device, for a model to work on the way a coding / /// agent works on a folder: list it, search it, read a file, edit it, write one. / /// / /// Small models tuned for code have 
+  step: prompt 1137 tokens, first token 2.7s  calls edit_file {"find":"static let searchMatches = 30","path":"resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift","replace":"static let searchMatches = 40"}
+    -> Changed resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift. The rest of the file is as it was. From line 31 it now reads: /     static let searchMatches = 40 / When every change is made, call repo_open_pull_request.
+  step: prompt 71 tokens, first token 0.4s  calls repo_open_pull_request {"body":"Updated resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift: changed static let searchMatches from 30 to 40 so file searches show more results.","title":"Raise file search matches limit from 30 to 40"}
+  PULL REQUEST Raise file search matches limit from 30 to 40 | Updated resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift: changed static let searchMatches from 30 to 40 so file searches show more results.
+  CHANGED HarnessKit/Sources/HarnessKit/Code/Workspace.swift
+  OPENED https://github.com/Jflick58/resident/pull/5 on branch raise-file-search-matches-limit-from, commit 9349a8e
+    -> Opened pull request #5: https://github.com/Jflick58/resident/pull/5 / It changes HarnessKit/Sources/HarnessKit/Code/Workspace.swift on a new branch, raise-file-search-matches-limit-from. It is not merged. Give the user the
+  step: prompt 76 tokens, first token 0.4s  calls read_file {"path":"resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift","start_line":30}
+    ->     static let readCharacters = 4500 /     static let searchMatches = 40 /     static let searchMatchesPerFile = 4 /     /// Files and folders named after what is searched for, shown ahead of the lines that hold it. /     static
+  answer: …The file search limit was found at `resident/HarnessKit/Sources/HarnessKit/Code/Workspace.swift` (line 31, `static let searchMatches = 30`). I changed it to **40**. /  / A pull request has been opened: /  / **https://github.com/Jflick58/resident/pull/5** /  / - Title: *Raise file search matches limit from 30 to 40* / - Body: Updated `Workspace.swift` so `searchMatches` is now 40. / - Ch …
+  step: prompt 1123 tokens, first token 2.8s
+
+The last step line belongs to the answer: a step is printed after what it produced.
+
+Its chat, as the app keeps one, is tools/site-pull-request.json. The website shows it, and
+tools/site-shots.sh puts it in the simulator for the screenshot beside it.

@@ -168,6 +168,13 @@ let savePath = option("--save")
 // repository copies the folder. For putting a chat that went wrong on a phone to the model again here.
 let repositoryFolder = option("--repository-folder")
 let repositoryName = option("--repository")
+// --live with --repository owner/name: the same chat for real. Cloning downloads that repository from GitHub
+// and the pull request is opened on it, by the app's own GitHubHost with the token in GITHUB_TOKEN. Only that
+// repository, and one pull request a run. --live-paths a,b: a pull request that changes any other file is
+// refused before anything is sent, so a run nobody is watching cannot publish a change nobody expected.
+let liveRepository = arguments.contains("--live")
+arguments.removeAll { $0 == "--live" }
+let livePaths = option("--live-paths")?.split(separator: ",").map(String.init)
 /// Where a model's files are kept on this Mac, downloading them first if they are not all there.
 /// HARNESS_MODELS_DIR: another folder of models, for trying what changes a model's files.
 func modelFiles(_ repo: String, info known: HubModelInfo? = nil) async throws -> (info: HubModelInfo, directory: URL, downloaded: Bool) {
@@ -533,7 +540,9 @@ if let chatTurns {
         ? [ToolGroup(name: "linear", title: "Linear", summary: "Issues and projects", tools: loadLinearTools(recorder: recorder), guidance: linearGuidance)] : []
     var chatContext = 16384
     var chatOptions = GenerationOptions(maxOutputTokens: 600, temperature: 0.6, thinking: .low)
-    if let repositoryFolder {
+    // The chat has what the app has: its connectors, its limits and its sampling.
+    let asTheApp = repositoryFolder != nil || liveRepository
+    if asTheApp {
         let name = (repositoryName ?? "acme/project").split(separator: "/").map(String.init)
         guard name.count == 2 else {
             print("--repository takes owner/name")
@@ -541,7 +550,17 @@ if let chatTurns {
         }
         let workspace = Workspace(
             directory: FileManager.default.temporaryDirectory.appendingPathComponent("harness-spike-chat-\(UUID().uuidString)"))
-        let host = FolderRepositoryHost(owner: name[0], repo: name[1], folder: URL(fileURLWithPath: repositoryFolder))
+        let host: any RepositoryHost
+        if liveRepository {
+            guard repositoryName != nil, let token = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !token.isEmpty else {
+                print("--live takes --repository owner/name, and a GitHub token in GITHUB_TOKEN")
+                exit(2)
+            }
+            host = LiveRepositoryHost(owner: name[0], repo: name[1], token: token, paths: livePaths)
+            print("  FOR REAL: \(name[0])/\(name[1]) is downloaded from GitHub, and a pull request is opened on it")
+        } else {
+            host = FolderRepositoryHost(owner: name[0], repo: name[1], folder: URL(fileURLWithPath: repositoryFolder ?? ""))
+        }
         var github = ToolGroup(
             name: "github", title: "GitHub", summary: "Repositories, issues and pull requests",
             tools: FileEditTool.adding(to: loadGitHubTools(recorder: recorder), title: "GitHub")
@@ -576,7 +595,7 @@ if let chatTurns {
         messages.append(.user(turn))
         var agent = Agent(
             provider: modelProvider(chatContext), tools: chatTools, options: chatOptions,
-            contextBudgetTokens: repositoryFolder == nil ? 12000 : chatContext - chatOptions.maxOutputTokens)
+            contextBudgetTokens: asTheApp ? chatContext - chatOptions.maxOutputTokens : 12000)
         agent.loadedToolNames = loaded
         agent.groups = chatGroups
         var plainPreset = HarnessPreset.assistant
@@ -591,14 +610,14 @@ if let chatTurns {
             case .assistantMessage(let message):
                 messages.append(message)
                 if message.toolCalls.isEmpty {
-                    print("  answer: …" + String(message.text.suffix(repositoryFolder == nil ? 260 : 1200)).replacingOccurrences(of: "\n", with: " / "))
+                    print("  answer: …" + String(message.text.suffix(asTheApp ? 1200 : 260)).replacingOccurrences(of: "\n", with: " / "))
                 }
                 let stats = message.stats
                 print(String(format: "  step: prompt %d tokens, first token %.1fs%@", stats?.promptTokens ?? -1, stats?.timeToFirstToken ?? -1,
                     message.toolCalls.isEmpty ? "" : "  calls " + message.toolCalls.map { $0.name + " " + $0.arguments.jsonString }.joined(separator: ", ")))
             case .toolFinished(let message):
                 messages.append(message)
-                if repositoryFolder != nil {
+                if asTheApp {
                     print("    -> " + (message.isError ? "ERROR " : "") + String(message.text.prefix(220)).replacingOccurrences(of: "\n", with: " / "))
                 }
             case .toolsLoaded(let names):

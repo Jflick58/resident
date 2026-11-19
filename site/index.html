@@ -89,6 +89,48 @@ questions:
     {% include shot.html name="chat" alt="The same chat in the app: the question, a web search, three pages read, and the start of the answer" %}
   </div>
 </section>
+<section id="pull-request" class="band">
+  <p class="eyebrow">A code change</p>
+  <h2 class="beats"><span>One request.</span> <span>Nine tool calls.</span> <span>One pull request.</span></h2>
+  <p class="sub">
+    The same model, pointed at Resident’s own repository. It cloned 964 files, found the one line
+    that sets the limit, changed it and opened a pull request on GitHub.
+  </p>
+  <div class="split reverse">
+    <div>
+      <div class="run">
+        <p class="label">LFM3 1.7B · 9 tool calls · 55 seconds on a Mac</p>
+        <p class="ask">File search in jflick58/resident stops at 30 matches. Open a PR that raises it to 40.</p>
+        <ol>
+          <li><span class="at">0:08</span><span>Loaded its pull request skill</span></li>
+          <li><span class="at">0:14</span><span>Cloned jflick58/resident</span></li>
+          <li><span class="at">0:22</span><span>Searched the files for “30”</span></li>
+          <li><span class="at">0:27</span><span>Asked for a file at the wrong path, and was told the right one</span></li>
+          <li><span class="at">0:28</span><span>Searched the files for “searchMatches”</span></li>
+          <li><span class="at">0:30</span><span>Read Workspace.swift</span></li>
+          <li><span class="at">0:37</span><span>Changed one line</span></li>
+          <li><span class="at">0:42</span><span>Opened pull request #5</span></li>
+          <li><span class="at">0:49</span><span>Read the changed lines again</span></li>
+          <li class="done"><span class="at">0:55</span><span>Answered with the link</span></li>
+        </ol>
+      </div>
+      <div class="diff">
+        <p class="file">HarnessKit/Sources/HarnessKit/Code/Workspace.swift</p>
+        <pre><span class="was">-    static let searchMatches = 30</span><span class="now">+    static let searchMatches = 40</span></pre>
+      </div>
+      <p class="fine">
+        That is <a href="https://github.com/jflick58/resident/pull/5">pull request #5</a> on
+        Resident’s repository, as the model wrote it. The run was made on a Mac on November 19, 2026,
+        through the same harness and the same GitHub code the app uses. Three practice runs against
+        a copy of the repository made the same change first, in 80 to 117 seconds. The screenshot is
+        that chat opened in the app, and
+        <a href="https://github.com/jflick58/resident/blob/main/tools/site-pull-request.json">the whole transcript</a>
+        is in the repository.
+      </p>
+    </div>
+    {% include shot.html name="pull-request" alt="The end of that chat in the app: the file edited, a pull request opened, and an answer that gives the link to it" %}
+  </div>
+</section>
 
 <section id="does" class="band">
   <p class="eyebrow">What it can do</p>

@@ -80,6 +80,14 @@ extension ChatView {
             .onChange(of: chat.liveText) {
                 proxy.scrollTo("bottom", anchor: .bottom)
             }
+            #if DEBUG
+                // -openAtEnd YES: the chat opens at its last message, for a picture of how a long one ended.
+                .task {
+                    guard UserDefaults.standard.bool(forKey: "openAtEnd") else { return }
+                    try? await Task.sleep(for: .milliseconds(600))
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            #endif
         }
     }
 }

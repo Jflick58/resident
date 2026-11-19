@@ -114,6 +114,7 @@ Claims about harnesses are cheap, so these are the numbers behind ours. Each is 
 | 17 general tasks, 4 built-in tools plus 13 connectors, LFM3 1.7B | **17 of 17**, with a first prompt of about 1,200 tokens (4,700 with every tool declared) |
 | 12 tasks against Linear's real tool definitions, LFM3 1.7B, tools opened on demand | **12 of 12** |
 | The same 12 tasks with all tools declared up front | 10 of 12, with an 18,600-token prompt and 97 seconds a task |
+| A change to this repository, asked for in one sentence and made for real, LFM3 1.7B (6-bit) | It cloned the repository, changed the one line asked for and opened [pull request #5](https://github.com/jflick58/resident/pull/5) in **9 tool calls and 55 seconds**. Three practice runs on a copy of the repository made the same change first, in 80 to 117 seconds |
 | Speed on an iPhone Duo, LFM3 1.7B, app on screen | About 65 tokens a second with the 6-bit build the app offers there, 76 to 95 with the 4-bit |
 | LFM3 1.7B's builds against the weights as trained, on 42 prompts from the suite | The 4-bit build picks the same next token **89.5%** of the time, 5-bit 93.8%, 6-bit **97.3%**, 8-bit 98.6%. The app offers the 6-bit where it fits with a full-length chat and the 4-bit elsewhere |
 
