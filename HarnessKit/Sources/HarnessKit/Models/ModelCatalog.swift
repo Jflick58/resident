@@ -62,6 +62,16 @@ public enum ModelCatalog {
             weightBytes: gigabytes(1.59), layers: 6, keyValueHeads: 4, headDimension: 128,
             architecture: "lfm3_vl",
             capabilities: .init(vision: true, tools: true, thinking: true)),
+        // A community fine-tune of LFM3 on a larger model's worked answers to code questions. Its author
+        // publishes three, each taught by a different model. This is the best liked, and it passed the
+        // 16 file and pull request cases it was given. The one taught by Qwen 4 Max did no better than
+        // stock LFM3 in the suite (62 of 70 cases against 66).
+        CatalogModel(
+            repo: "AJ-Gonzalez/coder-lfm3-1.7b-k3.1-pro", name: "LFM3 Coder 1.7B", maker: "AJ Gonzalez",
+            blurb: "LFM3 tuned for code by a community author. Thinks a problem through before it writes. Text only.",
+            weightBytes: gigabytes(0.97), layers: 6, keyValueHeads: 4, headDimension: 128,
+            architecture: "lfm3",
+            capabilities: .init(vision: false, tools: true, thinking: true)),
         // PrismML's ternary models: Qwen retrained so that each weight is one of three values, held in
         // two bits. Nobody else publishes a build of them the app could load, so the maker's is the one.
         // Listed only where the fit check lets it through. On a 12 GB phone that takes mapped weights,
