@@ -147,6 +147,110 @@ let imagePath = option("--image")
 let chatTurns = option("--chat")?.components(separatedBy: "|")
 // --save <path>: write the chat's messages as JSON, in the form the app keeps them.
 let savePath = option("--save")
+/// Where a model's files are kept on this Mac, downloading them first if they are not all there.
+/// HARNESS_MODELS_DIR: another folder of models, for trying what changes a model's files.
+func modelFiles(_ repo: String, info known: HubModelInfo? = nil) async throws -> (info: HubModelInfo, directory: URL, downloaded: Bool) {
+    let info: HubModelInfo
+    if let known { info = known } else { info = try await HubMetadataClient().info(repo: repo) }
+    let root = ProcessInfo.processInfo.environment["HARNESS_MODELS_DIR"].map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("harness-spike/models")
+    let directory = root.appendingPathComponent(ModelDownloader.folderName(for: repo))
+    if ModelDownloader.isComplete(info, in: directory) { return (info, directory, false) }
+    print("Downloading to \(directory.path)")
+    var lastPrinted = -1
+    try await ModelDownloader().download(info, to: directory) { progress in
+        let percent = Int(progress.fraction * 100)
+        if percent / 10 != lastPrinted / 10 {
+            lastPrinted = percent
+            print("  \(percent)%")
+        }
+    }
+    return (info, directory, true)
+}
+
+// --fidelity <requests.jsonl> <reference> <build>...: how far each build of a model has moved from the
+// reference build (the weights as trained, or the nearest thing that fits), on prompts kept from a run
+// with HARNESS_RECORD_REQUESTS. --limit N compares about N of them, spread over the file; --reply-tokens
+// N is how much of each reply; --discard deletes each build this run had to download once it is scored;
+// --samples <file> keeps the reference's replies there, so a later run with other builds does not write them again.
+if let requestsPath = option("--fidelity") {
+    setvbuf(stdout, nil, _IOLBF, 0)
+    let limit = option("--limit").flatMap { Int($0) } ?? 48
+    let replyTokens = option("--reply-tokens").flatMap { Int($0) } ?? 96
+    let samplesPath = option("--samples")
+    let discards = arguments.contains("--discard")
+    let repos = arguments.filter { !$0.hasPrefix("--") }.compactMap { ModelFit.repoID(from: $0) }
+    guard repos.count >= 2 else {
+        print("Usage: harness-spike --fidelity requests.jsonl <reference> <build>... [--limit N] [--reply-tokens N] [--samples file] [--discard]")
+        exit(2)
+    }
+    /// The reference's replies as kept in a file, with what they were written from.
+    struct Kept: Codable {
+        var reference: String
+        var prompts: Int
+        var replyTokens: Int
+        var samples: [BuildFidelity.Sample?]
+    }
+    let lines = try String(contentsOfFile: requestsPath, encoding: .utf8).split(separator: "\n")
+    let all = lines.compactMap { try? JSONDecoder().decode(RecordedRequest.self, from: Data($0.utf8)) }
+    let step = max(1, all.count / max(1, limit))
+    let requests = Array(stride(from: 0, to: all.count, by: step).map { all[$0] }.prefix(limit))
+    print("== fidelity to \(repos[0]): \(requests.count) of \(all.count) recorded prompts, \(replyTokens) tokens of each reply at most")
+
+    func megabytes(_ directory: URL) -> Int {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        return files.filter { $0.pathExtension == "safetensors" && !$0.lastPathComponent.hasPrefix("prompt-cache") }
+            .reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) } / 1_000_000
+    }
+    func line(_ name: String, _ size: Int, _ score: BuildFidelity.Score, _ seconds: Double) -> String {
+        String(
+            format: "%@  %5d MB  divergence %.4f (worst in twenty %.4f)  same token %5.1f%%  same reply %5.1f%%  %d replies, %d tokens%@  %.0fs",
+            name.padding(toLength: 44, withPad: " ", startingAt: 0), size, score.divergence, score.divergenceAtWorst, score.agreement * 100,
+            score.sameReplies * 100, score.replies, score.tokens, score.unreadable > 0 ? ", \(score.unreadable) prompts read differently" : "", seconds)
+    }
+
+    var started = Date()
+    var samples: [BuildFidelity.Sample?] = []
+    if let samplesPath, let data = FileManager.default.contents(atPath: samplesPath),
+        let kept = try? PropertyListDecoder().decode(Kept.self, from: data), kept.reference == repos[0], kept.prompts == requests.count,
+        kept.replyTokens == replyTokens
+    {
+        samples = kept.samples
+        print("Reference's \(samples.compactMap { $0 }.count) replies read from \(samplesPath).")
+    } else {
+        let reference = try await modelFiles(repos[0])
+        samples = try await BuildFidelity.samples(reference: reference.directory, requests: requests, replyTokens: replyTokens) { index in
+            if index % 10 == 0 { print("  reference: prompt \(index + 1) of \(requests.count)") }
+        }
+        let usable = samples.compactMap { $0 }
+        print(String(
+            format: "Reference wrote %d replies in %.0fs (%d prompts too long to use).", usable.count, Date().timeIntervalSince(started),
+            samples.count - usable.count))
+        if let samplesPath {
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            try encoder.encode(Kept(reference: repos[0], prompts: requests.count, replyTokens: replyTokens, samples: samples))
+                .write(to: URL(fileURLWithPath: samplesPath))
+        }
+        // The reference against itself: nothing should be lost. If something is, the comparison is at fault, not a build.
+        started = Date()
+        let itself = try await BuildFidelity.score(reference.directory, against: samples, requests: requests)
+        print(line("(reference against itself)", megabytes(reference.directory), itself, Date().timeIntervalSince(started)))
+    }
+    for repo in repos.dropFirst() {
+        do {
+            let build = try await modelFiles(repo)
+            started = Date()
+            let score = try await BuildFidelity.score(build.directory, against: samples, requests: requests)
+            print(line(repo, megabytes(build.directory), score, Date().timeIntervalSince(started)))
+            if discards, build.downloaded { try? FileManager.default.removeItem(at: build.directory) }
+        } catch {
+            print("\(repo): \(error.localizedDescription)")
+        }
+    }
+    exit(0)
+}
+
 let repo = ModelFit.repoID(from: arguments.first ?? "mlx-community/Qwen3-4B-4bit") ?? "mlx-community/Qwen3-4B-4bit"
 
 // MARK: Tools for each setup
@@ -221,10 +325,32 @@ if retrievalOnly {
     exit(0)
 }
 
+/// Writes down every request the agent sends to the model, a line of JSON each, and passes it on.
+/// `--fidelity` puts the same prompts to several builds of a model to see how far they differ.
+struct RecordingProvider: ModelProvider {
+    var inner: any ModelProvider
+    var path: String
+
+    func generate(_ request: GenerationRequest) -> AsyncThrowingStream<ProviderEvent, Error> {
+        if let data = try? JSONEncoder().encode(RecordedRequest(request)) {
+            if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
+            if let handle = FileHandle(forWritingAtPath: path) {
+                handle.seekToEndOfFile()
+                handle.write(data + Data("\n".utf8))
+                try? handle.close()
+            }
+        }
+        return inner.generate(request)
+    }
+}
+
 /// The model under test: one run by MLX, or the system's own.
+/// HARNESS_RECORD_REQUESTS=<file> keeps a copy of every request it is sent.
 func modelProvider(_ contextTokens: Int) -> any ModelProvider {
     if useApple, #available(macOS 26.0, *) { return AppleModelProvider() }
-    return MLXEngine.shared.provider(contextTokens: contextTokens)
+    let provider = MLXEngine.shared.provider(contextTokens: contextTokens)
+    if let path = ProcessInfo.processInfo.environment["HARNESS_RECORD_REQUESTS"] { return RecordingProvider(inner: provider, path: path) }
+    return provider
 }
 
 /// The system model's context size. Stops the run if the model cannot be used.
@@ -250,21 +376,7 @@ if useApple {
     print("Capabilities: vision=\(report.capabilities.vision) tools=\(report.capabilities.tools) thinking=\(report.capabilities.thinking)  download=\(ModelFit.format(report.downloadBytes))")
     if !report.canInstall { print("Fit check says no; continuing anyway for the spike.") }
 
-    // HARNESS_MODELS_DIR: another folder of models, for trying what changes a model's files.
-    let root = ProcessInfo.processInfo.environment["HARNESS_MODELS_DIR"].map { URL(fileURLWithPath: $0) }
-        ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("harness-spike/models")
-    let directory = root.appendingPathComponent(ModelDownloader.folderName(for: repo))
-    if !ModelDownloader.isComplete(info, in: directory) {
-        print("Downloading to \(directory.path)")
-        var lastPrinted = -1
-        try await ModelDownloader().download(info, to: directory) { progress in
-            let percent = Int(progress.fraction * 100)
-            if percent / 10 != lastPrinted / 10 {
-                lastPrinted = percent
-                print("  \(percent)%")
-            }
-        }
-    }
+    let directory = try await modelFiles(repo, info: info).directory
 
     // EXPERIMENT: use the weights straight from a mapped file.
     if arguments.contains("--mapped") { MLXEngine.setMapsWeights(true) }

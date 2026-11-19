@@ -52,6 +52,39 @@ python3 evals/report.py before.jsonl after.jsonl
 
 A model does not give the same answer twice, so a few cases flip between any two runs. The report says how likely the split it saw is by chance. Treat a difference as real only when that is small.
 
+## Comparing builds of one model
+
+A model is published in several builds: the weights as trained, and the same weights rounded to fewer bits in more than one way. The suite is a poor way to choose between them. Most builds pass most cases, and a model does not answer the same way twice, so two builds a few cases apart may be the same. What the rounding changed can be measured directly instead:
+
+```sh
+# Keep the prompts of a run: every request the agent sent to the model.
+HARNESS_RECORD_REQUESTS=requests.jsonl $SPIKE LiquidAI/LFM3-1.7B-MLX-4bit --thinking low --suite all --sample 70 --out run.jsonl
+
+# Put them to the weights as trained, then to each build. The first model named is the reference.
+$SPIKE --fidelity requests.jsonl LiquidAI/LFM3-1.7B-MLX-bf16 \
+    LiquidAI/LFM3-1.7B-MLX-4bit LiquidAI/LFM3-1.7B-MLX-6bit --limit 48 --samples reference.plist --discard
+```
+
+The reference is given each prompt and writes the start of its reply, always taking its likeliest token. Each build is then walked down the same reply and asked, at every token, what it would have written there. One line comes out per build:
+
+| Column | What it says |
+|---|---|
+| divergence | How far the build's view of the next token is from the reference's, averaged over every token (the Kullback-Leibler divergence, in nats). Nothing lost is 0. |
+| worst in twenty | The same for the token in twenty where the build was furthest off. |
+| same token | How often the build's likeliest token is the reference's. |
+| same reply | How often the build would have written the whole start of the reply token for token. |
+
+| Option | What it does |
+|---|---|
+| `--limit N` | Compare about N of the recorded prompts, spread over the file. 48 by default takes a 2B model about five minutes a build. |
+| `--reply-tokens N` | How much of each reply to compare. 96 by default. |
+| `--samples file` | Keep the reference's replies in this file, so a later run with other builds does not write them again. |
+| `--discard` | Delete each build this run had to download once it is scored. The reference stays. |
+
+The first line is the reference against itself and must read 0 and 100%: if it does not, the comparison is at fault and not a build. The reference has to fit in the Mac's memory; for a model too large for that, its 8-bit build is the nearest thing. Run it with nothing else using the graphics processor, or macOS may stop one of the two.
+
+It compares builds of one model. A model retrained to be small, as the Bonsai models are, is a different model from the one it came from: put those through the suite.
+
 ## The categories
 
 | Category | Cases | What it checks |
