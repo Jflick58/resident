@@ -7,15 +7,21 @@ A small Jekyll site: one page of marketing, plus privacy and support.
 
 - `index.html` is the page. Its sections are plain HTML; the lists of models
   and questions are in the front matter at the top of the file. The order is
-  the argument: what the app is, one real run of it, what it can do, why a
-  local model matters, why it was built, the engineering (what goes wrong
-  with a small model and what the harness does about it, then the inference
-  work), and how to get it. The two engineering sections have a cooler
-  background (`.under`).
-- The run under "See it work" is written out by hand from
+  the argument: what the app is, a recorded run, why it was built, useful
+  tasks and agent configuration, the engineering and its evidence, local
+  data boundaries, model choice, and how to get it. Technical details,
+  including the inference work, expand inside the engineering section.
+  That section has a cooler background (`.under`).
+- The run under "A real run" is written out by hand from
   `tools/site-chat.json`: each step's time is that message's date less the
   first message's. If the chat is replaced, replace those lines with it, and
-  keep the label honest about where the run was made.
+  keep the date and execution environment visible. It is a Mac run shown in
+  the iPhone simulator, not an on-device timing benchmark. The follow-up
+  date calculation is relative to November 16, 2026, not the visitor's date.
+- The before-and-after evidence compares the intersection of case IDs in
+  `spike-results/suite-lfm3-baseline.jsonl` and `suite-lfm3-after.jsonl`:
+  387 shared cases, with 357 and 374 passes respectively. Keep the simulated
+  services, fixture repository and run variability explicit when updating it.
 - `assets/css/style.css` holds every style. Colours are variables at the top,
   taken from the app's mark, with a dark and a light set.
 - `assets/img/` holds the mark, the icon and the screenshots. The screenshots
@@ -34,6 +40,6 @@ one (the script says how) and run the script again. The status bar is set to
 What the page says the app does is what it did when the page was written.
 Before publishing, check it against the app. Every number on the page is one
 `spike-results/` or the app backs, and the page says where each was measured.
-When the app is on the App Store, replace the two "Coming soon to the App
-Store" lines (under the first buttons and at the foot) with the link, and make
-it the first button.
+When the app is on the App Store, update the hero, get-started section,
+availability FAQ and closing call to action. Make the store link the primary
+installation action and retain the source-build instructions for developers.

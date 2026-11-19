@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}: {{ site.tagline }}</title>
-  <meta name="description" content="{{ page.description | default: site.description | strip_newlines }}">
+  <meta name="description" content="{{ page.description | default: site.description | strip_newlines | escape }}">
   <meta property="og:title" content="{{ site.title }}: {{ site.tagline }}">
-  <meta property="og:description" content="{{ site.description | strip_newlines }}">
+  <meta property="og:description" content="{{ page.description | default: site.description | strip_newlines | escape }}">
   <meta property="og:image" content="{{ '/assets/img/icon.png' | relative_url }}">
   <meta name="color-scheme" content="dark light">
   <link rel="icon" href="{{ '/assets/img/icon.png' | relative_url }}">
@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="bar">
     <a class="brand" href="{{ '/' | relative_url }}">
       <img src="{{ '/assets/img/mark.png' | relative_url }}" alt="" width="26" height="28">
@@ -21,15 +22,13 @@
     </a>
     <nav aria-label="Sections">
       <a href="{{ '/#watch' | relative_url }}">See it work</a>
-      <a href="{{ '/#does' | relative_url }}">What it does</a>
-      <a href="{{ '/#local' | relative_url }}">Why local</a>
+      <a href="{{ '/#why' | relative_url }}">Why Resident</a>
       <a href="{{ '/#engineering' | relative_url }}">Engineering</a>
       <a href="{{ '/#start' | relative_url }}">Get started</a>
-      <a href="{{ '/#questions' | relative_url }}">Questions</a>
     </nav>
   </header>
 
-  <main>
+  <main id="main" tabindex="-1">
     {{ content }}
   </main>
 
