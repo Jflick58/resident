@@ -36,9 +36,12 @@ being built, and the two packages keep that name (`HarnessKit`, `HarnessMLX`).
   A model whose weights fill the device's memory thinks only when it is
   switched on in the chat: on a 12 GB phone a 27B's replies with thinking fell
   from 6 tokens a second to 2 over 400 tokens, and without it came at 7.
-  Tool calls are held to valid syntax by a grammar (`ToolCallGrammar.swift`):
-  text and thinking stay free, and once the model opens a tool call only a
-  declared tool name and schema-valid arguments can follow.
+  Tool calls are held to valid syntax by a grammar (`ToolCallGrammar.swift`)
+  for models that write them as tagged JSON, which of the recommended ones is
+  Qwen 3: text and thinking stay free, and once the model opens a tool call
+  only a declared tool name and schema-valid arguments can follow. LFM3, Qwen
+  3.5 and Bonsai write calls in other forms, which the grammar does not cover
+  yet (`harness-spike <model> --probe` says which a model is).
 - **Connectors** (`PersonalTools.swift`, `EventKitSource.swift`): Calendar and
   Reminders, switched on per preset like tools. They read and write the
   device's own calendar and reminders through EventKit, ask for access the

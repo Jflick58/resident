@@ -6,7 +6,11 @@ A small Jekyll site: one page of marketing, plus privacy and support.
     jekyll serve        # then open http://localhost:4000
 
 - `index.html` is the page. Its sections are plain HTML; the lists of models
-  and questions are in the front matter at the top of the file.
+  and questions are in the front matter at the top of the file. The page goes
+  down like an iceberg: why a local model matters, then three depths under the
+  surface (the harness, the engineering that keeps a small model dependable,
+  and the inference work). The iceberg is an SVG drawn in the page, and each
+  deeper section has a slightly deeper background (`.deep-1` to `.deep-3`).
 - `assets/css/style.css` holds every style. Colours are variables at the top,
   taken from the app's mark, with a dark and a light set.
 - `assets/img/` holds the mark, the icon and the screenshots. The screenshots
