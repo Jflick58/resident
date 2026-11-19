@@ -8,9 +8,9 @@ A small Jekyll site: one page of marketing, plus privacy and support.
 - `index.html` is the page. Its sections are plain HTML; the lists of models
   and questions are in the front matter at the top of the file. The order is
   the argument: what the app is, its use cases as screenshots of real chats,
-  what it can do, why a local model matters, why it was built, the
-  engineering (what goes wrong with a small model and what the harness does
-  about it, then the inference work), and the models. The two engineering
+  what it can do, connectors, Shortcuts, why a local model matters, why it
+  was built, the engineering (what goes wrong with a small model and what the
+  harness does about it, then the inference work), and the models. The two engineering
   sections have a cooler background (`.under`).
 - The use cases under "See it work" are shown as screenshots of the app, not
   as drawings of it. The tool-call counts beside them come from the saved
@@ -18,6 +18,10 @@ A small Jekyll site: one page of marketing, plus privacy and support.
   chats were run on a Mac, so the page gives no timings for them: a time shown
   there would have to say where it was measured. If a chat is replaced, take
   the screenshots again and correct the counts.
+- The shortcut and Live Activity beside the Shortcuts section are drawn in
+  HTML (`.panel`), not a screenshot. They say what the app says: the action
+  reads "Ask <agent> <message>" with the model under it, and the Live Activity
+  shows what the agent is doing and "Step N".
 - `assets/css/style.css` holds every style. Colours are variables at the top,
   taken from the app's mark, with a dark and a light set.
 - `assets/img/` holds the mark, the icon and the screenshots. The screenshots

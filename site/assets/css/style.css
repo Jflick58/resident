@@ -225,6 +225,9 @@ h2.beats span { display: inline-block; }
   border-radius: var(--radius);
 }
 .grid article p { color: var(--muted); }
+/* Eight cards sit four by four. */
+.grid.four { grid-template-columns: repeat(4, 1fr); }
+.grid.four article { padding: 22px 20px; }
 
 .maker {
   margin: 0 0 6px;
@@ -248,6 +251,67 @@ h2.beats span { display: inline-block; }
 .split > div:first-child > p.eyebrow { color: var(--orange); font-size: 0.82rem; }
 .split h2 { margin-bottom: 6px; }
 .split .device { width: min(40%, 300px); }
+
+/* A drawn panel beside the text: a shortcut and its Live Activity. A picture of the idea, not a screenshot. */
+
+.panel {
+  flex: 0.9;
+  max-width: 420px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  box-shadow: 0 30px 70px -40px rgba(0, 0, 0, 0.7);
+}
+.panel-title {
+  margin: 10px 14px 8px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.panel .action, .panel .activity {
+  margin: 0 4px 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  line-height: 2;
+}
+.panel .token {
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--orange) 20%, transparent);
+  color: var(--link);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.panel .field {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  line-height: 1.5;
+}
+.panel .field span:last-child { color: var(--link); }
+.panel .activity { line-height: 1.5; }
+.panel .activity > div:first-child { display: flex; justify-content: space-between; gap: 12px; }
+.panel .activity span { color: var(--muted); white-space: nowrap; }
+.meter {
+  height: 6px;
+  margin-top: 12px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.meter i {
+  display: block;
+  width: 37.5%;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--yellow), var(--orange), var(--rose));
+}
 
 /* A use case: what was asked and what came of it, beside two screenshots of that chat. */
 
@@ -390,7 +454,9 @@ details p { color: var(--muted); }
 /* Small screens */
 
 @media (max-width: 720px) {
-  .grid { grid-template-columns: 1fr; }
+  .grid, .grid.four { grid-template-columns: 1fr; }
+  .grid.four article { padding: 24px; }
+  .panel { max-width: none; width: 100%; }
 
   .bar nav { gap: 14px; font-size: 0.88rem; }
   .bar nav a:nth-child(n + 3) { display: none; }
@@ -422,4 +488,8 @@ details p { color: var(--muted); }
 
 @media (min-width: 721px) and (max-width: 960px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 721px) and (max-width: 1080px) {
+  .grid.four { grid-template-columns: repeat(2, 1fr); }
+  .grid.four article { padding: 24px; }
 }

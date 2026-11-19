@@ -111,7 +111,7 @@ questions:
     If you use Claude Code or Codex, the loop will be familiar: read, act, check the result, carry
     on. Resident runs that loop on a phone, and not only for code.
   </p>
-  <div class="grid">
+  <div class="grid four">
     <article>
       <h3>Works on your files</h3>
       <p>
@@ -168,18 +168,7 @@ questions:
         or write your own.
       </p>
     </article>
-    <article>
-      <h3>Runs from Shortcuts</h3>
-      <p>
-        Ask Resident puts an agent inside your automations with the app closed, and shows a long job
-        as a Live Activity you can stop.
-      </p>
-    </article>
   </div>
-  <p class="fine">
-    Also in there: photos, PDFs and documents as attachments, and dictation by a speech model that
-    runs on the device.
-  </p>
 </section>
 
 <section class="band split">
@@ -194,11 +183,39 @@ questions:
       You sign in on the service’s own page, as you would for any app. Resident never sees your
       password, keeps its access in the iPhone’s Keychain and renews it without asking again.
     </p>
-    <p>
-      Then ask in plain words: what is on my plate, is this issue done yet, file a ticket for that.
-    </p>
   </div>
   {% include shot.html name="connectors" alt="The Add Connector screen: GitHub, Linear, Notion, Atlassian, Sentry, Hugging Face and DeepWiki, and a field for the address of any other MCP server" %}
+</section>
+
+<section id="shortcuts" class="band split reverse">
+  <div>
+    <p class="eyebrow">Automations</p>
+    <h2>Put an agent on a schedule.</h2>
+    <p>
+      Ask Resident is an action in Shortcuts. Give it a message, an agent and a model, and it runs
+      with the app closed and hands the reply to the next action as plain text.
+    </p>
+    <p>
+      So an agent can be a step in anything Shortcuts runs. Connect your tools, save a skill that
+      pulls out what you care about, and have it run every morning: real agent work, done by a model
+      on your phone.
+    </p>
+    <p>
+      A job that takes a while shows as a Live Activity, with a button to stop it.
+    </p>
+  </div>
+  <div class="panel" role="img" aria-label="A shortcut that asks the Assistant to summarize today’s front page of Hacker News with the model LFM3 1.7B, and a Live Activity showing the agent reading the page at its third step.">
+    <p class="panel-title">Shortcut</p>
+    <div class="action">
+      Ask <span class="token">Assistant</span> <span class="token">Summarize today’s front page of Hacker News</span>
+      <div class="field"><span>Model</span><span>LFM3 1.7B</span></div>
+    </div>
+    <p class="panel-title">Live Activity</p>
+    <div class="activity">
+      <div><strong>Reading news.ycombinator.com</strong><span>Step 3</span></div>
+      <div class="meter"><i></i></div>
+    </div>
+  </div>
 </section>
 
 <section id="local" class="band">
@@ -262,7 +279,7 @@ questions:
   <p class="sub">
     A small model can reason well and still fall over on a real task. It drowns in a big set of
     tools, loses its place between steps, or writes a call nothing can parse. Each part of Resident’s
-    harness answers a failure like that, seen in a real transcript.
+    harness answers a failure like that.
   </p>
   <div class="fixes" role="table" aria-label="What goes wrong with a small model, what Resident does about it, and what you get">
     <div class="head" role="row">
@@ -277,7 +294,7 @@ questions:
     </div>
     <div role="row">
       <span role="cell">A task takes several tool calls</span>
-      <span role="cell">Feeds each result back fitted to size, and saves the chat after every step</span>
+      <span role="cell">Feeds each result back to the model, and saves the chat after every step</span>
       <span role="cell">Work that carries across steps, and carries on if iOS cuts it off</span>
     </div>
     <div role="row">
@@ -299,71 +316,56 @@ questions:
 
   <div class="evidence">
     <p>
-      <strong>How this is checked.</strong> A public suite of
-      <a href="https://github.com/jflick58/resident/tree/main/evals">423 scored requests</a> runs any model through the same
-      harness as the app, on a Mac. The services in it are simulated and its pull request cases use
-      one small made-up repository, so it tests the model and the harness, not a real account or a
-      large codebase. LFM3 1.7B on the same 387 cases, before and after one round of harness fixes:
-      357 passed, then 374. A chat that goes wrong on a phone is copied off it and replayed the same
-      way.
+      <strong>How this is checked.</strong> A
+      <a href="https://github.com/jflick58/resident/tree/main/evals">public test suite</a> runs any model through the same
+      harness as the app. The services in it are simulated and its pull request cases use one small
+      made-up repository, so it tests the model and the harness. On its last full run, LFM3 1.7B
+      passed 382 of 398 cases.
     </p>
   </div>
 
   <h3 class="group">The details, for those who want them</h3>
   <details>
-    <summary>A big MCP server costs one line</summary>
+    <summary>Tools are disclosed a step at a time</summary>
     <p>
-      A connector is one line in the prompt until a request needs it. Then the model gets the six
-      tools that best fit what it asked for, not the whole server; Linear’s has about 70. On 12
-      Linear tasks with LFM3 1.7B, declaring every tool up front, 27 of Linear’s among them, made an
-      18,600-token prompt and 10 tasks were finished. Opened on demand, and trimmed to what it takes
-      to make the call, the tools it needed came to under 3,000 tokens and all 12 were finished.
+      The prompt lists your connectors, a line each. The model picks a connector when a request
+      needs it, and is then given the tools in it that fit what it asked for. A big MCP server costs
+      one line until it is used.
     </p>
   </details>
   <details>
     <summary>Tools shaped like a coding agent’s</summary>
     <p>
       Small models have seen list, search, read and edit endlessly. They have not seen GitHub’s API.
-      So the model works with the tools it knows, and the branch, the commit and the upload are the
-      harness’s job. On the same 13 pull request cases, moving from GitHub’s own tools to these took
-      Qwen 3.5 4B from 6 passed to 12 and LFM3 1.7B from 11 to 13, in about half the steps.
+      So the model works on files with the tools it knows, and the branch, the commit and the pull
+      request are the harness’s job.
     </p>
   </details>
   <details>
-    <summary>Results that are fitted, not cut off</summary>
+    <summary>Autocorrect for tool calls</summary>
     <p>
-      Twenty issues with pages of description would fill the context. A structured result is
-      shortened field by field with every item kept, a long file is read a part at a time, and a
-      result the model has already seen is named instead of sent again.
+      A tool called by the wrong name is answered with the closest real ones, ready to call. A call
+      with the wrong arguments comes back with the ones it needed, and a wrong file path with the
+      right one. The model reads the correction and carries on. For models that write tool calls as
+      JSON, a grammar on the decoder rules out a malformed call altogether.
     </p>
   </details>
   <details>
-    <summary>Mistakes that come back with the fix</summary>
+    <summary>Prompt caching, kept on the phone</summary>
     <p>
-      A tool called by the wrong name loads the closest real ones. A failed call returns the
-      parameters it needed, and a call that cannot be parsed comes back as an error the model can
-      read. A model still searching after it has found the place is told to make the change or ask.
-      For models that write tool calls as JSON, such as Qwen 3, a grammar on the decoder makes a
-      malformed call impossible to write. The other formats are not held to one yet.
-    </p>
-  </details>
-  <details>
-    <summary>A prompt that is read once</summary>
-    <p>
-      The start of the prompt never changes, so each step reads only what is new. Tools opened in the
-      middle of a chat are declared where the conversation stands, not back at the top. The
-      instructions and tools that open every chat are read once and saved beside the model, which for
-      a large model saves most of a minute. And turns are kept exactly as the model wrote them,
-      because these models cannot back their cache up: one token rendered differently would mean
-      reading the whole prompt again.
+      The start of the prompt never changes, so the model’s cache of it stays good and each step
+      reads only what is new. The instructions and tools that open every chat are read once and
+      stored beside the model, so a new chat starts from that copy. For a large model that saves
+      most of a minute. Tools opened in the middle of a chat are declared where the conversation
+      stands, which leaves the cache as it was.
     </p>
   </details>
   <details>
     <summary>Builds chosen by measurement</summary>
     <p>
-      Every quantized build of a model is compared with the full-precision weights, token by token.
-      The 4-bit LFM3 picks the same next token 89.5% of the time and the 6-bit 97.3%, so the app
-      offers the 6-bit wherever it leaves room for a full-length chat, and the 4-bit elsewhere.
+      The eval harness compares every quantized build of a model with its full-precision weights,
+      token by token. The 4-bit LFM3 picks the same next token 89.5% of the time and the 6-bit
+      97.3%, so the app offers the 6-bit wherever it fits.
     </p>
   </details>
   <p class="fine">
@@ -391,9 +393,10 @@ questions:
     <article>
       <h3>Pinned while it works</h3>
       <p>
-        Mapped pages are the first thing a phone short of memory takes back. Left alone, the 27B’s
-        second reply had not started after 70 seconds of reading its weights in again. So what the
-        model has read is pinned for the length of a reply, then let go.
+        iOS takes mapped weights back whenever memory runs short, and the model has to read them
+        from storage again before it can answer. Without a fix, the 27B’s second reply took over a
+        minute to start. So the weights are pinned in memory while a reply is written, and released
+        after it.
       </p>
     </article>
     <article>
@@ -406,9 +409,9 @@ questions:
     </article>
   </div>
   <p class="fine">
-    Where that leaves it: Bonsai 2 27B answers at about 7 tokens a second on a 12 GB iPhone and slows
-    as a reply runs long, while LFM3 1.7B runs at about 65. Mapping switches on by itself, and only
-    for a model too large to load. The changes are a fork of
+    On an iPhone Duo, Bonsai 2 27B ran at about 7 to 10 tokens a second on short replies and slower
+    on long ones. LFM3 1.7B (6-bit) ran at about 65. Mapping is automatic for models too big to fit
+    in memory. The changes are a fork of
     <a href="https://github.com/ml-explore/mlx-swift-lm">mlx-swift-lm</a>,
     <a href="https://github.com/jflick58/resident/tree/main/Vendor">listed in the repository</a>.
   </p>
