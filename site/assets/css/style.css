@@ -301,6 +301,21 @@ h2.beats span { display: inline-block; }
 /* The engineering section sits a little deeper than the rest. */
 .under { background: color-mix(in srgb, var(--bg), var(--deep) 30%); }
 
+/* The lines a pull request changed, under the run that changed them. */
+.diff {
+  margin-top: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  font: 0.86rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.diff .file { margin: 0; padding: 10px 18px; border-bottom: 1px solid var(--line); color: var(--muted); overflow-wrap: anywhere; }
+.diff pre { margin: 0; padding: 6px 0; overflow-x: auto; font: inherit; }
+.diff pre span { display: block; width: max-content; min-width: 100%; padding: 1px 18px; }
+.diff .was { background: color-mix(in srgb, var(--rose) 18%, transparent); }
+.diff .now { background: color-mix(in srgb, #2ea043 22%, transparent); }
+
 /* What goes wrong, what the app does about it, and what that gets you: three columns, a row each. */
 
 .fixes { margin-top: 46px; border-top: 1px solid var(--line); }

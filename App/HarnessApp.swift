@@ -126,7 +126,7 @@ struct RootView: View {
 #if DEBUG
     extension RootView {
         /// Launch arguments for driving the app from the command line while developing:
-        /// `-openSheet models|chats|settings|presets|hub|presetEditor|connectors|addConnector|connectorDetail`, `-hubLink <link>`, `-addServer "Name|url|model"`, `-openLatestChat YES`, `-continueTurn YES`, `-addConnector <url>`, `-installRepo owner/name`, `-demoPrompt "text"` and `-demoHour <0-23>` (the hour an empty chat greets you for).
+        /// `-openSheet models|chats|settings|presets|hub|presetEditor|connectors|addConnector|connectorDetail`, `-hubLink <link>`, `-addServer "Name|url|model"`, `-openLatestChat YES` (with `-openAtEnd YES`, at its last message), `-continueTurn YES`, `-addConnector <url>`, `-installRepo owner/name`, `-demoPrompt "text"` and `-demoHour <0-23>` (the hour an empty chat greets you for).
         fileprivate func applyLaunchArguments() {
             let defaults = UserDefaults.standard
             if let name = defaults.string(forKey: "openSheet") { sheet = Sheet(rawValue: name) }

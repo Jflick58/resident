@@ -35,16 +35,20 @@ shot() {
   echo "$name: $(sips -g pixelWidth -g pixelHeight $out/shot-$name.png 2>/dev/null | awk '/pixel/ {printf "%s ", $2}')"
 }
 
-# The simulator cannot run a model, so the chat is one LFM3 really had, run on
+# The simulator cannot run a model, so each chat shown is one LFM3 really had, run on
 # a Mac through the same agent and saved by the test tool:
 #   harness-spike LiquidAI/LFM3-1.7B-MLX-6bit --thinking low --chat "<a>|<b>" --save tools/site-chat.json
-# It is put in the app's data with LFM3 listed as the model on the device.
+# tools/site-pull-request.json was saved the same way with --repository jflick58/resident --live,
+# which opened a real pull request (see evals/README.md). A chat is put in the app's data by
+# itself, with LFM3 listed as the model on the device.
 data="$(limit 30 xcrun simctl get_app_container "$device" "$BUNDLE_ID" data)/Library/Application Support/Harness"
 limit 60 xcrun simctl launch "$device" "$BUNDLE_ID" >/dev/null; sleep 4
 limit 30 xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null
-python3 -I - "$data" tools/site-chat.json <<'SEED'
+seed() {  # seed <chat.json> <title>
+  limit 30 xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null
+  python3 -I - "$data" "$1" "$2" <<'SEED'
 import glob, json, os, sys, uuid
-data, chat = sys.argv[1], sys.argv[2]
+data, chat, title = sys.argv[1], sys.argv[2], sys.argv[3]
 agent = "A0000000-0000-4000-8000-000000000001"
 model = {"repo": "LiquidAI/LFM3-1.7B-MLX-6bit", "name": "LFM3 1.7B", "sizeBytes": 1423163359, "contextTokens": 32768,
          "capabilities": {"tools": True, "thinking": True, "vision": False}}
@@ -56,9 +60,11 @@ json.dump({"endpoints": [], "defaultPresetID": agent, "installed": [model], "sel
 os.makedirs(os.path.join(data, "conversations"), exist_ok=True)
 for path in glob.glob(os.path.join(data, "conversations", "*.json")): os.remove(path)
 name = str(uuid.uuid4()).upper()
-json.dump({"id": name, "title": "Latest Swift release", "presetID": agent, "messages": json.load(open(chat)),
+json.dump({"id": name, "title": title, "presetID": agent, "messages": json.load(open(chat)),
            "updatedAt": "2026-11-16T17:41:00Z", "isTitled": True}, open(os.path.join(data, "conversations", name + ".json"), "w"))
 SEED
+}
+seed tools/site-chat.json "Latest Swift release"
 
 # The status bar says 9:41, so the greeting is told it is morning.
 shot home 7 -demoHour 9
@@ -67,3 +73,8 @@ shot agents 6 -openSheet presets
 shot settings 6 -openSheet settings
 shot connectors 6 -openSheet addConnector
 shot chat 6 -openLatestChat YES
+if [ -f tools/site-pull-request.json ]; then
+  seed tools/site-pull-request.json "Search limit"
+  # Opened at its end: the pull request and the answer are what there is to see.
+  shot pull-request 7 -openLatestChat YES -openAtEnd YES
+fi

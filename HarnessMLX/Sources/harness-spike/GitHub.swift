@@ -224,3 +224,49 @@ struct FolderRepositoryHost: RepositoryHost {
         return OpenedPullRequest(number: 42, url: "https://github.com/\(owner)/\(repo)/pull/42", branch: draft.branch, commit: "c0ffee42")
     }
 }
+
+/// GitHub itself, through the app's own `GitHubHost`, held to one repository and one pull request:
+/// what a chat run for real on this Mac may touch. The token is the caller's own, so these bounds
+/// are what stop a model that wanders from cloning or changing anything else with it.
+final class LiveRepositoryHost: RepositoryHost, @unchecked Sendable {
+    let owner: String
+    let repo: String
+    /// The only files a pull request may change, when given.
+    let paths: [String]?
+    private let base: GitHubHost
+    private let lock = NSLock()
+    private var opened = false
+
+    init(owner: String, repo: String, token: String, paths: [String]? = nil) {
+        self.owner = owner
+        self.repo = repo
+        self.paths = paths
+        base = GitHubHost(token: { token })
+    }
+
+    private func isTheOne(_ owner: String, _ repo: String) -> Bool {
+        owner.lowercased() == self.owner.lowercased() && repo.lowercased() == self.repo.lowercased()
+    }
+
+    func download(owner: String, repo: String, into directory: URL) async throws -> RepositoryVersion {
+        guard isTheOne(owner, repo) else { throw RepositoryError("GitHub has no such repository, or this account cannot see it.") }
+        let version = try await base.download(owner: owner, repo: repo, into: directory)
+        print("  DOWNLOADED \(owner)/\(repo) at \(version.commit.prefix(7)) on \(version.branch)")
+        return version
+    }
+
+    func openPullRequest(_ draft: PullRequestDraft) async throws -> OpenedPullRequest {
+        guard isTheOne(draft.owner, draft.repo) else { throw RepositoryError("GitHub has no such repository, or this account cannot see it.") }
+        guard !lock.withLock({ opened }) else { throw RepositoryError("This run has opened its one pull request already.") }
+        print("  PULL REQUEST \(draft.title) | \(draft.body.replacingOccurrences(of: "\n", with: " / "))")
+        print("  CHANGED \(draft.files.map(\.path).joined(separator: ", "))")
+        if let paths, let other = draft.files.map(\.path).first(where: { !paths.contains($0) }) {
+            print("  REFUSED: \(other) is not a file this run may change")
+            throw RepositoryError("\(other) is not a file this run may change.")
+        }
+        let pull = try await base.openPullRequest(draft)
+        lock.withLock { opened = true }
+        print("  OPENED \(pull.url) on branch \(pull.branch), commit \(pull.commit.prefix(7))")
+        return pull
+    }
+}
