@@ -3,12 +3,14 @@
 and the product page header and search results images.
 
     python3 tools/store-frames.py                 everything
-    python3 tools/store-frames.py iphone-6.3      one set of screenshots
+    python3 tools/store-frames.py iphone-medium-1206x2622      one set of screenshots
     python3 tools/store-frames.py creative        the header, search and universal images
 
 The screenshots come from tools/site-shots.sh (the folders under store/screenshots).
 Each image is a small HTML page, drawn by headless Chrome at the exact size App Store
-Connect takes, into store/screenshots/framed/<set>/ and store/creative/. The headlines
+Connect takes, into store/screenshots/framed/<set>/ and store/creative/. Every set has the
+same file names, so each folder is named for its slot and its size: a set dropped on the
+wrong slot is refused with "File dimensions are invalid". The headlines
 here are the ones in store/listing.md: change them in both places.
 
 Sizes, from Apple's screenshot and creative asset specifications (November 2026):
@@ -40,24 +42,24 @@ FRAMES = [
 SHEETS = {"05-connectors"}
 
 SETS = {
-    "iphone-6.3": {
+    "iphone-medium-1206x2622": {
         "shots": "site/assets/img", "size": (1206, 2622), "device": "iPhone",
         "headline": 124, "sub": 50, "top": 174, "gap": 95, "width": 922, "bezel": 20, "radius": 137, "island": True,
     },
-    "iphone-6.9": {
+    "iphone-large-1320x2868": {
         "shots": "store/screenshots/iphone-6.9", "size": (1320, 2868), "device": "iPhone",
         "headline": 136, "sub": 54, "top": 190, "gap": 104, "width": 1010, "bezel": 22, "radius": 150, "island": True,
     },
-    "ipad-13": {
+    "ipad-13-2064x2752": {
         "shots": "store/screenshots/ipad-13", "size": (2064, 2752), "device": "iPad",
         "headline": 150, "sub": 60, "top": 170, "gap": 96, "width": 1500, "bezel": 24, "radius": 84, "skip": SHEETS,
     },
-    "duo-outer": {
+    "iphone-duo-outer-1398x2034": {
         "shots": "store/screenshots/duo-outer", "size": (1398, 2034), "device": "iPhone Duo",
         "headline": 118, "sub": 48, "top": 104, "gap": 70, "width": 1010, "bezel": 20, "radius": 120,
     },
     # Open, the phone is held sideways: the headline sits beside the screen.
-    "duo-inner": {
+    "iphone-duo-inner-2853x2007": {
         "shots": "store/screenshots/duo-inner", "size": (2853, 2007), "device": "iPhone Duo",
         "headline": 122, "sub": 54, "width": 1480, "bezel": 22, "radius": 88, "beside": True, "skip": SHEETS,
     },

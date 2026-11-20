@@ -102,11 +102,11 @@ they appear in `store/screenshots/framed/` and `store/creative/`.
 
 | Slot in App Store Connect | Size | Folder | Frames |
 |---|---|---|---|
-| iPhone 6.3 inch (the required one) | 1206 x 2622 | `framed/iphone-6.3` | 7 |
-| iPhone 6.9 inch | 1320 x 2868 | `framed/iphone-6.9` | 7 |
-| iPad 13 inch (required, since the app runs on iPad) | 2064 x 2752 | `framed/ipad-13` | 6 |
-| iPhone Duo, outer display | 1398 x 2034 | `framed/duo-outer` | 7 |
-| iPhone Duo, inner display | 2853 x 2007 | `framed/duo-inner` | 6 |
+| iPhone with Dynamic Island (medium display), the required one | 1206 x 2622 | `framed/iphone-medium-1206x2622` | 7 |
+| iPhone, large display (App Store Connect may show no slot for it) | 1320 x 2868 | `framed/iphone-large-1320x2868` | 7 |
+| iPad 13 inch (required, since the app runs on iPad) | 2064 x 2752 | `framed/ipad-13-2064x2752` | 6 |
+| iPhone Duo, outer display | 1398 x 2034 | `framed/iphone-duo-outer-1398x2034` | 7 |
+| iPhone Duo, inner display | 2853 x 2007 | `framed/iphone-duo-inner-2853x2007` | 6 |
 | Product page header | 3840 x 1646 | `store/creative/header.png` | |
 | Search results image | 3840 x 2560 | `store/creative/search.png` | |
 | Universal image, for both of those | 5244 x 2950 | `store/creative/universal.png` | |
