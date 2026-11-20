@@ -163,7 +163,7 @@ def creative_page(name):
   .left {{ left: 140px; }} .right {{ right: 140px; }}
 """
         body = (
-            f'<div class="safe"><img src="{mark}"><h1><span>An AI agent that runs</span><span class="warm">on your iPhone</span></h1></div>'
+            f'<div class="safe"><img src="{mark}"><h1><span>An AI agent that runs</span><span class="warm">on your device</span></h1></div>'
             f'<div class="left">{device(shots / "shot-chat.png", phone, 16, 100, True)}</div>'
             f'<div class="right">{device(shots / "shot-pull-request.png", phone, 16, 100, True)}</div>'
         )
