@@ -94,11 +94,28 @@ cover "open source", "web" and "search" cover "web search".
 
     The "Ask Resident" Shortcuts action needs iOS 27. Models larger than the recommended one need a device with more memory, and the app says which fit before a download.
 
-## Screenshots
+## Screenshots and images
 
-The images are in `store/screenshots/framed/`, made by `tools/store-frames.py` from the
-screenshots beside them. Upload them in this order. The first three are the ones shown in
-search results.
+`python3 tools/store-frames.py` makes every image below from the screenshots in the
+repository, at the exact sizes App Store Connect takes. They are not checked in: run it and
+they appear in `store/screenshots/framed/` and `store/creative/`.
+
+| Slot in App Store Connect | Size | Folder | Frames |
+|---|---|---|---|
+| iPhone 6.3 inch (the required one) | 1206 x 2622 | `framed/iphone-6.3` | 7 |
+| iPhone 6.9 inch | 1320 x 2868 | `framed/iphone-6.9` | 7 |
+| iPad 13 inch (required, since the app runs on iPad) | 2064 x 2752 | `framed/ipad-13` | 6 |
+| iPhone Duo, outer display | 1398 x 2034 | `framed/duo-outer` | 7 |
+| iPhone Duo, inner display | 2853 x 2007 | `framed/duo-inner` | 6 |
+| Product page header | 3840 x 1646 | `store/creative/header.png` | |
+| Search results image | 3840 x 2560 | `store/creative/search.png` | |
+| Universal image, for both of those | 5244 x 2950 | `store/creative/universal.png` | |
+
+iPhone Duo screenshots are optional until April 2027 and add a "made for iPhone Duo" badge.
+The header and search images keep the mark and the words inside Apple's art safe area; the
+screens beside them may be cut off on some devices. Preview both in App Store Connect.
+
+Upload the frames in this order. The first three are the ones shown in search results.
 
 | # | Headline | Line under it | Screenshot |
 |---|---|---|---|
@@ -106,7 +123,13 @@ search results.
 | 2 | It researches for you | Searches the web, reads the pages, answers | A question researched on the web |
 | 3 | From request to pull request | Finds the code, changes it, opens the PR | The end of a chat that opened a pull request |
 | 4 | Works it out in code | A sandbox on the device for sums, dates and data | A date worked out by running code |
-| 5 | Connect the tools you use | GitHub, Linear, Notion and any MCP server | Add Connector (iPhone only) |
+| 5 | Connect the tools you use | GitHub, Linear, Notion and any MCP server | Add Connector (left out where the screen is wide) |
 | 6 | The newest small models | LFM3, Qwen, Gemma, Bonsai, or any MLX model | The model library |
 | 7 | Agents, skills and memory | Shape how it works and what it remembers | Settings |
 | 8 | An agent on a schedule | Ask Resident runs in Shortcuts, app closed | Not made yet: needs a screenshot of the action in Shortcuts, from a phone |
+
+To retake the iPhone Duo screenshots, open the simulated phone in Device Hub first (the Open
+button under it) for the inner display, and close it for the outer one:
+
+    SIM="iPhone Duo" SHOT_DISPLAY=3 OUT=store/screenshots/duo-inner tools/site-shots.sh
+    SIM="iPhone Duo" SHOT_DISPLAY=1 OUT=store/screenshots/duo-outer tools/site-shots.sh
