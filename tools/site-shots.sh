@@ -3,6 +3,7 @@
 #   tools/site-shots.sh
 #   SIM="iPhone 18 Pro Max" OUT=store/screenshots/iphone-6.9 tools/site-shots.sh      for the App Store
 #   SIM="iPad Pro 13-inch (M5)" OUT=store/screenshots/ipad-13 tools/site-shots.sh   for the App Store
+#   SIM="iPhone Duo" SHOT_DISPLAY=3 OUT=store/screenshots/duo-inner tools/site-shots.sh   (and 1, duo-outer)
 # They land in site/assets/img/ as shot-<name>.png, or in OUT at full size. The simulator holds no
 # real data, so nothing private can end up on the site. Build the app for the
 # simulator first (./run-sim.sh does).
@@ -29,9 +30,14 @@ shot() {
   # Taken to a temporary file first, so a failed shot never replaces a good picture.
   # A folding phone has two screens and needs one named; the outer one is phone-shaped.
   local new=$(mktemp -t shot).png
-  limit 40 xcrun simctl io "$device" screenshot $new >/dev/null 2>&1 \
-    || limit 40 xcrun simctl io "$device" screenshot --display=1 $new >/dev/null 2>&1 \
-    || { echo "$name: no screenshot"; return 1; }
+  # SHOT_DISPLAY picks one of them: on an iPhone Duo, 3 is the inner screen and 1 the outer.
+  if [ -n "$SHOT_DISPLAY" ]; then
+    limit 40 xcrun simctl io "$device" screenshot --display=$SHOT_DISPLAY $new >/dev/null 2>&1 || { echo "$name: no screenshot"; return 1; }
+  else
+    limit 40 xcrun simctl io "$device" screenshot $new >/dev/null 2>&1 \
+      || limit 40 xcrun simctl io "$device" screenshot --display=1 $new >/dev/null 2>&1 \
+      || { echo "$name: no screenshot"; return 1; }
+  fi
   mv $new $out/shot-$name.png
   echo "$name: $(sips -g pixelWidth -g pixelHeight $out/shot-$name.png 2>/dev/null | awk '/pixel/ {printf "%s ", $2}')"
 }

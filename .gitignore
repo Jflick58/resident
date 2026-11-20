@@ -11,3 +11,6 @@ spike-results/*.log
 
 # The vendored library is part of the build; a rule higher up ignores folders of this name.
 !/Vendor/
+# Made by tools/store-frames.py from the screenshots.
+store/screenshots/framed/
+store/creative/
