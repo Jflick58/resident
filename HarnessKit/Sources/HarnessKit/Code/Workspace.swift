@@ -28,7 +28,7 @@ public actor Workspace {
 
     static let readLines = 200
     static let readCharacters = 4500
-    static let searchMatches = 30
+    static let searchMatches = 40
     static let searchMatchesPerFile = 4
     /// Files and folders named after what is searched for, shown ahead of the lines that hold it.
     static let searchNames = 8
