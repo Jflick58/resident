@@ -149,18 +149,23 @@ def creative_page(name):
     mark = (ROOT / "site/assets/img/mark.png").as_uri()
     style = STYLE.format(w=width, h=height, glow="90% 80% at 50% 0%")
     if name == "search":
-        # The words in the safe area, three screens under them running off the bottom edge.
-        size, phone = 168, 800
+        # The Search tab shows the image's full width and only its top: about 1443 px of it on an
+        # iPhone and 1778 px on an iPhone Duo (seen in App Store Connect's preview). So the words
+        # go where Apple's safe area and that top band meet, with a screen at each side of them,
+        # and nothing that matters sits lower.
+        phone, top, band = 660, 130, 1443
         style += f"""
-  .safe {{ position: absolute; left: {x}px; top: {y}px; width: {safe_w}px; text-align: center; }}
-  .safe img {{ height: 190px; }}
-  h1 {{ margin-top: 34px; font-size: {size}px; }}
-  .row {{ position: absolute; left: 0; right: 0; top: {y + 700}px; display: flex; justify-content: center; gap: 110px; }}
+  .safe {{ position: absolute; left: {x}px; top: {y}px; width: {safe_w}px; height: {band - y}px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }}
+  .safe img {{ height: 150px; }}
+  h1 {{ margin-top: 24px; font-size: 186px; }}
+  .left, .right {{ position: absolute; top: {top}px; }}
+  .left {{ left: 140px; }} .right {{ right: 140px; }}
 """
-        row = "".join(device(shots / f"shot-{shot}.png", phone, 18, 120, True) for shot in ("chat", "pull-request", "code"))
         body = (
             f'<div class="safe"><img src="{mark}"><h1><span>An AI agent that runs</span><span class="warm">on your iPhone</span></h1></div>'
-            f'<div class="row">{row}</div>'
+            f'<div class="left">{device(shots / "shot-chat.png", phone, 16, 100, True)}</div>'
+            f'<div class="right">{device(shots / "shot-pull-request.png", phone, 16, 100, True)}</div>'
         )
     else:
         # The mark and the headline in the safe area, a screen at each side.
